@@ -1,0 +1,87 @@
+schema: spec-driven
+
+# Project context shown to AI when creating artifacts (proposals, specs, tasks).
+# Keep this in sync with constitution.md and techstack.md — the constitution wins.
+context: |
+  MarginSense is a business operating system for trade contractors (starting with
+  general/remodeling contractors). The whole product is oriented around one question:
+  "Is this estimate pulling its weight — does the profit it earns justify the crew hours
+  it eats?" — shown as a red / yellow / green signal driven by Effective Profit per Hour
+  (EPH = netProfit / laborHours). EPH is an INTERNAL engine term; the UI speaks plain
+  language ("profit per hour vs your target", "loaded cost", "% of your year").
+
+  v1 uses the solo owner-operator model (constitution §3.2): a single annual overhead
+  figure, one owner wage + burden %, and working_days_per_year x billable_minutes_per_day.
+  Multi-role crews are a future expansion. Rates derive on an ANNUAL basis: overhead
+  recovery rate = annual_overhead / annualBillableHours; burdened labor rate = wage x (1 +
+  burden); loaded cost/hr = recovery + burdened (a break-even/display concept — labor and
+  overhead stay separate cost slices on a job); gross-profit goal = overhead + income +
+  profit; target profit/hr = (income + profit) / annualBillableHours. Estimate roll-up adds
+  a contingency cost line = contingency_bp x (directCost + overheadAllocated); netProfit =
+  revenue - directCost - overheadAllocated - contingency. Pricing is margin-solve by default
+  (costs entered, price solved to target_margin_bp) with per-line/total override. Portfolio
+  view: percentOfYear = laborHours / annualBillableHours; percentOfProfitGoal = (netProfit +
+  overheadAllocated) / grossProfitGoal.
+
+  Domain hierarchy (fixed): Business (tenant) -> Project (one client job; the unit of
+  shared context) -> Estimate(s) -> Line Items. A project owns one shared context and one
+  conversation that all tools use.
+
+  Two layers:
+  - Outer layer (NOT tools): Profit Tracker dashboard, onboarding/settings, projects list,
+    and creating/editing estimates. Creating an estimate seeds the job's cost/hour data.
+  - Tools are their own category (AI-powered, openable): Material Finder, Photo Advisor,
+    Code Finder, Client Estimate Doc. A tool receives a READ-ONLY snapshot and has no write
+    path to an estimate or context fact — it only SUGGESTS changes the user confirms. Some
+    auto-trigger (Code Finder on photo upload) but still only suggest.
+
+  Module separation (constitution §6.8): the pure engine (src/engine/) owns the math;
+  estimate editing (src/estimate/) and profit signaling/dashboard (src/profit/) are SEPARATE
+  modules that both consume the engine via typed data — connected, never merged. Tools
+  (src/tools/) are a third, read-only category. The engine also holds src/engine/config.ts,
+  the single home for thresholds, the target-profit/hr formula, and the contingency base.
+
+  Tech stack: TypeScript (strict), Next.js (App Router) + React, Tailwind + shadcn/ui,
+  Postgres via Supabase with Row-Level Security, Drizzle ORM (forward-only migrations),
+  Supabase Auth + Storage, Anthropic API (Claude) for tools, TanStack Query in tool UIs,
+  Zod at all boundaries, Vitest (unit) + Playwright (e2e), hosted on Vercel.
+
+  Non-negotiable rules (constitution §6):
+  - Money is integer cents, time is integer minutes, percentages are basis points. No
+    floats for money, ever. Rounding happens only at display.
+  - ALL financial math lives in the pure src/engine/ module — no framework/DB/AI imports,
+    plain data in and out, near-exhaustive unit tests. UI and DB call it; they never
+    re-implement totals, EPH, or color logic.
+  - Multi-tenant isolation is enforced in the database: every business-owned row has a
+    non-null business_id and Row-Level Security is on. A missing tenant filter is a
+    security incident. Tenant-scoped DB access goes through src/db/ helpers that require a
+    business_id.
+  - Tools suggest; users confirm. No code path lets an AI tool mutate an estimate or commit
+    a fact without explicit acceptance.
+  - Every displayed number is traceable — no magic totals; the user can always see inputs.
+  - Migrations are versioned and forward-only in production.
+  - Physical-work / code advice (Photo Advisor, Code Finder) carries a
+    licensed-professional, non-authoritative disclaimer.
+
+  Color thresholds (defaults, per-business configurable; the method is fixed, the numbers
+  are not): ratio/weight >= 1.00 green; 0.80–0.99 yellow; < 0.80 red. Color signals are
+  always paired with text. Phone-first: design and test at phone width first.
+
+  Model IDs, threshold defaults, and AI config are centralized in src/ai/ — never
+  hardcoded across the codebase. Default judgment-heavy tool model: claude-opus-4-8.
+
+# Per-artifact rules applied when authoring each artifact type.
+rules:
+  proposal:
+    - State the problem in terms of contractor value (hours, profit, trust), not features.
+    - Call out any interaction with the financial model, tenant isolation, or the
+      tools-suggest-users-confirm rule explicitly.
+    - Include a "Non-goals" note when scope is easy to over-read.
+  specs:
+    - Write requirements as testable SHALL statements with WHEN/THEN scenarios.
+    - For engine work, cover rounding, zero-hour and zero-revenue estimates, and each color
+      threshold boundary (0.79 / 0.80 / 0.99 / 1.00).
+    - Keep money in integer cents, time in integer minutes, percentages in basis points.
+  tasks:
+    - Put engine math and its unit tests before any UI or DB task that depends on it.
+    - Include a tenant-isolation test task for anything touching business-owned rows.
