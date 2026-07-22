@@ -30,12 +30,16 @@ import type {
   NewOverheadItemRow,
   NewProjectRow,
   NewSuggestionRow,
+  NewToolRunRow,
   OverheadItemRow,
   ProjectRow,
   ProjectStatus,
   SuggestionRow,
   SuggestionStatusName,
   SuggestionTargetName,
+  ToolRunRow,
+  ToolRunSourceName,
+  ToolRunStatusName,
 } from "./schema";
 import {
   authorToRow,
@@ -188,6 +192,8 @@ export interface MessageInput {
   projectId: string;
   body: string;
   author?: Author | undefined;
+  /** The tool run that authored this message, when a tool posted it (add-tool-platform). */
+  toolRunId?: string | null | undefined;
 }
 
 /** A suggestion to create (always `pending`). */
@@ -197,6 +203,20 @@ export interface SuggestionInput {
   payload: unknown;
   targetEstimateId?: string | null | undefined;
   author?: Author | undefined;
+  /** The tool run that proposed this suggestion, when a tool created it (add-tool-platform). */
+  toolRunId?: string | null | undefined;
+}
+
+/** A tool-run audit record to write (constitution §2, §7). `business_id` is stamped by
+ * `TenantDb`, never accepted from input. Recorded for successful and failed runs alike. */
+export interface ToolRunInput {
+  projectId: string;
+  toolName: string;
+  status: ToolRunStatusName;
+  source?: ToolRunSourceName | undefined;
+  inputTokens?: number | undefined;
+  outputTokens?: number | undefined;
+  latencyMs?: number | undefined;
 }
 
 /** The outcome of resolving (accepting/dismissing) a suggestion. */
@@ -234,6 +254,17 @@ export interface ContextBackend {
   ): Promise<SuggestionResolution>;
 }
 
+/**
+ * The tool-run port `TenantDb` talks to (add-tool-platform). Records what a tool invocation
+ * cost — tokens, latency, status — so AI spend is observable per tenant (§7). Like the other
+ * ports, only `TenantDb` calls it, always with its own bound business id.
+ */
+export interface ToolRunsBackend {
+  listByProject(businessId: BusinessId, projectId: string): Promise<ToolRunRow[]>;
+  /** `row.businessId` is set by `TenantDb`; the backend persists it verbatim. */
+  insert(row: NewToolRunRow): Promise<ToolRunRow>;
+}
+
 /** Backends a {@link TenantDb} composes. All but `projects` are optional so tests wire just
  * what they exercise; feature code (via `tenantDbForSession`) supplies all. */
 export interface TenantBackends {
@@ -241,6 +272,7 @@ export interface TenantBackends {
   settings?: SettingsBackend | undefined;
   estimates?: EstimateBackend | undefined;
   context?: ContextBackend | undefined;
+  toolRuns?: ToolRunsBackend | undefined;
 }
 
 /**
@@ -254,6 +286,7 @@ export class TenantDb {
   readonly #settings: SettingsBackend | undefined;
   readonly #estimates: EstimateBackend | undefined;
   readonly #context: ContextBackend | undefined;
+  readonly #toolRuns: ToolRunsBackend | undefined;
 
   /** @internal — use {@link createTenantDb}, which requires a business id. */
   constructor(businessId: BusinessId, backends: TenantBackends) {
@@ -265,6 +298,7 @@ export class TenantDb {
     this.#settings = backends.settings;
     this.#estimates = backends.estimates;
     this.#context = backends.context;
+    this.#toolRuns = backends.toolRuns;
   }
 
   /** The settings backend, or a clear error if this handle wasn't wired with one. */
@@ -289,6 +323,14 @@ export class TenantDb {
       throw new Error("TenantDb has no context backend configured.");
     }
     return this.#context;
+  }
+
+  /** The tool-runs backend, or a clear error if this handle wasn't wired with one. */
+  get #toolRunsBackend(): ToolRunsBackend {
+    if (!this.#toolRuns) {
+      throw new Error("TenantDb has no tool-runs backend configured.");
+    }
+    return this.#toolRuns;
   }
 
   /** List this business's projects. Another tenant's rows can never appear here. */
@@ -462,7 +504,8 @@ export class TenantDb {
     return this.#contextBackend.listMessages(this.businessId, projectId);
   }
 
-  /** Post a message into the project's one conversation. */
+  /** Post a message into the project's one conversation. When a tool posts it, `toolRunId`
+   * links the message to the run — and its cost — that produced it. */
   postMessage(input: MessageInput): Promise<ConversationMessageRow> {
     const { author, authorTool } = authorToRow(input.author ?? "user");
     return this.#contextBackend.addMessage({
@@ -471,6 +514,7 @@ export class TenantDb {
       body: input.body,
       author,
       authorTool,
+      toolRunId: input.toolRunId ?? null,
     });
   }
 
@@ -487,7 +531,8 @@ export class TenantDb {
     return this.#contextBackend.listSuggestions(this.businessId, projectId, { status: "pending" });
   }
 
-  /** Create a `pending` suggestion. Nothing is applied until the user accepts it. */
+  /** Create a `pending` suggestion. Nothing is applied until the user accepts it. When a tool
+   * proposes it, `toolRunId` links the suggestion to the run that produced it. */
   createSuggestion(input: SuggestionInput): Promise<SuggestionRow> {
     const { author, authorTool } = authorToRow(input.author ?? "user");
     return this.#contextBackend.createSuggestion({
@@ -499,6 +544,29 @@ export class TenantDb {
       status: "pending",
       author,
       authorTool,
+      toolRunId: input.toolRunId ?? null,
+    });
+  }
+
+  // --- Tool runs (constitution §2, §7; add-tool-platform) --------------------------
+
+  /** This project's tool-run audit records, scoped to this business. */
+  listToolRuns(projectId: string): Promise<ToolRunRow[]> {
+    return this.#toolRunsBackend.listByProject(this.businessId, projectId);
+  }
+
+  /** Record one tool invocation's cost/outcome. The stored `business_id` is always this
+   * handle's — never input. Called for successful and failed runs alike. */
+  recordToolRun(input: ToolRunInput): Promise<ToolRunRow> {
+    return this.#toolRunsBackend.insert({
+      businessId: this.businessId,
+      projectId: input.projectId,
+      toolName: input.toolName,
+      status: input.status,
+      source: input.source ?? "user",
+      inputTokens: input.inputTokens ?? 0,
+      outputTokens: input.outputTokens ?? 0,
+      latencyMs: input.latencyMs ?? 0,
     });
   }
 
@@ -784,6 +852,7 @@ export function createMemoryContextBackend(
         author: row.author ?? "user",
         authorTool: row.authorTool ?? null,
         body: row.body,
+        toolRunId: row.toolRunId ?? null,
         createdAt: now,
       };
       messages.push(stored);
@@ -811,6 +880,7 @@ export function createMemoryContextBackend(
         payload: row.payload,
         author: row.author ?? "user",
         authorTool: row.authorTool ?? null,
+        toolRunId: row.toolRunId ?? null,
         resolvedAt: null,
         createdAt: now,
         updatedAt: now,
@@ -859,6 +929,39 @@ export function createMemoryContextBackend(
       s.status = "accepted";
       s.resolvedAt = now;
       return { ok: true, suggestion: s, committed: "estimate_line_item" };
+    },
+  };
+}
+
+/**
+ * An in-memory {@link ToolRunsBackend} over a shared array holding *every* tenant's runs — the
+ * condition RLS defends against. A handle bound to A can never read B's runs here (the
+ * isolation test asserts this), and every stored `business_id` is the one `TenantDb` passed.
+ */
+export function createMemoryToolRunsBackend(seed: ToolRunRow[] = []): ToolRunsBackend {
+  const rows: ToolRunRow[] = [...seed];
+  let seq = seed.length;
+  const now = new Date(0);
+
+  return {
+    async listByProject(businessId, projectId) {
+      return rows.filter((r) => r.businessId === businessId && r.projectId === projectId);
+    },
+    async insert(row) {
+      const stored: ToolRunRow = {
+        id: `mem-run-${++seq}`,
+        businessId: row.businessId,
+        projectId: row.projectId,
+        toolName: row.toolName,
+        status: row.status,
+        source: row.source ?? "user",
+        inputTokens: row.inputTokens ?? 0,
+        outputTokens: row.outputTokens ?? 0,
+        latencyMs: row.latencyMs ?? 0,
+        createdAt: now,
+      };
+      rows.push(stored);
+      return stored;
     },
   };
 }

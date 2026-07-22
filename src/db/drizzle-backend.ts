@@ -16,6 +16,7 @@ import {
   overheadItems,
   projects,
   suggestions,
+  toolRuns,
 } from "./schema";
 import { withAuthenticatedTx, type Db, type Tx } from "./rls";
 import { nextStatus, suggestionEffect } from "../context";
@@ -26,6 +27,7 @@ import type {
   EstimatePatch,
   ProjectBackend,
   SettingsBackend,
+  ToolRunsBackend,
 } from "./tenant";
 
 export function createDrizzleProjectBackend(db: Db, authUserId: string): ProjectBackend {
@@ -367,6 +369,31 @@ export function createDrizzleContextBackend(db: Db, authUserId: string): Context
           suggestion: updated!,
           committed: eff.effect.kind === "commit_context_entry" ? "context_entry" : "estimate_line_item",
         };
+      });
+    },
+  };
+}
+
+/**
+ * The production `ToolRunsBackend`: Drizzle SQL inside the authenticated RLS context, so both
+ * isolation layers apply (app-layer `business_id` predicate + RLS policies keyed on
+ * `auth.uid()`). Append-only audit — a tool run, once recorded, is never mutated.
+ */
+export function createDrizzleToolRunsBackend(db: Db, authUserId: string): ToolRunsBackend {
+  return {
+    listByProject(businessId: BusinessId, projectId: string) {
+      return withAuthenticatedTx(db, authUserId, (tx) =>
+        tx
+          .select()
+          .from(toolRuns)
+          .where(and(eq(toolRuns.projectId, projectId), eq(toolRuns.businessId, businessId)))
+          .orderBy(desc(toolRuns.createdAt)),
+      );
+    },
+    insert(row) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const inserted = await tx.insert(toolRuns).values(row).returning();
+        return inserted[0]!;
       });
     },
   };

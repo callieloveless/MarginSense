@@ -220,6 +220,15 @@ export const suggestionTarget = pgEnum("suggestion_target", [
   "estimate_line_item",
 ]);
 
+/** How a tool run was invoked (constitution §5; add-tool-platform). `user` = a person opened
+ * the tool; `auto` = an event auto-triggered it (e.g. photo upload → Code Finder); `compose`
+ * = it ran as a hop in a composed tool graph. Drives the runner's step budget. */
+export const toolRunSource = pgEnum("tool_run_source", ["user", "auto", "compose"]);
+
+/** The outcome of one tool run — `ok`, or `error` (the run threw or its output failed
+ * validation). Failed runs are still recorded so partial AI spend stays observable (§7). */
+export const toolRunStatus = pgEnum("tool_run_status", ["ok", "error"]);
+
 /**
  * A typed entry in a project's shared context (constitution §4.1). The `payload` is a typed
  * JSON blob validated by the `src/context/` Zod schema for its `kind` — never `any`. `author`
@@ -258,6 +267,9 @@ export const conversationMessages = pgTable("conversation_messages", {
   author: authorKind("author").notNull().default("user"),
   authorTool: text("author_tool"),
   body: text("body").notNull(),
+  /** The tool run that posted this message, when a tool authored it (add-tool-platform).
+   * Nullable: user messages and pre-platform rows have none. Traceable to its cost (§6.6). */
+  toolRunId: uuid("tool_run_id").references(() => toolRuns.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -285,9 +297,38 @@ export const suggestions = pgTable("suggestions", {
   payload: jsonb("payload").notNull(),
   author: authorKind("author").notNull().default("user"),
   authorTool: text("author_tool"),
+  /** The tool run that proposed this suggestion, when a tool created it (add-tool-platform).
+   * Nullable: user-created and pre-platform suggestions have none. Every proposed change is
+   * traceable to the run — and cost — that produced it (§6.6). */
+  toolRunId: uuid("tool_run_id").references(() => toolRuns.id, { onDelete: "set null" }),
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * An audit record of one tool invocation (constitution §2 "Tool Run", §5, §7). Records what a
+ * run cost — tokens and latency — plus its tool, project, source, and status, so AI spend is
+ * observable per tenant as the product scales. Written by the tool runner through the tenant
+ * seam; `business_id` is stamped from the bound handle, never input. Failed runs are recorded
+ * too (status `error`) so partial spend is never invisible. Suggestions and conversation
+ * messages point back here via `tool_run_id`.
+ */
+export const toolRuns = pgTable("tool_runs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id")
+    .notNull()
+    .references(() => businesses.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  toolName: text("tool_name").notNull(),
+  status: toolRunStatus("status").notNull(),
+  source: toolRunSource("source").notNull().default("user"),
+  inputTokens: integer("input_tokens").notNull().default(0),
+  outputTokens: integer("output_tokens").notNull().default(0),
+  latencyMs: integer("latency_ms").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export type BusinessRow = typeof businesses.$inferSelect;
@@ -310,6 +351,8 @@ export type ConversationMessageRow = typeof conversationMessages.$inferSelect;
 export type NewConversationMessageRow = typeof conversationMessages.$inferInsert;
 export type SuggestionRow = typeof suggestions.$inferSelect;
 export type NewSuggestionRow = typeof suggestions.$inferInsert;
+export type ToolRunRow = typeof toolRuns.$inferSelect;
+export type NewToolRunRow = typeof toolRuns.$inferInsert;
 
 /** Valid context-entry kinds, for boundary validation. */
 export const CONTEXT_ENTRY_KINDS = [
@@ -342,3 +385,9 @@ export type LineCategoryName = (typeof LINE_CATEGORIES)[number];
 /** The set of valid project statuses, for boundary validation. */
 export const PROJECT_STATUSES = ["active", "complete", "archived"] as const;
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
+
+/** Valid tool-run sources and statuses, for boundary validation. */
+export const TOOL_RUN_SOURCES = ["user", "auto", "compose"] as const;
+export type ToolRunSourceName = (typeof TOOL_RUN_SOURCES)[number];
+export const TOOL_RUN_STATUSES = ["ok", "error"] as const;
+export type ToolRunStatusName = (typeof TOOL_RUN_STATUSES)[number];

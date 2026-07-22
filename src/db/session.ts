@@ -18,6 +18,7 @@ import {
   createDrizzleEstimateBackend,
   createDrizzleProjectBackend,
   createDrizzleSettingsBackend,
+  createDrizzleToolRunsBackend,
 } from "./drizzle-backend";
 import { resolveBusinessId, type AuthSession } from "./auth";
 import { createTenantDb, type BusinessId, type TenantDb } from "./tenant";
@@ -86,5 +87,6 @@ export function tenantDbForSession(authUserId: string, businessId: BusinessId): 
     settings: createDrizzleSettingsBackend(db, authUserId),
     estimates: createDrizzleEstimateBackend(db, authUserId),
     context: createDrizzleContextBackend(db, authUserId),
+    toolRuns: createDrizzleToolRunsBackend(db, authUserId),
   });
 }
