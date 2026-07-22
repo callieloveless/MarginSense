@@ -1,40 +1,18 @@
-"use client";
-
-import { useActionState } from "react";
-import { signInWithEmailAction, type ActionResult } from "../actions";
-
-/** Email one-time-code sign-in. Managed auth via Supabase (constitution §7). */
+/**
+ * Sign-up / sign-in is TEMPORARILY CLOSED (see relevant_notes.md → "Temporarily disabled").
+ *
+ * The email one-time-code flow is intact and unchanged in `../actions.ts`
+ * (`signInWithEmailAction`) and in git history — this page simply stops exposing it for now.
+ * To reopen sign-ups, restore the form (the previous version of this file renders it) and
+ * remove the note. Nothing else needs to change.
+ */
 export default function SignInPage() {
-  const [state, formAction, pending] = useActionState<ActionResult | null, FormData>(
-    async (_prev, formData) => signInWithEmailAction(formData),
-    null,
-  );
-
   return (
-    <form action={formAction} className="space-y-3">
-      <label className="block text-sm font-medium" htmlFor="email">
-        Sign in with your email
-      </label>
-      <input
-        id="email"
-        name="email"
-        type="email"
-        required
-        placeholder="you@example.com"
-        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-base dark:border-neutral-700 dark:bg-neutral-900"
-      />
-      <button
-        type="submit"
-        disabled={pending}
-        className="w-full rounded-md bg-neutral-900 px-3 py-2 text-base font-medium text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900"
-      >
-        {pending ? "Sending…" : "Send sign-in link"}
-      </button>
-      {state ? (
-        <p className={`text-sm ${state.ok ? "text-green-700" : "text-red-600"}`}>
-          {state.ok ? state.message : state.error}
-        </p>
-      ) : null}
-    </form>
+    <div className="space-y-2">
+      <h2 className="text-lg font-semibold">MarginSense isn&apos;t open for sign-ups yet</h2>
+      <p className="text-sm text-neutral-600 dark:text-neutral-400">
+        We&apos;re still building. Sign-ups are paused for now — check back soon.
+      </p>
+    </div>
   );
 }
