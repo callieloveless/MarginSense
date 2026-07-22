@@ -25,6 +25,11 @@
 
 - [x] 3.1 Implement the `TenantDb` seam: constructing a query handle requires a
       `business_id`; no unscoped handle is exported
+- [x] 3.1a Implement `withAuthenticatedTx` (`rls.ts`): every tenant query runs in a
+      transaction that sets `auth.uid()` from the verified session and `SET LOCAL ROLE
+      authenticated`, so RLS is enforced over the pooled Drizzle connection; grant the
+      `authenticated` role table/function privileges in the migration; unit-test the emitted
+      identity/role SQL and the fail-closed path
 - [x] 3.2 Tenant-scoped helpers: businesses (read own via session), projects (list / get /
       create / update status) — every helper takes the `TenantDb`, never a raw connection
 - [x] 3.3 Zod boundary schemas for project and business input (create/update)

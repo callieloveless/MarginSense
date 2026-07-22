@@ -47,6 +47,9 @@ change lays it down:
   with non-null `business_id`, **RLS on**.
 - Tenant-scoped query helpers in `src/db/` that require a `business_id`.
 - Supabase Auth integration points (sessions scoped to one business).
+- **RLS made real over Drizzle**: every tenant query runs in an authenticated
+  request-context transaction (`src/db/rls.ts`) that sets `auth.uid()` from the verified
+  session and drops to the `authenticated` role, so the policies actually enforce.
 - Tenant-isolation tests (one business can never read/write another's rows).
 
 **Needs from Callie:** a Supabase project + env secrets to run against live infra.

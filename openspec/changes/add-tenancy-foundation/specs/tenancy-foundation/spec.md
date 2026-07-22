@@ -41,6 +41,28 @@ client SHALL never supply the `business_id` used for authorization.
 - **THEN** the same migration enables RLS and creates its per-business policy — there is
   no window where the table exists unprotected
 
+### Requirement: RLS is enforced on every application query
+Because the application reaches the database as a single pooled connection role, the
+system SHALL run every tenant-scoped query inside an authenticated request context that
+publishes the server-verified user identity as `auth.uid()` and assumes a role the RLS
+policies apply to (rather than a role that bypasses them). The identity SHALL be the one
+verified from the session, never a value from client input, and SHALL be scoped to the
+single transaction.
+
+#### Scenario: Query carries the signed-in identity
+- **WHEN** a tenant-scoped query runs for a signed-in user
+- **THEN** it executes in a transaction where `auth.uid()` equals that user's id and the
+  active role is subject to RLS, so the policies filter rows to the user's business
+
+#### Scenario: No identity means no access
+- **WHEN** the authenticated context cannot be established (no verified user id)
+- **THEN** the query is not run (it fails closed) rather than executing with RLS bypassed
+
+#### Scenario: Context does not leak between requests
+- **WHEN** a request's authenticated transaction completes
+- **THEN** the identity and role revert, so a subsequent request on the same pooled
+  connection does not inherit the previous user's `auth.uid()` or role
+
 ### Requirement: Tenant-scoped data access helpers
 All application data access SHALL go through `src/db/` helpers that operate on a query
 handle already bound to a `business_id`; obtaining a handle SHALL require a

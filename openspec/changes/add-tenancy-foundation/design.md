@@ -41,9 +41,24 @@ rework.
   unit tests should catch cross-tenant bugs without a live Postgres, and defense in
   depth is cheap here.
 - **RLS keys off the authenticated user's business, resolved via the `users` table.**
-  Policy shape: `business_id in (select business_id from users where auth_id =
-  auth.uid())`. The client never supplies `business_id`; the server resolves it from the
-  session. Supabase's `auth.uid()` is the only external input the policies trust.
+  Policy shape: `business_id = public.current_business_id()`, where
+  `current_business_id()` reads `business_id from users where auth_id = auth.uid()`. The
+  client never supplies `business_id`; the server resolves it from the session. Supabase's
+  `auth.uid()` is the only external input the policies trust.
+- **`auth.uid()` is made real over Drizzle by a per-request transaction context.** The app
+  reaches Postgres through the Supabase pooler as a single login role, so on its own
+  `auth.uid()` is null and the login role (which owns the tables) would bypass RLS
+  entirely. `withAuthenticatedTx` (`src/db/rls.ts`) wraps every tenant query in a
+  transaction that (a) sets `request.jwt.claims.sub` to the *server-verified* user id so
+  `auth.uid()` resolves, and (b) `SET LOCAL ROLE authenticated` so the policies apply.
+  Both are `SET LOCAL` (transaction-scoped) — the only session-safe option under the
+  pooler's transaction mode. *Alternative:* `ALTER TABLE … FORCE ROW LEVEL SECURITY` so
+  even the owner is subject to RLS — rejected because it also blocks the `create_business`
+  `SECURITY DEFINER` bootstrap (which must insert before the user has a business); the
+  role-switch keeps the guarantee without breaking bootstrap. *Alternative:* routing all
+  reads through Supabase PostgREST instead of Drizzle — rejected to keep queries typed and
+  in one data layer. This keeps the constitution's DB-enforced-isolation guarantee (§6.3)
+  intact; it changes only the mechanism, so no amendment is needed.
 - **`users.auth_id` maps a Supabase Auth identity to exactly one business.** One row per
   user, unique `auth_id`, non-null `business_id`. Solo today; a future crews change can
   relax cardinality without breaking the policy shape.

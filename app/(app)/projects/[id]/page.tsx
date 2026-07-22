@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getServerSession, tenantDbForBusiness } from "@/src/db/session";
+import { getServerSession, tenantDbForSession } from "@/src/db/session";
 
 /**
  * Project detail (constitution §2) — the home a job's estimates, shared context, one
@@ -28,7 +28,7 @@ export default async function ProjectPage({
     );
   }
 
-  const project = await tenantDbForBusiness(session.businessId).getProject(id);
+  const project = await tenantDbForSession(session.authUserId, session.businessId).getProject(id);
   if (!project) notFound();
 
   return (

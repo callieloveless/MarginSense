@@ -100,3 +100,25 @@ BEGIN
   RETURN v_business_id;
 END;
 $$;
+--> statement-breakpoint
+
+-- ============================================================================
+-- Privileges for the `authenticated` role. RLS decides WHICH rows are visible;
+-- these grants decide whether the role may touch the tables at all. The app
+-- connects via the pooler and drops to `authenticated` per transaction
+-- (src/db/rls.ts), so these grants are what those per-request queries run under.
+-- `anon` is granted nothing here — there is no unauthenticated data access.
+-- (Supabase already makes the pooler login role a member of `authenticated`, so
+-- SET LOCAL ROLE authenticated succeeds; migrations themselves run as the owner.)
+-- ============================================================================
+GRANT USAGE ON SCHEMA public TO authenticated;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE ON "businesses" TO authenticated;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE ON "users" TO authenticated;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE ON "projects" TO authenticated;--> statement-breakpoint
+-- Postgres grants EXECUTE to PUBLIC by default on new functions; revoke that first so
+-- these SECURITY DEFINER functions are callable only by the authenticated role (they
+-- already fail closed on a null auth.uid(), but least-privilege is the rule).
+REVOKE EXECUTE ON FUNCTION public.current_business_id() FROM PUBLIC;--> statement-breakpoint
+REVOKE EXECUTE ON FUNCTION public.create_business(text, text) FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.current_business_id() TO authenticated;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.create_business(text, text) TO authenticated;

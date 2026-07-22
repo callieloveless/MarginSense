@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getServerSession, tenantDbForBusiness } from "@/src/db/session";
+import { getServerSession, tenantDbForSession } from "@/src/db/session";
 import { projectInputSchema } from "@/src/db/validation";
 
 export type CreateProjectResult =
@@ -30,7 +30,7 @@ export async function createProjectAction(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
   }
 
-  const tenantDb = tenantDbForBusiness(session.businessId);
+  const tenantDb = tenantDbForSession(session.authUserId, session.businessId);
   const project = await tenantDb.createProject(parsed.data);
 
   revalidatePath("/projects");

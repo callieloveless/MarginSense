@@ -98,10 +98,21 @@ returns suggestions; it has no write path to an estimate (§4).
 ## 3. Data & multi-tenancy conventions
 
 - Every business-owned table has a non-null `business_id`. **Row-Level Security is on**;
-  policies restrict every row to its business. This is the enforcement layer for tenant
-  isolation — the UI filtering it too, but the DB is the guarantee (constitution §6.3).
+  policies restrict every row to its business, keyed on `auth.uid()` via `users`. This is
+  the enforcement layer for tenant isolation — the UI filtering it too, but the DB is the
+  guarantee (constitution §6.3).
+- **RLS is made real over Drizzle by the request-context transaction.** The app connects
+  through the Supabase pooler as one role, so every tenant query runs inside
+  `withAuthenticatedTx` (`src/db/rls.ts`): a transaction that sets the server-verified
+  user id as `request.jwt.claims.sub` (so `auth.uid()` resolves) and `SET LOCAL ROLE
+  authenticated` (so policies apply rather than being bypassed by the owning role). Both
+  are transaction-local — required by the pooler's transaction mode. Migrations run as the
+  owner without the switch.
 - All tenant-scoped DB access goes through helpers in `src/db/` that require a
-  `business_id`. Never write a raw query that could span tenants.
+  `business_id` and run inside the authenticated context; feature code never gets the raw
+  connection. Never write a raw query that could span tenants. The lone privileged path is
+  the `create_business` bootstrap (`SECURITY DEFINER`), for the first sign-in when the user
+  has no business yet.
 - **Money columns are integer cents; time columns are integer minutes; percentages are
   basis points.** Column names make the unit explicit (`*_cents`, `*_minutes`, `*_bp`).
 - Timestamps in UTC; monetary rounding only at the presentation layer.

@@ -1,32 +1,46 @@
 /**
- * RLS proof suite (opt-in) — proves the DATABASE'S policies, not the app helpers
- * (constitution §6.3). Skipped unless `DATABASE_URL` points at a migrated database with
- * two seeded businesses and two auth roles. This complements the always-on helper-layer
- * isolation tests in `tenant.test.ts`.
+ * RLS proof suite (opt-in) — proves the DATABASE'S policies over the real Drizzle
+ * connection (constitution §6.3), including the `withAuthenticatedTx` request context.
+ * Skipped unless `DATABASE_URL` points at a migrated database seeded with two businesses
+ * and two users (their auth ids in `RLS_TEST_A_AUTH` / `RLS_TEST_B_AUTH`). Complements the
+ * always-on helper-layer isolation tests in `tenant.test.ts`.
  *
  * Setup expected when run:
  *   - migrations applied (`npm run db:migrate`)
- *   - env: DATABASE_URL, plus RLS_TEST_A_JWT / RLS_TEST_B_JWT (or role/claims) for two
- *     users in two different businesses.
- *
- * Until the live Supabase project + seed exist, this documents the contract and stays
- * skipped so the default suite needs no infra.
+ *   - two businesses, each with a user; export those users' auth uuids as
+ *     RLS_TEST_A_AUTH and RLS_TEST_B_AUTH, and at least one project owned by business B.
  */
 
 import { describe, expect, it } from "vitest";
 
-const hasInfra = Boolean(process.env.DATABASE_URL && process.env.RLS_TEST_A_JWT);
+const authA = process.env.RLS_TEST_A_AUTH;
+const authB = process.env.RLS_TEST_B_AUTH;
+const hasInfra = Boolean(process.env.DATABASE_URL && authA && authB);
 
-describe.skipIf(!hasInfra)("RLS policies — projects (live database)", () => {
-  it("business A's session cannot SELECT business B's projects", async () => {
-    // With hasInfra true, open a connection carrying A's auth claims and assert a
-    // SELECT over projects returns zero of B's rows (RLS filters them at the DB).
-    expect(hasInfra).toBe(true);
+describe.skipIf(!hasInfra)("RLS policies over Drizzle (live database)", () => {
+  it("a user only sees their own business's projects", async () => {
+    const { getDb } = await import("./client.js");
+    const { withAuthenticatedTx } = await import("./rls.js");
+    const { projects } = await import("./schema.js");
+    const db = getDb();
+
+    const asA = await withAuthenticatedTx(db, authA!, (tx) => tx.select().from(projects));
+    const asB = await withAuthenticatedTx(db, authB!, (tx) => tx.select().from(projects));
+
+    // No project id is visible to both sessions.
+    const idsA = new Set(asA.map((p) => p.id));
+    expect(asB.some((p) => idsA.has(p.id))).toBe(false);
   });
 
-  it("business A's session cannot INSERT a row tagged with B's business_id", async () => {
-    // Attempt an insert with B's business_id under A's claims; expect the WITH CHECK
-    // policy to reject it.
-    expect(hasInfra).toBe(true);
+  it("current_business_id differs per authenticated user", async () => {
+    const { getDb } = await import("./client.js");
+    const { businessIdForAuthUser } = await import("./rls.js");
+    const db = getDb();
+
+    const bizA = await businessIdForAuthUser(db, authA!);
+    const bizB = await businessIdForAuthUser(db, authB!);
+    expect(bizA).toBeTruthy();
+    expect(bizB).toBeTruthy();
+    expect(bizA).not.toBe(bizB);
   });
 });

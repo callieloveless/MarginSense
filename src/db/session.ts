@@ -11,12 +11,11 @@
 
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
-import { eq } from "drizzle-orm";
-import { users } from "./schema.js";
 import { getDb } from "./client.js";
+import { businessIdForAuthUser } from "./rls.js";
+import { createDrizzleProjectBackend } from "./drizzle-backend.js";
 import { resolveBusinessId, type AuthSession } from "./auth.js";
 import { createTenantDb, type BusinessId, type TenantDb } from "./tenant.js";
-import { getBackends } from "./client.js";
 
 export type ServerSession =
   | { status: "unconfigured" }
@@ -61,22 +60,22 @@ export async function getServerSession(): Promise<ServerSession> {
 
   const db = getDb();
   const businessId = await resolveBusinessId(session, {
-    async businessIdForAuthId(authUserId) {
-      const found = await db
-        .select({ businessId: users.businessId })
-        .from(users)
-        .where(eq(users.authId, authUserId))
-        .limit(1);
-      return found[0]?.businessId ?? null;
-    },
+    // Backed by the DB's own current_business_id(), evaluated in the authenticated RLS
+    // context — the same identity path the policies use.
+    businessIdForAuthId: (authUserId) => businessIdForAuthUser(db, authUserId),
   });
 
   if (!businessId) return { status: "no-business", authUserId: session.authUserId };
   return { status: "ready", authUserId: session.authUserId, businessId };
 }
 
-/** Build a tenant-bound data handle for a resolved business (constitution §6.3). Only
- * reached in the `ready` state, so the caller always has a real `business_id`. */
-export function tenantDbForBusiness(businessId: BusinessId): TenantDb {
-  return createTenantDb(businessId, getBackends());
+/**
+ * Build a tenant-bound data handle for the signed-in user (constitution §6.3). Only
+ * reached in the `ready` state, so both the verified `authUserId` (drives the RLS context)
+ * and the resolved `business_id` (drives the app-layer predicate) are real.
+ */
+export function tenantDbForSession(authUserId: string, businessId: BusinessId): TenantDb {
+  return createTenantDb(businessId, {
+    projects: createDrizzleProjectBackend(getDb(), authUserId),
+  });
 }

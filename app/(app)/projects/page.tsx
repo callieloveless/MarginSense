@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getServerSession, tenantDbForBusiness } from "@/src/db/session";
+import { getServerSession, tenantDbForSession } from "@/src/db/session";
 import type { ProjectRow } from "@/src/db/schema";
 import { NewProjectForm } from "./new-project-form";
 
@@ -14,7 +14,7 @@ export default async function ProjectsPage() {
   let projects: ProjectRow[] = [];
   let live = false;
   if (session.status === "ready") {
-    projects = await tenantDbForBusiness(session.businessId).listProjects();
+    projects = await tenantDbForSession(session.authUserId, session.businessId).listProjects();
     live = true;
   }
 

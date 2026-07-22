@@ -1,46 +1,50 @@
 /**
- * The production `ProjectBackend`: Drizzle SQL that filters and stamps by `business_id`
- * in the query itself (never in application memory). This is the first isolation layer;
- * RLS in the database is the second. `TenantDb` is the only caller, and it always passes
- * its own bound `businessId`.
+ * The production `ProjectBackend`: Drizzle SQL that filters and stamps by `business_id`,
+ * run inside the authenticated RLS context (`withAuthenticatedTx`). So there are two
+ * isolation layers on every query — the app-layer `business_id` predicate here, and the
+ * database's RLS policies keyed on `auth.uid()`. The backend is bound to the signed-in
+ * user at construction; `TenantDb` supplies the `business_id`.
  */
 
 import { and, eq } from "drizzle-orm";
-import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { projects } from "./schema.js";
+import { withAuthenticatedTx, type Db } from "./rls.js";
 import type { BusinessId, ProjectBackend } from "./tenant.js";
 
-/** The Drizzle handle. Schema generic left default; queries reference tables directly. */
-export type Db = PostgresJsDatabase<Record<string, never>>;
-
-export function createDrizzleProjectBackend(db: Db): ProjectBackend {
+export function createDrizzleProjectBackend(db: Db, authUserId: string): ProjectBackend {
   return {
-    async listByBusiness(businessId: BusinessId) {
-      return db
-        .select()
-        .from(projects)
-        .where(eq(projects.businessId, businessId));
+    listByBusiness(businessId: BusinessId) {
+      return withAuthenticatedTx(db, authUserId, (tx) =>
+        tx.select().from(projects).where(eq(projects.businessId, businessId)),
+      );
     },
-    async getByBusiness(businessId: BusinessId, id: string) {
-      const found = await db
-        .select()
-        .from(projects)
-        .where(and(eq(projects.id, id), eq(projects.businessId, businessId)))
-        .limit(1);
-      return found[0] ?? null;
+    getByBusiness(businessId: BusinessId, id: string) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const found = await tx
+          .select()
+          .from(projects)
+          .where(and(eq(projects.id, id), eq(projects.businessId, businessId)))
+          .limit(1);
+        return found[0] ?? null;
+      });
     },
-    async insert(row) {
-      const inserted = await db.insert(projects).values(row).returning();
-      // .returning() guarantees exactly one row for a single-values insert.
-      return inserted[0]!;
+    insert(row) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const inserted = await tx.insert(projects).values(row).returning();
+        // .returning() guarantees exactly one row for a single-values insert; RLS's
+        // WITH CHECK also verifies the row's business matches the caller's.
+        return inserted[0]!;
+      });
     },
-    async updateStatusByBusiness(businessId: BusinessId, id: string, status) {
-      const updated = await db
-        .update(projects)
-        .set({ status, updatedAt: new Date() })
-        .where(and(eq(projects.id, id), eq(projects.businessId, businessId)))
-        .returning();
-      return updated[0] ?? null;
+    updateStatusByBusiness(businessId: BusinessId, id: string, status) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const updated = await tx
+          .update(projects)
+          .set({ status, updatedAt: new Date() })
+          .where(and(eq(projects.id, id), eq(projects.businessId, businessId)))
+          .returning();
+        return updated[0] ?? null;
+      });
     },
   };
 }

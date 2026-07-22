@@ -3,22 +3,24 @@
  * is typed SQL, not PostgREST. Auth/session and (later) storage go through Supabase's own
  * client; only the raw data plane lives here.
  *
- * Connect with a role that is **subject to RLS** (not a superuser), so the database's
- * per-business policies are enforced even if application code has a bug (constitution
- * §6.3). The URL and role come from env — never the repo (techstack §7). Importing this
- * module does not connect; the connection is created lazily on first use so unit tests
- * (which use the in-memory backend) never require `DATABASE_URL`.
+ * The connection logs in through the Supabase pooler as one role for every request; each
+ * tenant query then drops to the `authenticated` role and sets the caller's identity via
+ * `withAuthenticatedTx` (see `rls.ts`), so RLS is enforced per request. The URL and
+ * credentials come from env — never the repo (techstack §7). Importing this module does
+ * not connect; the connection is created lazily on first use so unit tests (which use the
+ * in-memory backend) never require `DATABASE_URL`.
  */
 
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { createDrizzleProjectBackend, type Db } from "./drizzle-backend.js";
-import type { ProjectBackend } from "./tenant.js";
+import type { Db } from "./rls.js";
 
-let cached: { db: Db; backends: { projects: ProjectBackend } } | null = null;
+let cachedDb: Db | null = null;
 
-function connect(): { db: Db; backends: { projects: ProjectBackend } } {
-  if (cached) return cached;
+/** The live Drizzle handle. Throws if `DATABASE_URL` is unset. `prepare: false` is
+ * required by the Supabase transaction pooler. */
+export function getDb(): Db {
+  if (cachedDb) return cachedDb;
   const url = process.env.DATABASE_URL;
   if (!url) {
     throw new Error(
@@ -27,17 +29,6 @@ function connect(): { db: Db; backends: { projects: ProjectBackend } } {
     );
   }
   const sql = postgres(url, { prepare: false });
-  const db = drizzle(sql) as Db;
-  cached = { db, backends: { projects: createDrizzleProjectBackend(db) } };
-  return cached;
-}
-
-/** The live Drizzle handle. Throws if `DATABASE_URL` is unset. */
-export function getDb(): Db {
-  return connect().db;
-}
-
-/** The live tenant backends, for wiring into `createTenantDb`. Throws if unconfigured. */
-export function getBackends(): { projects: ProjectBackend } {
-  return connect().backends;
+  cachedDb = drizzle(sql) as Db;
+  return cachedDb;
 }
