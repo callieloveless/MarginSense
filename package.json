@@ -1,0 +1,18 @@
+{
+  "name": "marginsense",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "MarginSense — is this estimate worth the crew hours it takes?",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:engine": "vitest run src/engine",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}
