@@ -140,6 +140,12 @@ Every tool in `src/tools/*` exports the same shape so tools stay uniform and com
 - **Cost logging** — every run records a `tool_run` (tokens, latency) via `src/ai/`.
 - **Disclaimers** — Photo Advisor and Code Finder attach the licensed-professional /
   non-authoritative disclaimer to their output (constitution §5, §7).
+- **Composable by design (forward-looking)** — because every tool has typed
+  `inputSchema` / `outputSchema` and emits suggestions instead of writing, tools can later be
+  wired together in a visual **tool-graph editor** (constitution §5, "Composing tools"): one
+  tool's output feeding another's input, auto-triggers drawn as edges. Not built in v1 — but
+  keep tool I/O typed and side-effect-free (suggestions only, no hidden writes) so it stays
+  possible without redesign.
 
 ---
 

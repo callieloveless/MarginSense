@@ -54,6 +54,17 @@ App-layer tenant isolation is already proven by in-memory tests (`tenant.test.ts
 - [ ] Production Supabase (separate from dev); apply all migrations there.
 - [ ] Confirm middleware session refresh + auth redirects on the deployed domain.
 
+## Future direction (north-star)
+
+- **Visual tool-graph editor** *(2026-07-22)* — a later feature: a canvas where tools are
+  nodes and connections are edges, so one tool's output feeds another's input and auto-triggers
+  (photo upload → Code Finder) are drawn, not coded. Meta/admin surface first, power-user
+  contractors later; lands **after the v1 tools ship**. It changes none of the tool rules
+  (read-only snapshot in, suggestions out). **Guardrail for whoever builds the tool platform
+  (#6):** keep every tool's `inputSchema`/`outputSchema` typed and side-effect-free (suggestions
+  only, no hidden writes) so tools stay wirable later — but don't build the graph now. See
+  constitution §5 "Composing tools", techstack §4, PROGRESS #10.
+
 ## Gotchas & lessons
 
 - **OpenSpec CLI package** — the CLI is `@fission-ai/openspec` (`npm i -g @fission-ai/openspec`,

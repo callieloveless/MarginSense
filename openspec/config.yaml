@@ -33,7 +33,11 @@ context: |
   - Tools are their own category (AI-powered, openable): Material Finder, Photo Advisor,
     Code Finder, Client Estimate Doc. A tool receives a READ-ONLY snapshot and has no write
     path to an estimate or context fact — it only SUGGESTS changes the user confirms. Some
-    auto-trigger (Code Finder on photo upload) but still only suggest.
+    auto-trigger (Code Finder on photo upload) but still only suggest. Future north-star
+    (after v1 tools ship): a visual tool-graph editor wiring tool outputs into tool inputs,
+    with auto-triggers as edges (constitution §5, "Composing tools") — so keep every tool's
+    inputSchema/outputSchema typed and side-effect-free (suggestions only) so tools stay
+    composable, but do NOT build the graph now.
 
   Module separation (constitution §6.8): the pure engine (src/engine/) owns the math;
   estimate editing (src/estimate/) and profit signaling/dashboard (src/profit/) are SEPARATE

@@ -23,8 +23,9 @@
 | 7 | Photo Advisor + Code Finder (auto-trigger) | `photo-advisor`, `code-finder` | ⏳ Planned |
 | 8 | Client Estimate Doc | `client-estimate-doc` | ⏳ Planned |
 | 9 | Hardening & launch pass | — | ⏳ Planned |
+| 10 | Tool graph editor (meta) | — | 🌟 North-star (after core tools ship) |
 
-Legend: ✅ done · 🔨 in progress · 📝 proposal written, not started · ⏳ planned, not yet proposed
+Legend: ✅ done · 🔨 in progress · 📝 proposal written, not started · ⏳ planned, not yet proposed · 🌟 north-star, later
 
 > Work that's coded but waiting on a live Supabase project (apply migrations, prove RLS
 > end-to-end, walk the flows), plus gotchas and conventions worth remembering, live in
@@ -102,6 +103,16 @@ overhead, EPH never leak into it). Generates the polished proposal as a `documen
 Money-critical e2e suite (onboarding → estimate → signal → accept suggestion → client
 doc), tenant-isolation audit, AI cost observability review, accessibility pass
 (colors always paired with text), Vercel + production Supabase setup.
+
+### 10. 🌟 Tool graph editor (meta) — north-star, later
+A **visual tool-graph editor** where tools are nodes and their connections are edges: one
+tool's output feeds another's input, and auto-triggers (photo upload → Code Finder) are drawn
+rather than coded (constitution §5, "Composing tools"). Starts as a **meta / admin** surface
+for configuring how the tools connect, later opening to power-user contractors. Lands **after
+the v1 tools ship** (#6–#8) and changes none of the tool rules — composed tools still read a
+read-only snapshot and emit only suggestions. No redesign needed now; the only ask on earlier
+phases is to keep tool `inputSchema`/`outputSchema` typed and side-effect-free (techstack §4)
+so tools stay wirable.
 
 ---
 
