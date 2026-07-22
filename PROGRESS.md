@@ -27,7 +27,8 @@
 Legend: ✅ done · 🔨 in progress · 📝 proposal written, not started · ⏳ planned, not yet proposed
 
 > Work that's coded but waiting on a live Supabase project (apply migrations, prove RLS
-> end-to-end, walk the flows) is tracked in [`DEFERRED-INFRA.md`](./DEFERRED-INFRA.md).
+> end-to-end, walk the flows), plus gotchas and conventions worth remembering, live in
+> [`relevant_notes.md`](./relevant_notes.md) — skim it at the start of a task.
 
 ---
 

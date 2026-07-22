@@ -19,6 +19,11 @@ repo. This file is the short version plus workflow rules.
 If a request conflicts with the constitution, say so and propose an amendment rather than
 quietly working around it.
 
+**Also skim [`relevant_notes.md`](./relevant_notes.md) at the start of a task** — a living
+scratchpad of deferred work (e.g. everything waiting on a live Supabase project: applying
+migrations, proving RLS end-to-end), gotchas, and conventions worth remembering. Add to it
+when you learn something the next person would want to know.
+
 ## The 60-second mental model
 
 - **MarginSense** helps trade contractors (starting with general contractors) run their
