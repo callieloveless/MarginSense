@@ -9,14 +9,19 @@
 import { and, asc, desc, eq } from "drizzle-orm";
 import {
   businessSettings,
+  contextEntries,
+  conversationMessages,
   estimates,
   lineItems,
   overheadItems,
   projects,
+  suggestions,
 } from "./schema";
 import { withAuthenticatedTx, type Db, type Tx } from "./rls";
+import { nextStatus, suggestionEffect } from "../context";
 import type {
   BusinessId,
+  ContextBackend,
   EstimateBackend,
   EstimatePatch,
   ProjectBackend,
@@ -220,6 +225,148 @@ export function createDrizzleEstimateBackend(db: Db, authUserId: string): Estima
           result.push({ estimate, lines });
         }
         return result;
+      });
+    },
+  };
+}
+
+/**
+ * The production `ContextBackend`: Drizzle SQL inside the authenticated RLS context, so both
+ * isolation layers apply. `resolveSuggestion` is the accept/dismiss orchestrator — it loads
+ * the suggestion, runs the pure state machine, and (on accept) performs the effect (insert a
+ * context entry, or append a line item to the target estimate) AND flips the status in **one
+ * transaction**; a failure rolls back both, leaving the suggestion pending.
+ */
+export function createDrizzleContextBackend(db: Db, authUserId: string): ContextBackend {
+  return {
+    listEntries(businessId: BusinessId, projectId: string) {
+      return withAuthenticatedTx(db, authUserId, (tx) =>
+        tx
+          .select()
+          .from(contextEntries)
+          .where(and(eq(contextEntries.projectId, projectId), eq(contextEntries.businessId, businessId)))
+          .orderBy(asc(contextEntries.createdAt)),
+      );
+    },
+    addEntry(row) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const inserted = await tx.insert(contextEntries).values(row).returning();
+        return inserted[0]!;
+      });
+    },
+    listMessages(businessId: BusinessId, projectId: string) {
+      return withAuthenticatedTx(db, authUserId, (tx) =>
+        tx
+          .select()
+          .from(conversationMessages)
+          .where(
+            and(
+              eq(conversationMessages.projectId, projectId),
+              eq(conversationMessages.businessId, businessId),
+            ),
+          )
+          .orderBy(asc(conversationMessages.createdAt)),
+      );
+    },
+    addMessage(row) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const inserted = await tx.insert(conversationMessages).values(row).returning();
+        return inserted[0]!;
+      });
+    },
+    listSuggestions(businessId: BusinessId, projectId: string, opts) {
+      return withAuthenticatedTx(db, authUserId, (tx) => {
+        const where = opts?.status
+          ? and(
+              eq(suggestions.projectId, projectId),
+              eq(suggestions.businessId, businessId),
+              eq(suggestions.status, opts.status),
+            )
+          : and(eq(suggestions.projectId, projectId), eq(suggestions.businessId, businessId));
+        return tx.select().from(suggestions).where(where).orderBy(desc(suggestions.createdAt));
+      });
+    },
+    getSuggestion(businessId: BusinessId, id: string) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const found = await tx
+          .select()
+          .from(suggestions)
+          .where(and(eq(suggestions.id, id), eq(suggestions.businessId, businessId)))
+          .limit(1);
+        return found[0] ?? null;
+      });
+    },
+    createSuggestion(row) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const inserted = await tx.insert(suggestions).values(row).returning();
+        return inserted[0]!;
+      });
+    },
+    resolveSuggestion(businessId: BusinessId, id: string, action) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const found = await tx
+          .select()
+          .from(suggestions)
+          .where(and(eq(suggestions.id, id), eq(suggestions.businessId, businessId)))
+          .limit(1);
+        const s = found[0];
+        if (!s) return { ok: false as const, error: "Suggestion not found." };
+
+        const transition = nextStatus(s.status, action);
+        if (!transition.changed) return { ok: true as const, suggestion: s, committed: null };
+
+        if (action === "dismiss") {
+          const [updated] = await tx
+            .update(suggestions)
+            .set({ status: "dismissed", resolvedAt: new Date(), updatedAt: new Date() })
+            .where(eq(suggestions.id, id))
+            .returning();
+          return { ok: true as const, suggestion: updated!, committed: null };
+        }
+
+        const eff = suggestionEffect({
+          target: s.target,
+          payload: s.payload,
+          targetEstimateId: s.targetEstimateId,
+        });
+        if (!eff.ok) return { ok: false as const, error: eff.error };
+
+        if (eff.effect.kind === "commit_context_entry") {
+          await tx.insert(contextEntries).values({
+            businessId,
+            projectId: s.projectId,
+            kind: eff.effect.entryKind,
+            payload: eff.effect.payload,
+            author: s.author,
+            authorTool: s.authorTool,
+          });
+        } else {
+          // Append the proposed line to the target estimate (sort after existing lines).
+          const existing = await lineItemsFor(tx, businessId, eff.effect.estimateId);
+          const line = eff.effect.line;
+          await tx.insert(lineItems).values({
+            businessId,
+            estimateId: eff.effect.estimateId,
+            category: line.category,
+            description: line.description ?? null,
+            laborMinutes: line.laborMinutes ?? null,
+            quantity: line.quantity ?? null,
+            unitCostCents: line.unitCostCents ?? null,
+            priceCents: line.priceCents ?? null,
+            sortOrder: existing.length,
+          });
+        }
+
+        const [updated] = await tx
+          .update(suggestions)
+          .set({ status: "accepted", resolvedAt: new Date(), updatedAt: new Date() })
+          .where(eq(suggestions.id, id))
+          .returning();
+        return {
+          ok: true as const,
+          suggestion: updated!,
+          committed: eff.effect.kind === "commit_context_entry" ? "context_entry" : "estimate_line_item",
+        };
       });
     },
   };

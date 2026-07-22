@@ -14,6 +14,7 @@ import { createServerClient } from "@supabase/ssr";
 import { getDb } from "./client";
 import { businessIdForAuthUser } from "./rls";
 import {
+  createDrizzleContextBackend,
   createDrizzleEstimateBackend,
   createDrizzleProjectBackend,
   createDrizzleSettingsBackend,
@@ -84,5 +85,6 @@ export function tenantDbForSession(authUserId: string, businessId: BusinessId): 
     projects: createDrizzleProjectBackend(db, authUserId),
     settings: createDrizzleSettingsBackend(db, authUserId),
     estimates: createDrizzleEstimateBackend(db, authUserId),
+    context: createDrizzleContextBackend(db, authUserId),
   });
 }

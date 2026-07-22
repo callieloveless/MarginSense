@@ -16,18 +16,35 @@
 
 import type {
   BusinessSettingsRow,
+  ContextEntryKindName,
+  ContextEntryRow,
+  ConversationMessageRow,
   EstimateRow,
   LineCategoryName,
   LineItemRow,
   NewBusinessSettingsRow,
+  NewContextEntryRow,
+  NewConversationMessageRow,
   NewEstimateRow,
   NewLineItemRow,
   NewOverheadItemRow,
   NewProjectRow,
+  NewSuggestionRow,
   OverheadItemRow,
   ProjectRow,
   ProjectStatus,
+  SuggestionRow,
+  SuggestionStatusName,
+  SuggestionTargetName,
 } from "./schema";
+import {
+  authorToRow,
+  nextStatus,
+  suggestionEffect,
+  type Author,
+  type ProposedLineItem,
+  type SuggestionAction,
+} from "../context";
 
 /** A business id. A branded string would be nicer; kept plain for v1 simplicity. */
 export type BusinessId = string;
@@ -157,12 +174,73 @@ export interface EstimateBackend {
   listActiveWithLines(businessId: BusinessId): Promise<EstimateWithLines[]>;
 }
 
-/** Backends a {@link TenantDb} composes. `settings`/`estimates` are optional so tests wire
- * just what they exercise; feature code (via `tenantDbForSession`) supplies all. */
+/** A context entry to add. `business_id` and author columns are stamped by `TenantDb`. */
+export interface ContextEntryInput {
+  projectId: string;
+  kind: ContextEntryKindName;
+  /** Validated by the `src/context/` schema for `kind` before it reaches here. */
+  payload: unknown;
+  author?: Author | undefined;
+}
+
+/** A message to post into a project's single conversation. */
+export interface MessageInput {
+  projectId: string;
+  body: string;
+  author?: Author | undefined;
+}
+
+/** A suggestion to create (always `pending`). */
+export interface SuggestionInput {
+  projectId: string;
+  target: SuggestionTargetName;
+  payload: unknown;
+  targetEstimateId?: string | null | undefined;
+  author?: Author | undefined;
+}
+
+/** The outcome of resolving (accepting/dismissing) a suggestion. */
+export type SuggestionResolution =
+  | {
+      ok: true;
+      suggestion: SuggestionRow;
+      /** What accepting committed, or null for a dismiss / idempotent no-op. */
+      committed: "context_entry" | "estimate_line_item" | null;
+    }
+  | { ok: false; error: string };
+
+/**
+ * The context port `TenantDb` talks to. Like the others, every method takes `businessId`
+ * explicitly (only `TenantDb` calls these, always with its own bound id). `resolveSuggestion`
+ * is the accept/dismiss orchestrator: it runs the state machine and performs the effect
+ * (commit a context entry or append an estimate line item) in **one** transaction.
+ */
+export interface ContextBackend {
+  listEntries(businessId: BusinessId, projectId: string): Promise<ContextEntryRow[]>;
+  addEntry(row: NewContextEntryRow): Promise<ContextEntryRow>;
+  listMessages(businessId: BusinessId, projectId: string): Promise<ConversationMessageRow[]>;
+  addMessage(row: NewConversationMessageRow): Promise<ConversationMessageRow>;
+  listSuggestions(
+    businessId: BusinessId,
+    projectId: string,
+    opts?: { status?: SuggestionStatusName | undefined } | undefined,
+  ): Promise<SuggestionRow[]>;
+  getSuggestion(businessId: BusinessId, id: string): Promise<SuggestionRow | null>;
+  createSuggestion(row: NewSuggestionRow): Promise<SuggestionRow>;
+  resolveSuggestion(
+    businessId: BusinessId,
+    id: string,
+    action: SuggestionAction,
+  ): Promise<SuggestionResolution>;
+}
+
+/** Backends a {@link TenantDb} composes. All but `projects` are optional so tests wire just
+ * what they exercise; feature code (via `tenantDbForSession`) supplies all. */
 export interface TenantBackends {
   projects: ProjectBackend;
   settings?: SettingsBackend | undefined;
   estimates?: EstimateBackend | undefined;
+  context?: ContextBackend | undefined;
 }
 
 /**
@@ -175,6 +253,7 @@ export class TenantDb {
   readonly #projects: ProjectBackend;
   readonly #settings: SettingsBackend | undefined;
   readonly #estimates: EstimateBackend | undefined;
+  readonly #context: ContextBackend | undefined;
 
   /** @internal — use {@link createTenantDb}, which requires a business id. */
   constructor(businessId: BusinessId, backends: TenantBackends) {
@@ -185,6 +264,7 @@ export class TenantDb {
     this.#projects = backends.projects;
     this.#settings = backends.settings;
     this.#estimates = backends.estimates;
+    this.#context = backends.context;
   }
 
   /** The settings backend, or a clear error if this handle wasn't wired with one. */
@@ -201,6 +281,14 @@ export class TenantDb {
       throw new Error("TenantDb has no estimate backend configured.");
     }
     return this.#estimates;
+  }
+
+  /** The context backend, or a clear error if this handle wasn't wired with one. */
+  get #contextBackend(): ContextBackend {
+    if (!this.#context) {
+      throw new Error("TenantDb has no context backend configured.");
+    }
+    return this.#context;
   }
 
   /** List this business's projects. Another tenant's rows can never appear here. */
@@ -347,6 +435,82 @@ export class TenantDb {
   /** Every project's active estimate version + its lines — the portfolio input. */
   listActiveEstimatesWithLines(): Promise<EstimateWithLines[]> {
     return this.#estimateBackend.listActiveWithLines(this.businessId);
+  }
+
+  // --- Shared project context (constitution §4, §5) --------------------------------
+
+  /** This project's context entries, scoped to this business. */
+  listContextEntries(projectId: string): Promise<ContextEntryRow[]> {
+    return this.#contextBackend.listEntries(this.businessId, projectId);
+  }
+
+  /** Add a typed context entry. Author defaults to the user; `business_id` is this handle's. */
+  addContextEntry(input: ContextEntryInput): Promise<ContextEntryRow> {
+    const { author, authorTool } = authorToRow(input.author ?? "user");
+    return this.#contextBackend.addEntry({
+      businessId: this.businessId,
+      projectId: input.projectId,
+      kind: input.kind,
+      payload: input.payload,
+      author,
+      authorTool,
+    });
+  }
+
+  /** This project's single conversation, oldest-first (the backend's ordering). */
+  listMessages(projectId: string): Promise<ConversationMessageRow[]> {
+    return this.#contextBackend.listMessages(this.businessId, projectId);
+  }
+
+  /** Post a message into the project's one conversation. */
+  postMessage(input: MessageInput): Promise<ConversationMessageRow> {
+    const { author, authorTool } = authorToRow(input.author ?? "user");
+    return this.#contextBackend.addMessage({
+      businessId: this.businessId,
+      projectId: input.projectId,
+      body: input.body,
+      author,
+      authorTool,
+    });
+  }
+
+  /** This project's suggestions, optionally filtered by status (e.g. the pending queue). */
+  listSuggestions(
+    projectId: string,
+    opts?: { status?: SuggestionStatusName | undefined },
+  ): Promise<SuggestionRow[]> {
+    return this.#contextBackend.listSuggestions(this.businessId, projectId, opts);
+  }
+
+  /** The project's pending suggestions — the queue awaiting confirmation. */
+  listPendingSuggestions(projectId: string): Promise<SuggestionRow[]> {
+    return this.#contextBackend.listSuggestions(this.businessId, projectId, { status: "pending" });
+  }
+
+  /** Create a `pending` suggestion. Nothing is applied until the user accepts it. */
+  createSuggestion(input: SuggestionInput): Promise<SuggestionRow> {
+    const { author, authorTool } = authorToRow(input.author ?? "user");
+    return this.#contextBackend.createSuggestion({
+      businessId: this.businessId,
+      projectId: input.projectId,
+      target: input.target,
+      targetEstimateId: input.targetEstimateId ?? null,
+      payload: input.payload,
+      status: "pending",
+      author,
+      authorTool,
+    });
+  }
+
+  /** Accept a suggestion — the ONLY path that commits its proposed change (server-side, one
+   * transaction). A no-op if it isn't pending. */
+  acceptSuggestion(id: string): Promise<SuggestionResolution> {
+    return this.#contextBackend.resolveSuggestion(this.businessId, id, "accept");
+  }
+
+  /** Dismiss a suggestion — remembered so it never re-surfaces; commits nothing. */
+  dismissSuggestion(id: string): Promise<SuggestionResolution> {
+    return this.#contextBackend.resolveSuggestion(this.businessId, id, "dismiss");
   }
 }
 
@@ -565,6 +729,136 @@ export function createMemoryEstimateBackend(
             (l) => l.businessId === businessId && l.estimateId === estimate.id,
           ),
         }));
+    },
+  };
+}
+
+/**
+ * An in-memory {@link ContextBackend} over shared arrays holding *every* tenant's context
+ * entries, messages, and suggestions — the condition RLS defends against. A handle bound to
+ * A can never read or resolve B's rows here (the isolation tests assert this). `accept`
+ * performs the suggestion's effect: it commits a context entry directly, and delegates an
+ * estimate line-item add to the optional `appendLineItem` hook (so a test can wire it to the
+ * estimate backend). The state machine + effect come from `src/context/`.
+ */
+export function createMemoryContextBackend(
+  opts: {
+    appendLineItem?:
+      | ((input: { businessId: BusinessId; estimateId: string; line: ProposedLineItem }) => void)
+      | undefined;
+  } = {},
+): ContextBackend {
+  const entries: ContextEntryRow[] = [];
+  const messages: ConversationMessageRow[] = [];
+  const suggestionRows: SuggestionRow[] = [];
+  let seq = 0;
+  const now = new Date(0);
+
+  return {
+    async listEntries(businessId, projectId) {
+      return entries.filter((e) => e.businessId === businessId && e.projectId === projectId);
+    },
+    async addEntry(row) {
+      const stored: ContextEntryRow = {
+        id: `mem-ctx-${++seq}`,
+        businessId: row.businessId,
+        projectId: row.projectId,
+        kind: row.kind,
+        payload: row.payload,
+        author: row.author ?? "user",
+        authorTool: row.authorTool ?? null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      entries.push(stored);
+      return stored;
+    },
+    async listMessages(businessId, projectId) {
+      return messages.filter((m) => m.businessId === businessId && m.projectId === projectId);
+    },
+    async addMessage(row) {
+      const stored: ConversationMessageRow = {
+        id: `mem-msg-${++seq}`,
+        businessId: row.businessId,
+        projectId: row.projectId,
+        author: row.author ?? "user",
+        authorTool: row.authorTool ?? null,
+        body: row.body,
+        createdAt: now,
+      };
+      messages.push(stored);
+      return stored;
+    },
+    async listSuggestions(businessId, projectId, listOpts) {
+      return suggestionRows.filter(
+        (s) =>
+          s.businessId === businessId &&
+          s.projectId === projectId &&
+          (listOpts?.status === undefined || s.status === listOpts.status),
+      );
+    },
+    async getSuggestion(businessId, id) {
+      return suggestionRows.find((s) => s.id === id && s.businessId === businessId) ?? null;
+    },
+    async createSuggestion(row) {
+      const stored: SuggestionRow = {
+        id: `mem-sug-${++seq}`,
+        businessId: row.businessId,
+        projectId: row.projectId,
+        status: row.status ?? "pending",
+        target: row.target,
+        targetEstimateId: row.targetEstimateId ?? null,
+        payload: row.payload,
+        author: row.author ?? "user",
+        authorTool: row.authorTool ?? null,
+        resolvedAt: null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      suggestionRows.push(stored);
+      return stored;
+    },
+    async resolveSuggestion(businessId, id, action) {
+      const s = suggestionRows.find((x) => x.id === id && x.businessId === businessId);
+      if (!s) return { ok: false, error: "Suggestion not found." };
+
+      const transition = nextStatus(s.status, action);
+      if (!transition.changed) return { ok: true, suggestion: s, committed: null };
+
+      if (action === "dismiss") {
+        s.status = "dismissed";
+        s.resolvedAt = now;
+        return { ok: true, suggestion: s, committed: null };
+      }
+
+      const eff = suggestionEffect({
+        target: s.target,
+        payload: s.payload,
+        targetEstimateId: s.targetEstimateId,
+      });
+      if (!eff.ok) return { ok: false, error: eff.error };
+
+      if (eff.effect.kind === "commit_context_entry") {
+        entries.push({
+          id: `mem-ctx-${++seq}`,
+          businessId,
+          projectId: s.projectId,
+          kind: eff.effect.entryKind,
+          payload: eff.effect.payload,
+          author: s.author,
+          authorTool: s.authorTool,
+          createdAt: now,
+          updatedAt: now,
+        });
+        s.status = "accepted";
+        s.resolvedAt = now;
+        return { ok: true, suggestion: s, committed: "context_entry" };
+      }
+
+      opts.appendLineItem?.({ businessId, estimateId: eff.effect.estimateId, line: eff.effect.line });
+      s.status = "accepted";
+      s.resolvedAt = now;
+      return { ok: true, suggestion: s, committed: "estimate_line_item" };
     },
   };
 }

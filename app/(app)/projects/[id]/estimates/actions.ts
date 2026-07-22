@@ -34,14 +34,28 @@ export async function createEstimateAction(
 
   const versionLabel = field(formData, "versionLabel").trim() || "v1";
   const existing = await tenantDb.listEstimates(projectId);
+  const isFirst = existing.length === 0;
 
   const estimate = await tenantDb.createEstimate({
     projectId,
     versionLabel,
     targetMarginBp: settings.targetMarginBp,
     contingencyBp: settings.defaultContingencyBp,
-    isActive: existing.length === 0, // first version is the active one
+    isActive: isFirst, // first version is the active one
   });
+
+  // Creating an estimate seeds the project's shared context (constitution §4): the first
+  // version records a `fact` so the "one job, one memory" thread reflects the job's estimate.
+  if (isFirst) {
+    await tenantDb.addContextEntry({
+      projectId,
+      kind: "fact",
+      payload: {
+        label: "Estimate started",
+        value: `Version "${versionLabel}" — cost and hour data fill in as line items are added.`,
+      },
+    });
+  }
 
   revalidatePath(`/projects/${projectId}`);
   redirect(`/projects/${projectId}/estimates/${estimate.id}`);

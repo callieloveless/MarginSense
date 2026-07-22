@@ -22,6 +22,7 @@ import {
   bigint,
   boolean,
   doublePrecision,
+  jsonb,
 } from "drizzle-orm/pg-core";
 
 /** A project's lifecycle status. Kept small and explicit for v1. */
@@ -192,6 +193,103 @@ export const lineItems = pgTable("line_items", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// --- Shared project context (constitution §4; add-project-context) ------------------
+
+/** Who authored a context entry, message, or suggestion: the human owner or a named tool. */
+export const authorKind = pgEnum("author_kind", ["user", "tool"]);
+
+/** The typed kinds of shared-context entry (constitution §4.1). */
+export const contextEntryKind = pgEnum("context_entry_kind", [
+  "finding",
+  "material",
+  "code_ref",
+  "photo",
+  "fact",
+]);
+
+/** A suggestion's lifecycle (constitution §4.3, §5). */
+export const suggestionStatus = pgEnum("suggestion_status", [
+  "pending",
+  "accepted",
+  "dismissed",
+]);
+
+/** What a suggestion proposes to change when accepted. */
+export const suggestionTarget = pgEnum("suggestion_target", [
+  "context_entry",
+  "estimate_line_item",
+]);
+
+/**
+ * A typed entry in a project's shared context (constitution §4.1). The `payload` is a typed
+ * JSON blob validated by the `src/context/` Zod schema for its `kind` — never `any`. `author`
+ * is the human owner today; tool authors carry a `author_tool` name once tools ship.
+ */
+export const contextEntries = pgTable("context_entries", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id")
+    .notNull()
+    .references(() => businesses.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  kind: contextEntryKind("kind").notNull(),
+  payload: jsonb("payload").notNull(),
+  author: authorKind("author").notNull().default("user"),
+  /** The tool's name when `author = 'tool'`; null for the user. */
+  authorTool: text("author_tool"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * A message in a project's **single** conversation (constitution §4.2). All tools and the
+ * user post into one thread per project (keyed by `project_id`); there are no per-tool
+ * histories. Each message is attributed to its author.
+ */
+export const conversationMessages = pgTable("conversation_messages", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id")
+    .notNull()
+    .references(() => businesses.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  author: authorKind("author").notNull().default("user"),
+  authorTool: text("author_tool"),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * A proposed change awaiting confirmation (constitution §4.3, §5). Accepting is the ONLY
+ * path that commits the proposed context entry or estimate line item; a `dismissed`
+ * suggestion is remembered so it does not nag. `payload` is the typed proposal (validated by
+ * `src/context/`); `target_estimate_id` names the estimate for an `estimate_line_item`
+ * target. Nothing is applied automatically — new rows are `pending`.
+ */
+export const suggestions = pgTable("suggestions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id")
+    .notNull()
+    .references(() => businesses.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  status: suggestionStatus("status").notNull().default("pending"),
+  target: suggestionTarget("target").notNull(),
+  /** For an `estimate_line_item` target: the estimate the line is added to on accept. */
+  targetEstimateId: uuid("target_estimate_id").references(() => estimates.id, {
+    onDelete: "cascade",
+  }),
+  payload: jsonb("payload").notNull(),
+  author: authorKind("author").notNull().default("user"),
+  authorTool: text("author_tool"),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type BusinessRow = typeof businesses.$inferSelect;
 export type NewBusinessRow = typeof businesses.$inferInsert;
 export type UserRow = typeof users.$inferSelect;
@@ -206,6 +304,28 @@ export type EstimateRow = typeof estimates.$inferSelect;
 export type NewEstimateRow = typeof estimates.$inferInsert;
 export type LineItemRow = typeof lineItems.$inferSelect;
 export type NewLineItemRow = typeof lineItems.$inferInsert;
+export type ContextEntryRow = typeof contextEntries.$inferSelect;
+export type NewContextEntryRow = typeof contextEntries.$inferInsert;
+export type ConversationMessageRow = typeof conversationMessages.$inferSelect;
+export type NewConversationMessageRow = typeof conversationMessages.$inferInsert;
+export type SuggestionRow = typeof suggestions.$inferSelect;
+export type NewSuggestionRow = typeof suggestions.$inferInsert;
+
+/** Valid context-entry kinds, for boundary validation. */
+export const CONTEXT_ENTRY_KINDS = [
+  "finding",
+  "material",
+  "code_ref",
+  "photo",
+  "fact",
+] as const;
+export type ContextEntryKindName = (typeof CONTEXT_ENTRY_KINDS)[number];
+
+/** Valid suggestion statuses and targets, for boundary validation. */
+export const SUGGESTION_STATUSES = ["pending", "accepted", "dismissed"] as const;
+export type SuggestionStatusName = (typeof SUGGESTION_STATUSES)[number];
+export const SUGGESTION_TARGETS = ["context_entry", "estimate_line_item"] as const;
+export type SuggestionTargetName = (typeof SUGGESTION_TARGETS)[number];
 
 /** The set of valid line categories, for boundary validation. */
 export const LINE_CATEGORIES = [
