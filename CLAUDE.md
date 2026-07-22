@@ -85,6 +85,67 @@ bumps with no behavioral delta. When in doubt, write the proposal.
 Keep `openspec/config.yaml` (the `context:` and `rules:` the AI sees when authoring
 artifacts) in sync with the constitution and techstack.
 
+## Execution playbook (how changes #1–#5 actually got built — reuse it)
+
+The repeatable recipe. Each change followed this; the next one should too.
+
+1. **Propose + validate** (above) — `/opsx:propose`, then `openspec validate <id> --strict`.
+2. **Read before writing** — the constitution section it implements, the change's spec delta,
+   and the existing code you'll mirror: `src/engine/`, `src/db/{schema,tenant,drizzle-backend,
+   session,validation}.ts`, and the closest prior change's files. Also skim
+   [`relevant_notes.md`](./relevant_notes.md).
+3. **Implement in committed stages.** Stage A = persistence + pure domain module(s) +
+   unit/isolation tests. Stage B = UI under `app/` + a real build. Commit each stage with a
+   descriptive message; keep code scoped to the change.
+4. **Verify every stage** — `npm run typecheck`, `npx vitest run`, and **`npm run build`**.
+   The build is the *only* check that catches Turbopack / App-Router issues, so always run it
+   after touching `app/` or `src/` imports. Flip `tasks.md` `- [ ]` → `- [x]` as you go.
+5. **Archive + push when the in-code work is done** (the live-Supabase tasks stay deferred, not
+   a blocker): `openspec archive <id> --yes`, update `PROGRESS.md` status and the
+   `relevant_notes.md` deferred list, commit the archive **on its own**, then `git push`.
+   Confirm before pushing unless told to.
+
+## Patterns to mirror (don't reinvent)
+
+- **Tenant data access = the `TenantDb` seam** (`src/db/tenant.ts`). Each capability adds an
+  `XBackend` port with a **memory impl** (in `tenant.ts`, powers isolation tests) and a
+  **Drizzle impl** (`drizzle-backend.ts`, runs inside `withAuthenticatedTx` so RLS applies),
+  wired in `session.ts`. Backends are optional on `TenantBackends`; a private `#xBackend`
+  getter throws if unwired. Every method takes `businessId`; `TenantDb` always passes its own
+  bound id — feature code never sees an unscoped handle.
+- **New business-owned table**: non-null `business_id` (+ `project_id` where relevant). Run
+  `npm run db:generate`, then **hand-append the RLS block** to the generated SQL — enable RLS,
+  a per-business policy keyed on `public.current_business_id()`, and `GRANT … TO authenticated`
+  (mirror migration `0000`). Add an in-memory tenant-isolation test (cross-tenant read/write
+  blocked; `business_id` stamped from the handle, never input).
+- **Domain modules, one per surface, engine-only for math**: `src/engine/` (sacred — no
+  framework/DB imports), `src/estimate/`, `src/profit/`, `src/context/`. They exchange only
+  the engine's typed roll-up / typed values and **never import each other**. Keep them
+  framework/DB-free: import schema **types only** (type-only imports don't pull Drizzle at
+  runtime; guard any local vocabulary array with `satisfies readonly XName[]`).
+- **Money/percent at the boundary**: convert human strings → integer cents/bp with plain,
+  unit-tested helpers in `src/db/validation.ts` — *not* transform-heavy Zod (chained
+  `z.union().transform()` OOMs `tsc`). Store inputs only; recompute derived values via the
+  engine every render.
+- **UI**: server components by default; phone-first; `formatCents` for money; color always
+  paired with text (`SignalBadge`). Forms post to **server actions** that resolve the business
+  from the session and never trust a client `business_id`. Shared field inputs live in
+  `app/_components/fields.tsx`; private helpers/components in `app/_lib/` and `app/_components/`
+  (an underscore folder is not a route).
+
+## Environment & tooling (full list in relevant_notes.md)
+
+- **OpenSpec CLI** is `@fission-ai/openspec` (installed globally). Run it through **PowerShell**
+  — the Bash tool's PATH lags and won't find `openspec`. Its "- Validating…" stderr line shows
+  as a PowerShell error even on success; trust the `Totals:` line.
+- **`next build` uses Turbopack**: relative imports in `src/` must be **extensionless**
+  (`./x`, not `./x.js`) or the build fails — and `tsc`/`vitest` don't catch it. The build needs
+  a few hundred MB free on `C:` (the drive has hit 100%; clear the regenerable `.next/` if a
+  write fails with ENOSPC).
+- **`tsconfig.json` is Next-owned** — `next build` rewrites `jsx`/`include` every run; commit it
+  as-is, don't fight it.
+- Commit trailer: `Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>`.
+
 ## Working conventions
 
 - TypeScript strict; validate boundaries with Zod, not `any`.
