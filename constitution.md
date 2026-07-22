@@ -371,6 +371,18 @@ advice (Photo Advisor, Code Finder) must include a clear disclaimer that MarginS
 not a substitute for a licensed professional's judgment or an authoritative code
 inspection, and must not present code lookups as legally authoritative.
 
+### Composing tools (future direction — non-binding)
+A later north-star is a **visual tool-graph editor**: a canvas where tools are nodes and
+their connections are edges, so one tool's output can feed another tool's input and
+auto-triggers (e.g. photo upload → Code Finder) are *drawn* rather than coded. It begins as a
+**meta / admin surface** — configuring how MarginSense's tools connect — and may later open to
+power-user contractors wiring their own workflows. It lands **after the v1 tools ship** and
+changes **none** of the rules above: composed or not, a tool still reads a read-only snapshot
+and emits only suggestions, the single project conversation still holds, and the
+accept-to-commit guarantee holds across a whole graph, not just one tool. To keep the door
+open, tool inputs and outputs stay **typed and declarative** (techstack §4) so tools are
+wirable later without redesign. This paragraph is direction, not a current requirement.
+
 ---
 
 ## 6. Engineering non-negotiables
