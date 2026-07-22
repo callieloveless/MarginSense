@@ -15,8 +15,8 @@
 | # | Change | Capability(ies) | Status |
 |---|--------|-----------------|--------|
 | 1 | `add-profit-engine` | `profit-engine` | ✅ **Done** (archived 2026-07-22) |
-| 2 | `add-tenancy-foundation` | `tenancy-foundation` | 🔨 **In progress** — current task |
-| 3 | `add-onboarding` | `onboarding` | 📝 Proposed, waiting on #2 |
+| 2 | `add-tenancy-foundation` | `tenancy-foundation` | ✅ **Done** (archived 2026-07-22; live-infra tasks deferred) |
+| 3 | `add-onboarding` | `onboarding` | 🔨 **In progress** — current task |
 | 4 | `add-estimate-dashboard` | `estimates`, `profit-dashboard` | 📝 Proposed, waiting on #2 + #3 |
 | 5 | Shared context + suggestions queue | `project-context` | ⏳ Planned |
 | 6 | Tool platform + first tool (Material Finder) | `tool-platform`, `material-finder` | ⏳ Planned |
@@ -36,7 +36,12 @@ annual rates, estimate roll-up with contingency, margin-solve pricing, EPH, and 
 red/yellow/green signal (absolute + comparative views). Unit-tested, no framework imports.
 Spec: [`openspec/specs/profit-engine/spec.md`](./openspec/specs/profit-engine/spec.md).
 
-### 2. 🔨 Tenancy & app foundation — CURRENT
+### 2. ✅ Tenancy & app foundation — DONE (archived 2026-07-22)
+All in-code work is complete, validated, and archived; the spec is synced into
+[`openspec/specs/tenancy-foundation/`](./openspec/specs/tenancy-foundation/spec.md). The
+only open items are **deferred to live infra** (owner provisions Supabase): apply migration
+`0000`, prove RLS end-to-end via `npm run test:rls`, and walk the flow live.
+
 Everything downstream presumes the domain spine **Business → Project → Estimate** and
 DB-enforced tenant isolation (constitution §2, §6.3) — none of which existed yet. This
 change lays it down:
@@ -56,7 +61,7 @@ change lays it down:
 Everything else (schema, migrations, helpers, policies, tests, app skeleton) is
 buildable now and wired up when the keys land.
 
-### 3. 📝 Onboarding (wizard + Review)
+### 3. 🔨 Onboarding (wizard + Review) — CURRENT
 Captures the §3.2 solo-operator inputs (overhead, wage+burden, capacity, goals) in a
 3-step phone-first wizard; Review screen plays back the derived rates via the engine.
 Stores **inputs only** — rates are always recomputed. Proposal:
