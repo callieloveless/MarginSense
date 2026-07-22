@@ -72,9 +72,13 @@ techstack §8). Specs and proposals are plain Markdown under `openspec/`.
    requirements as `#### Scenario:` blocks (`WHEN` / `THEN`).
 3. **Validate** — `openspec validate <change> --strict` (or `--all`). Do this before you
    write code.
-4. **Apply** — `/opsx:apply`; implement the tasks, flipping `- [ ]` → `- [x]` as you go.
-   Keep code changes scoped to the change.
-5. **Archive** — when done and merged, `/opsx:archive`: sync the delta into the living
+4. **STOP — show the proposal and wait for the user's confirmation.** After the proposal
+   artifacts (`proposal.md`, `design.md`, `tasks.md`, spec delta) are written and validated,
+   present them and **do not implement until the user explicitly approves.** Writing/committing
+   the proposal is fine; touching `src/`, `app/`, migrations, or any code is gated on a yes.
+5. **Apply** — only after approval: `/opsx:apply`; implement the tasks, flipping `- [ ]` →
+   `- [x]` as you go. Keep code changes scoped to the change.
+6. **Archive** — when done and merged, `/opsx:archive`: sync the delta into the living
    specs and move the change into `changes/archive/`.
 
 **What needs a proposal:** new capability/tool, changes to the financial model or its
@@ -90,6 +94,8 @@ artifacts) in sync with the constitution and techstack.
 The repeatable recipe. Each change followed this; the next one should too.
 
 1. **Propose + validate** (above) — `/opsx:propose`, then `openspec validate <id> --strict`.
+   **Then stop and show the user the proposal; get an explicit go-ahead before writing any
+   code.** The proposal may be committed while waiting; implementation may not begin.
 2. **Read before writing** — the constitution section it implements, the change's spec delta,
    and the existing code you'll mirror: `src/engine/`, `src/db/{schema,tenant,drizzle-backend,
    session,validation}.ts`, and the closest prior change's files. Also skim
