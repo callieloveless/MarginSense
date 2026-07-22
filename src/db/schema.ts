@@ -20,6 +20,8 @@ import {
   timestamp,
   integer,
   bigint,
+  boolean,
+  doublePrecision,
 } from "drizzle-orm/pg-core";
 
 /** A project's lifecycle status. Kept small and explicit for v1. */
@@ -123,6 +125,73 @@ export const overheadItems = pgTable("overhead_items", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** Granular line-item categories (constitution §3.4); grouping is display-only. Mirrors
+ * the engine's `LineCategory`. */
+export const lineCategory = pgEnum("line_category", [
+  "labor",
+  "material",
+  "subcontractor",
+  "equipment",
+  "permit",
+  "disposal",
+  "other",
+]);
+
+/**
+ * An estimate version for a project (constitution §3.4, §6.8). A project has many versions
+ * (v1, revised, Option A/B); exactly one is `is_active` (enforced by a partial unique index
+ * in the migration) and feeds the portfolio. `target_margin_bp` and `contingency_bp` are the
+ * per-estimate pricing inputs (seeded from settings at creation, editable). The solved price
+ * is **not** stored — the engine recomputes it (constitution §6.8); only a deliberate
+ * `total_price_override_cents` is persisted, after which margin becomes an outcome.
+ */
+export const estimates = pgTable("estimates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id")
+    .notNull()
+    .references(() => businesses.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  versionLabel: text("version_label").notNull(),
+  isActive: boolean("is_active").notNull().default(false),
+  targetMarginBp: integer("target_margin_bp").notNull(),
+  contingencyBp: integer("contingency_bp").notNull(),
+  /** Deliberate total-price override; null means price is margin-solved by the engine. */
+  totalPriceOverrideCents: bigint("total_price_override_cents", { mode: "number" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * One line of an estimate (constitution §3.4). Labor lines carry `labor_minutes`; non-labor
+ * lines carry `quantity` × `unit_cost_cents`. `price_cents` is an optional per-line override
+ * (reserved; v1 pricing solves/overrides at the total). Costs are entered — the client price
+ * and margin are derived by the engine, never stored as truth.
+ */
+export const lineItems = pgTable("line_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id")
+    .notNull()
+    .references(() => businesses.id, { onDelete: "cascade" }),
+  estimateId: uuid("estimate_id")
+    .notNull()
+    .references(() => estimates.id, { onDelete: "cascade" }),
+  category: lineCategory("category").notNull(),
+  description: text("description"),
+  /** Labor lines only. */
+  laborMinutes: integer("labor_minutes"),
+  /** Non-labor lines: count/measure (may be fractional — a measure, not money). */
+  quantity: doublePrecision("quantity"),
+  /** Non-labor lines: cost per unit. */
+  unitCostCents: bigint("unit_cost_cents", { mode: "number" }),
+  /** Optional per-line price override (reserved for future per-line pricing). */
+  priceCents: bigint("price_cents", { mode: "number" }),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type BusinessRow = typeof businesses.$inferSelect;
 export type NewBusinessRow = typeof businesses.$inferInsert;
 export type UserRow = typeof users.$inferSelect;
@@ -133,6 +202,22 @@ export type BusinessSettingsRow = typeof businessSettings.$inferSelect;
 export type NewBusinessSettingsRow = typeof businessSettings.$inferInsert;
 export type OverheadItemRow = typeof overheadItems.$inferSelect;
 export type NewOverheadItemRow = typeof overheadItems.$inferInsert;
+export type EstimateRow = typeof estimates.$inferSelect;
+export type NewEstimateRow = typeof estimates.$inferInsert;
+export type LineItemRow = typeof lineItems.$inferSelect;
+export type NewLineItemRow = typeof lineItems.$inferInsert;
+
+/** The set of valid line categories, for boundary validation. */
+export const LINE_CATEGORIES = [
+  "labor",
+  "material",
+  "subcontractor",
+  "equipment",
+  "permit",
+  "disposal",
+  "other",
+] as const;
+export type LineCategoryName = (typeof LINE_CATEGORIES)[number];
 
 /** The set of valid project statuses, for boundary validation. */
 export const PROJECT_STATUSES = ["active", "complete", "archived"] as const;

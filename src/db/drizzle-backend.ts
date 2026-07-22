@@ -6,10 +6,22 @@
  * user at construction; `TenantDb` supplies the `business_id`.
  */
 
-import { and, eq } from "drizzle-orm";
-import { businessSettings, overheadItems, projects } from "./schema.js";
-import { withAuthenticatedTx, type Db } from "./rls.js";
-import type { BusinessId, ProjectBackend, SettingsBackend } from "./tenant.js";
+import { and, asc, desc, eq } from "drizzle-orm";
+import {
+  businessSettings,
+  estimates,
+  lineItems,
+  overheadItems,
+  projects,
+} from "./schema.js";
+import { withAuthenticatedTx, type Db, type Tx } from "./rls.js";
+import type {
+  BusinessId,
+  EstimateBackend,
+  EstimatePatch,
+  ProjectBackend,
+  SettingsBackend,
+} from "./tenant.js";
 
 export function createDrizzleProjectBackend(db: Db, authUserId: string): ProjectBackend {
   return {
@@ -106,6 +118,108 @@ export function createDrizzleSettingsBackend(db: Db, authUserId: string): Settin
         await tx.delete(overheadItems).where(eq(overheadItems.businessId, businessId));
         if (rows.length === 0) return [];
         return tx.insert(overheadItems).values(rows).returning();
+      });
+    },
+  };
+}
+
+/** Line items for one estimate, in display order. */
+function lineItemsFor(tx: Tx, businessId: BusinessId, estimateId: string) {
+  return tx
+    .select()
+    .from(lineItems)
+    .where(and(eq(lineItems.estimateId, estimateId), eq(lineItems.businessId, businessId)))
+    .orderBy(asc(lineItems.sortOrder));
+}
+
+/**
+ * The production `EstimateBackend`: Drizzle SQL inside the authenticated RLS context. Both
+ * isolation layers apply (app-layer `business_id` predicate + RLS policies). `setActive`
+ * clears then sets within one transaction, so the one-active-per-project partial unique
+ * index is never violated; `replaceLineItems` swaps a version's whole line set atomically.
+ */
+export function createDrizzleEstimateBackend(db: Db, authUserId: string): EstimateBackend {
+  return {
+    listByProject(businessId: BusinessId, projectId: string) {
+      return withAuthenticatedTx(db, authUserId, (tx) =>
+        tx
+          .select()
+          .from(estimates)
+          .where(and(eq(estimates.projectId, projectId), eq(estimates.businessId, businessId)))
+          .orderBy(desc(estimates.createdAt)),
+      );
+    },
+    getById(businessId: BusinessId, id: string) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const found = await tx
+          .select()
+          .from(estimates)
+          .where(and(eq(estimates.id, id), eq(estimates.businessId, businessId)))
+          .limit(1);
+        return found[0] ?? null;
+      });
+    },
+    insert(row) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const inserted = await tx.insert(estimates).values(row).returning();
+        return inserted[0]!;
+      });
+    },
+    update(businessId: BusinessId, id: string, patch: EstimatePatch) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const set: Record<string, unknown> = { updatedAt: new Date() };
+        if (patch.versionLabel !== undefined) set.versionLabel = patch.versionLabel;
+        if (patch.targetMarginBp !== undefined) set.targetMarginBp = patch.targetMarginBp;
+        if (patch.contingencyBp !== undefined) set.contingencyBp = patch.contingencyBp;
+        if (patch.totalPriceOverrideCents !== undefined) {
+          set.totalPriceOverrideCents = patch.totalPriceOverrideCents;
+        }
+        const updated = await tx
+          .update(estimates)
+          .set(set)
+          .where(and(eq(estimates.id, id), eq(estimates.businessId, businessId)))
+          .returning();
+        return updated[0] ?? null;
+      });
+    },
+    setActive(businessId: BusinessId, projectId: string, estimateId: string) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        await tx
+          .update(estimates)
+          .set({ isActive: false, updatedAt: new Date() })
+          .where(and(eq(estimates.projectId, projectId), eq(estimates.businessId, businessId)));
+        await tx
+          .update(estimates)
+          .set({ isActive: true, updatedAt: new Date() })
+          .where(and(eq(estimates.id, estimateId), eq(estimates.businessId, businessId)));
+      });
+    },
+    listLineItems(businessId: BusinessId, estimateId: string) {
+      return withAuthenticatedTx(db, authUserId, (tx) =>
+        lineItemsFor(tx, businessId, estimateId),
+      );
+    },
+    replaceLineItems(businessId: BusinessId, estimateId: string, rows) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        await tx
+          .delete(lineItems)
+          .where(and(eq(lineItems.estimateId, estimateId), eq(lineItems.businessId, businessId)));
+        if (rows.length === 0) return [];
+        return tx.insert(lineItems).values(rows).returning();
+      });
+    },
+    listActiveWithLines(businessId: BusinessId) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const active = await tx
+          .select()
+          .from(estimates)
+          .where(and(eq(estimates.isActive, true), eq(estimates.businessId, businessId)));
+        const result = [];
+        for (const estimate of active) {
+          const lines = await lineItemsFor(tx, businessId, estimate.id);
+          result.push({ estimate, lines });
+        }
+        return result;
       });
     },
   };

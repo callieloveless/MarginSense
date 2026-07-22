@@ -16,7 +16,12 @@
 
 import type {
   BusinessSettingsRow,
+  EstimateRow,
+  LineCategoryName,
+  LineItemRow,
   NewBusinessSettingsRow,
+  NewEstimateRow,
+  NewLineItemRow,
   NewOverheadItemRow,
   NewProjectRow,
   OverheadItemRow,
@@ -96,11 +101,68 @@ export interface SettingsBackend {
   replaceItems(businessId: BusinessId, rows: NewOverheadItemRow[]): Promise<OverheadItemRow[]>;
 }
 
-/** Backends a {@link TenantDb} composes. `settings` is optional so tests that exercise
- * only projects (or only settings) wire just what they use; feature code supplies both. */
+/** Fields for creating an estimate version. `business_id` is stamped by `TenantDb`. */
+export interface EstimateInput {
+  projectId: string;
+  versionLabel: string;
+  targetMarginBp: number;
+  contingencyBp: number;
+  /** Make this the project's active version (unsets any other). */
+  isActive?: boolean | undefined;
+  /** Deliberate total-price override; null/omitted → price is margin-solved. */
+  totalPriceOverrideCents?: number | null | undefined;
+}
+
+/** A partial update to an estimate's pricing inputs / label. */
+export interface EstimatePatch {
+  versionLabel?: string | undefined;
+  targetMarginBp?: number | undefined;
+  contingencyBp?: number | undefined;
+  totalPriceOverrideCents?: number | null | undefined;
+}
+
+/** One line-item's inputs. `business_id`/`estimate_id` are stamped by `TenantDb`. */
+export interface LineItemInput {
+  category: LineCategoryName;
+  description?: string | null | undefined;
+  laborMinutes?: number | null | undefined;
+  quantity?: number | null | undefined;
+  unitCostCents?: number | null | undefined;
+  priceCents?: number | null | undefined;
+  sortOrder?: number | undefined;
+}
+
+/** An estimate together with its line items (for computing a roll-up). */
+export interface EstimateWithLines {
+  estimate: EstimateRow;
+  lines: LineItemRow[];
+}
+
+/**
+ * The estimate port `TenantDb` talks to. Every method takes `businessId` explicitly so the
+ * real backend filters/stamps in SQL — but only `TenantDb` calls these, always with its own
+ * bound id. `setActive` enforces one active version per project; `replaceLineItems` swaps a
+ * version's whole line set atomically.
+ */
+export interface EstimateBackend {
+  listByProject(businessId: BusinessId, projectId: string): Promise<EstimateRow[]>;
+  getById(businessId: BusinessId, id: string): Promise<EstimateRow | null>;
+  insert(row: NewEstimateRow): Promise<EstimateRow>;
+  update(businessId: BusinessId, id: string, patch: EstimatePatch): Promise<EstimateRow | null>;
+  /** Set `estimateId` active and clear any other active version for `projectId`. */
+  setActive(businessId: BusinessId, projectId: string, estimateId: string): Promise<void>;
+  listLineItems(businessId: BusinessId, estimateId: string): Promise<LineItemRow[]>;
+  replaceLineItems(businessId: BusinessId, estimateId: string, rows: NewLineItemRow[]): Promise<LineItemRow[]>;
+  /** Every project's active version + its lines (for the portfolio dashboard). */
+  listActiveWithLines(businessId: BusinessId): Promise<EstimateWithLines[]>;
+}
+
+/** Backends a {@link TenantDb} composes. `settings`/`estimates` are optional so tests wire
+ * just what they exercise; feature code (via `tenantDbForSession`) supplies all. */
 export interface TenantBackends {
   projects: ProjectBackend;
   settings?: SettingsBackend | undefined;
+  estimates?: EstimateBackend | undefined;
 }
 
 /**
@@ -112,6 +174,7 @@ export class TenantDb {
   readonly businessId: BusinessId;
   readonly #projects: ProjectBackend;
   readonly #settings: SettingsBackend | undefined;
+  readonly #estimates: EstimateBackend | undefined;
 
   /** @internal — use {@link createTenantDb}, which requires a business id. */
   constructor(businessId: BusinessId, backends: TenantBackends) {
@@ -121,6 +184,7 @@ export class TenantDb {
     this.businessId = businessId;
     this.#projects = backends.projects;
     this.#settings = backends.settings;
+    this.#estimates = backends.estimates;
   }
 
   /** The settings backend, or a clear error if this handle wasn't wired with one. */
@@ -129,6 +193,14 @@ export class TenantDb {
       throw new Error("TenantDb has no settings backend configured.");
     }
     return this.#settings;
+  }
+
+  /** The estimate backend, or a clear error if this handle wasn't wired with one. */
+  get #estimateBackend(): EstimateBackend {
+    if (!this.#estimates) {
+      throw new Error("TenantDb has no estimate backend configured.");
+    }
+    return this.#estimates;
   }
 
   /** List this business's projects. Another tenant's rows can never appear here. */
@@ -203,6 +275,78 @@ export class TenantDb {
         category: item.category ?? null,
       })),
     );
+  }
+
+  /** This project's estimate versions (newest first is the backend's concern). */
+  listEstimates(projectId: string): Promise<EstimateRow[]> {
+    return this.#estimateBackend.listByProject(this.businessId, projectId);
+  }
+
+  /** One estimate by id, scoped to this business. Null if it isn't ours. */
+  getEstimate(id: string): Promise<EstimateRow | null> {
+    return this.#estimateBackend.getById(this.businessId, id);
+  }
+
+  /**
+   * Create an estimate version. The stored `business_id` is always this handle's. When
+   * `isActive` is set, the new version becomes the project's active one (any prior active
+   * version is cleared) — done as a follow-up so the one-active constraint never trips.
+   */
+  async createEstimate(input: EstimateInput): Promise<EstimateRow> {
+    const created = await this.#estimateBackend.insert({
+      businessId: this.businessId,
+      projectId: input.projectId,
+      versionLabel: input.versionLabel,
+      isActive: false,
+      targetMarginBp: input.targetMarginBp,
+      contingencyBp: input.contingencyBp,
+      totalPriceOverrideCents: input.totalPriceOverrideCents ?? null,
+    });
+    if (input.isActive) {
+      await this.#estimateBackend.setActive(this.businessId, input.projectId, created.id);
+      return { ...created, isActive: true };
+    }
+    return created;
+  }
+
+  /** Update an estimate's pricing inputs / label, scoped to this business. */
+  updateEstimate(id: string, patch: EstimatePatch): Promise<EstimateRow | null> {
+    return this.#estimateBackend.update(this.businessId, id, patch);
+  }
+
+  /** Make one version active for its project (clears any other active version). */
+  setActiveEstimate(projectId: string, estimateId: string): Promise<void> {
+    return this.#estimateBackend.setActive(this.businessId, projectId, estimateId);
+  }
+
+  /** This estimate's line items, scoped to this business. */
+  getLineItems(estimateId: string): Promise<LineItemRow[]> {
+    return this.#estimateBackend.listLineItems(this.businessId, estimateId);
+  }
+
+  /** Replace an estimate's line items (delete-then-insert). Each row is stamped with this
+   * handle's `business_id` and the given `estimateId`. */
+  saveLineItems(estimateId: string, items: LineItemInput[]): Promise<LineItemRow[]> {
+    return this.#estimateBackend.replaceLineItems(
+      this.businessId,
+      estimateId,
+      items.map((item, i) => ({
+        businessId: this.businessId,
+        estimateId,
+        category: item.category,
+        description: item.description ?? null,
+        laborMinutes: item.laborMinutes ?? null,
+        quantity: item.quantity ?? null,
+        unitCostCents: item.unitCostCents ?? null,
+        priceCents: item.priceCents ?? null,
+        sortOrder: item.sortOrder ?? i,
+      })),
+    );
+  }
+
+  /** Every project's active estimate version + its lines — the portfolio input. */
+  listActiveEstimatesWithLines(): Promise<EstimateWithLines[]> {
+    return this.#estimateBackend.listActiveWithLines(this.businessId);
   }
 }
 
@@ -326,6 +470,101 @@ export function createMemorySettingsBackend(
       }));
       items.push(...stored);
       return stored;
+    },
+  };
+}
+
+/**
+ * An in-memory {@link EstimateBackend} over shared arrays holding *every* tenant's estimates
+ * and line items — the condition RLS defends against. A handle bound to A can never see or
+ * touch B's rows here (the isolation tests assert this). `setActive` mirrors the DB's
+ * one-active-per-project rule.
+ */
+export function createMemoryEstimateBackend(
+  seed: EstimateRow[] = [],
+  seedLines: LineItemRow[] = [],
+): EstimateBackend {
+  const rows: EstimateRow[] = [...seed];
+  const lines: LineItemRow[] = [...seedLines];
+  let seq = seed.length;
+  let lineSeq = seedLines.length;
+  const now = new Date(0);
+
+  return {
+    async listByProject(businessId, projectId) {
+      return rows.filter((r) => r.businessId === businessId && r.projectId === projectId);
+    },
+    async getById(businessId, id) {
+      return rows.find((r) => r.id === id && r.businessId === businessId) ?? null;
+    },
+    async insert(row) {
+      const stored: EstimateRow = {
+        id: `mem-est-${++seq}`,
+        businessId: row.businessId,
+        projectId: row.projectId,
+        versionLabel: row.versionLabel,
+        isActive: row.isActive ?? false,
+        targetMarginBp: row.targetMarginBp,
+        contingencyBp: row.contingencyBp,
+        totalPriceOverrideCents: row.totalPriceOverrideCents ?? null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      rows.push(stored);
+      return stored;
+    },
+    async update(businessId, id, patch) {
+      const row = rows.find((r) => r.id === id && r.businessId === businessId);
+      if (!row) return null;
+      if (patch.versionLabel !== undefined) row.versionLabel = patch.versionLabel;
+      if (patch.targetMarginBp !== undefined) row.targetMarginBp = patch.targetMarginBp;
+      if (patch.contingencyBp !== undefined) row.contingencyBp = patch.contingencyBp;
+      if (patch.totalPriceOverrideCents !== undefined) {
+        row.totalPriceOverrideCents = patch.totalPriceOverrideCents;
+      }
+      return row;
+    },
+    async setActive(businessId, projectId, estimateId) {
+      for (const r of rows) {
+        if (r.businessId === businessId && r.projectId === projectId) {
+          r.isActive = r.id === estimateId;
+        }
+      }
+    },
+    async listLineItems(businessId, estimateId) {
+      return lines.filter((l) => l.businessId === businessId && l.estimateId === estimateId);
+    },
+    async replaceLineItems(businessId, estimateId, newRows) {
+      for (let i = lines.length - 1; i >= 0; i--) {
+        const l = lines[i]!;
+        if (l.businessId === businessId && l.estimateId === estimateId) lines.splice(i, 1);
+      }
+      const stored = newRows.map<LineItemRow>((r) => ({
+        id: `mem-line-${++lineSeq}`,
+        businessId: r.businessId,
+        estimateId: r.estimateId,
+        category: r.category,
+        description: r.description ?? null,
+        laborMinutes: r.laborMinutes ?? null,
+        quantity: r.quantity ?? null,
+        unitCostCents: r.unitCostCents ?? null,
+        priceCents: r.priceCents ?? null,
+        sortOrder: r.sortOrder ?? 0,
+        createdAt: now,
+        updatedAt: now,
+      }));
+      lines.push(...stored);
+      return stored;
+    },
+    async listActiveWithLines(businessId) {
+      return rows
+        .filter((r) => r.businessId === businessId && r.isActive)
+        .map((estimate) => ({
+          estimate,
+          lines: lines.filter(
+            (l) => l.businessId === businessId && l.estimateId === estimate.id,
+          ),
+        }));
     },
   };
 }
