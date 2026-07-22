@@ -8,16 +8,6 @@
 >
 > **Started:** 2026-07-22. Newest notes near the top of each section; date new entries.
 
-## Temporarily disabled (restore later)
-
-- **Sign-up / sign-in is closed** *(2026-07-22)* — `app/(auth)/sign-in/page.tsx` no longer
-  renders the email one-time-code form; it shows a "not open for sign-ups yet" message so no
-  one can register for now. The auth flow itself is **untouched**: `signInWithEmailAction`
-  and `createBusinessAction` in `app/(auth)/actions.ts`, the middleware, and the
-  create-business + onboarding pages all still work. **To reopen:** restore the form in
-  `sign-in/page.tsx` (the pre-2026-07-22 version renders it) and delete this note. Nothing
-  else changes.
-
 ## Deferred to live infrastructure
 
 Work that is **built and tested in code** but can't be *proven* or *run* until a live
