@@ -55,5 +55,6 @@ export async function createBusinessAction(formData: FormData): Promise<ActionRe
   });
   if (error) return { ok: false, error: error.message };
 
-  redirect("/dashboard");
+  // New business → onboarding wizard to capture the §3.2 financial inputs (add-onboarding).
+  redirect("/onboarding");
 }

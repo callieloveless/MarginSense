@@ -13,7 +13,10 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { getDb } from "./client.js";
 import { businessIdForAuthUser } from "./rls.js";
-import { createDrizzleProjectBackend } from "./drizzle-backend.js";
+import {
+  createDrizzleProjectBackend,
+  createDrizzleSettingsBackend,
+} from "./drizzle-backend.js";
 import { resolveBusinessId, type AuthSession } from "./auth.js";
 import { createTenantDb, type BusinessId, type TenantDb } from "./tenant.js";
 
@@ -75,7 +78,9 @@ export async function getServerSession(): Promise<ServerSession> {
  * and the resolved `business_id` (drives the app-layer predicate) are real.
  */
 export function tenantDbForSession(authUserId: string, businessId: BusinessId): TenantDb {
+  const db = getDb();
   return createTenantDb(businessId, {
-    projects: createDrizzleProjectBackend(getDb(), authUserId),
+    projects: createDrizzleProjectBackend(db, authUserId),
+    settings: createDrizzleSettingsBackend(db, authUserId),
   });
 }

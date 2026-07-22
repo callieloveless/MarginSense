@@ -14,7 +14,15 @@
  * own bound `businessId` — never one from input.
  */
 
-import type { NewProjectRow, ProjectRow, ProjectStatus } from "./schema.js";
+import type {
+  BusinessSettingsRow,
+  NewBusinessSettingsRow,
+  NewOverheadItemRow,
+  NewProjectRow,
+  OverheadItemRow,
+  ProjectRow,
+  ProjectStatus,
+} from "./schema.js";
 
 /** A business id. A branded string would be nicer; kept plain for v1 simplicity. */
 export type BusinessId = string;
@@ -45,6 +53,57 @@ export interface ProjectBackend {
 }
 
 /**
+ * The solo-operator financial inputs a caller may supply (constitution §3.2). All units
+ * are already integers (cents/minutes/bp) — the Zod boundary converts human dollars and
+ * percentages before they reach here. `business_id` is NOT among them: it is stamped by
+ * `TenantDb` from its bound business, never accepted from input.
+ */
+export interface SettingsInput {
+  annualOverheadCents: number;
+  ownerWageCentsPerHour: number;
+  laborBurdenBp: number;
+  workingDaysPerYear: number;
+  billableMinutesPerDay: number;
+  incomeGoalCents: number;
+  profitTargetCents: number;
+  targetMarginBp: number;
+  defaultContingencyBp: number;
+  /** Advanced (full settings only). */
+  defaultMarkupBp?: number | null | undefined;
+  /** Advanced (full settings only). */
+  defaultTaxRateBp?: number | null | undefined;
+}
+
+/** One optional overhead line item. `business_id` is stamped by `TenantDb`, not accepted. */
+export interface OverheadItemInput {
+  name: string;
+  amountCents: number;
+  category?: string | null | undefined;
+}
+
+/**
+ * The settings port `TenantDb` talks to. Like {@link ProjectBackend}, every method takes
+ * the `businessId` explicitly so the real backend can filter/stamp in SQL — but only
+ * `TenantDb` calls these, always with its own bound id. `upsert` maintains one settings
+ * row per business; `replaceItems` swaps the whole itemization set atomically.
+ */
+export interface SettingsBackend {
+  getByBusiness(businessId: BusinessId): Promise<BusinessSettingsRow | null>;
+  /** Insert or update this business's single settings row; returns the stored row. */
+  upsert(row: NewBusinessSettingsRow): Promise<BusinessSettingsRow>;
+  listItemsByBusiness(businessId: BusinessId): Promise<OverheadItemRow[]>;
+  /** Replace this business's overhead items with `rows` (delete-then-insert). */
+  replaceItems(businessId: BusinessId, rows: NewOverheadItemRow[]): Promise<OverheadItemRow[]>;
+}
+
+/** Backends a {@link TenantDb} composes. `settings` is optional so tests that exercise
+ * only projects (or only settings) wire just what they use; feature code supplies both. */
+export interface TenantBackends {
+  projects: ProjectBackend;
+  settings?: SettingsBackend | undefined;
+}
+
+/**
  * A data handle bound to one business. Construct it via {@link createTenantDb}. Every
  * method scopes to `this.businessId`; there is no method that accepts a different
  * business id, and creation always stamps the bound id (ignoring anything in the input).
@@ -52,14 +111,24 @@ export interface ProjectBackend {
 export class TenantDb {
   readonly businessId: BusinessId;
   readonly #projects: ProjectBackend;
+  readonly #settings: SettingsBackend | undefined;
 
   /** @internal — use {@link createTenantDb}, which requires a business id. */
-  constructor(businessId: BusinessId, backends: { projects: ProjectBackend }) {
+  constructor(businessId: BusinessId, backends: TenantBackends) {
     if (!businessId) {
       throw new Error("TenantDb requires a business id — no unscoped access.");
     }
     this.businessId = businessId;
     this.#projects = backends.projects;
+    this.#settings = backends.settings;
+  }
+
+  /** The settings backend, or a clear error if this handle wasn't wired with one. */
+  get #settingsBackend(): SettingsBackend {
+    if (!this.#settings) {
+      throw new Error("TenantDb has no settings backend configured.");
+    }
+    return this.#settings;
   }
 
   /** List this business's projects. Another tenant's rows can never appear here. */
@@ -86,6 +155,55 @@ export class TenantDb {
   updateProjectStatus(id: string, status: ProjectStatus): Promise<ProjectRow | null> {
     return this.#projects.updateStatusByBusiness(this.businessId, id, status);
   }
+
+  /** This business's settings row, or null if onboarding hasn't saved one yet. */
+  getSettings(): Promise<BusinessSettingsRow | null> {
+    return this.#settingsBackend.getByBusiness(this.businessId);
+  }
+
+  /**
+   * Save (insert or update) this business's settings. The stored `business_id` is always
+   * this handle's — never the input's — and advanced fields default to null when absent
+   * (the 3-step wizard omits them; full settings supplies them).
+   */
+  saveSettings(input: SettingsInput): Promise<BusinessSettingsRow> {
+    return this.#settingsBackend.upsert({
+      businessId: this.businessId,
+      annualOverheadCents: input.annualOverheadCents,
+      ownerWageCentsPerHour: input.ownerWageCentsPerHour,
+      laborBurdenBp: input.laborBurdenBp,
+      workingDaysPerYear: input.workingDaysPerYear,
+      billableMinutesPerDay: input.billableMinutesPerDay,
+      incomeGoalCents: input.incomeGoalCents,
+      profitTargetCents: input.profitTargetCents,
+      targetMarginBp: input.targetMarginBp,
+      defaultContingencyBp: input.defaultContingencyBp,
+      defaultMarkupBp: input.defaultMarkupBp ?? null,
+      defaultTaxRateBp: input.defaultTaxRateBp ?? null,
+    });
+  }
+
+  /** This business's overhead line items (empty if none). */
+  listOverheadItems(): Promise<OverheadItemRow[]> {
+    return this.#settingsBackend.listItemsByBusiness(this.businessId);
+  }
+
+  /**
+   * Replace this business's overhead items. Each stored row's `business_id` is this
+   * handle's — never the input's. Passing `[]` clears the itemization (the annual total
+   * on settings remains the source of truth for the math).
+   */
+  saveOverheadItems(items: OverheadItemInput[]): Promise<OverheadItemRow[]> {
+    return this.#settingsBackend.replaceItems(
+      this.businessId,
+      items.map((item) => ({
+        businessId: this.businessId,
+        name: item.name,
+        amountCents: item.amountCents,
+        category: item.category ?? null,
+      })),
+    );
+  }
 }
 
 /**
@@ -95,7 +213,7 @@ export class TenantDb {
  */
 export function createTenantDb(
   businessId: BusinessId,
-  backends: { projects: ProjectBackend },
+  backends: TenantBackends,
 ): TenantDb {
   return new TenantDb(businessId, backends);
 }
@@ -139,6 +257,75 @@ export function createMemoryProjectBackend(seed: ProjectRow[] = []): ProjectBack
       if (!row) return null;
       row.status = status;
       return row;
+    },
+  };
+}
+
+/**
+ * An in-memory {@link SettingsBackend} over shared arrays holding *every* tenant's rows —
+ * the condition RLS defends against. Because `TenantDb` only ever passes its own
+ * `businessId`, a handle bound to A can never see or touch B's settings or items here,
+ * which is what the isolation tests assert. One settings row per business (keyed on
+ * `business_id`), matching the unique constraint.
+ */
+export function createMemorySettingsBackend(
+  seed: BusinessSettingsRow[] = [],
+  seedItems: OverheadItemRow[] = [],
+): SettingsBackend {
+  const rows: BusinessSettingsRow[] = [...seed];
+  const items: OverheadItemRow[] = [...seedItems];
+  let seq = seed.length;
+  let itemSeq = seedItems.length;
+  const now = new Date(0);
+
+  return {
+    async getByBusiness(businessId) {
+      return rows.find((r) => r.businessId === businessId) ?? null;
+    },
+    async upsert(row) {
+      const existing = rows.find((r) => r.businessId === row.businessId);
+      if (existing) {
+        Object.assign(existing, row, { id: existing.id, updatedAt: now });
+        return existing;
+      }
+      const stored: BusinessSettingsRow = {
+        id: `mem-settings-${++seq}`,
+        businessId: row.businessId,
+        annualOverheadCents: row.annualOverheadCents,
+        ownerWageCentsPerHour: row.ownerWageCentsPerHour,
+        laborBurdenBp: row.laborBurdenBp,
+        workingDaysPerYear: row.workingDaysPerYear,
+        billableMinutesPerDay: row.billableMinutesPerDay,
+        incomeGoalCents: row.incomeGoalCents,
+        profitTargetCents: row.profitTargetCents,
+        targetMarginBp: row.targetMarginBp,
+        defaultContingencyBp: row.defaultContingencyBp,
+        defaultMarkupBp: row.defaultMarkupBp ?? null,
+        defaultTaxRateBp: row.defaultTaxRateBp ?? null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      rows.push(stored);
+      return stored;
+    },
+    async listItemsByBusiness(businessId) {
+      return items.filter((i) => i.businessId === businessId);
+    },
+    async replaceItems(businessId, newRows) {
+      for (let i = items.length - 1; i >= 0; i--) {
+        if (items[i]!.businessId === businessId) items.splice(i, 1);
+      }
+      const stored = newRows.map<OverheadItemRow>((r) => ({
+        id: `mem-item-${++itemSeq}`,
+        businessId: r.businessId,
+        name: r.name,
+        amountCents: r.amountCents,
+        category: r.category ?? null,
+        createdAt: now,
+        updatedAt: now,
+      }));
+      items.push(...stored);
+      return stored;
     },
   };
 }

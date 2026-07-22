@@ -16,7 +16,7 @@
 |---|--------|-----------------|--------|
 | 1 | `add-profit-engine` | `profit-engine` | ✅ **Done** (archived 2026-07-22) |
 | 2 | `add-tenancy-foundation` | `tenancy-foundation` | ✅ **Done** (archived 2026-07-22; live-infra tasks deferred) |
-| 3 | `add-onboarding` | `onboarding` | 🔨 **In progress** — current task |
+| 3 | `add-onboarding` | `onboarding` | ✅ **Built** (code + tests done; live-infra proof deferred) |
 | 4 | `add-estimate-dashboard` | `estimates`, `profit-dashboard` | 📝 Proposed, waiting on #2 + #3 |
 | 5 | Shared context + suggestions queue | `project-context` | ⏳ Planned |
 | 6 | Tool platform + first tool (Material Finder) | `tool-platform`, `material-finder` | ⏳ Planned |
@@ -25,6 +25,9 @@
 | 9 | Hardening & launch pass | — | ⏳ Planned |
 
 Legend: ✅ done · 🔨 in progress · 📝 proposal written, not started · ⏳ planned, not yet proposed
+
+> Work that's coded but waiting on a live Supabase project (apply migrations, prove RLS
+> end-to-end, walk the flows) is tracked in [`DEFERRED-INFRA.md`](./DEFERRED-INFRA.md).
 
 ---
 

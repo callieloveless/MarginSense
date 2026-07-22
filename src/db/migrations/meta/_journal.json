@@ -8,6 +8,13 @@
       "when": 1784748859983,
       "tag": "0000_tenant_spine",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1784752395714,
+      "tag": "0001_brave_spot",
+      "breakpoints": true
     }
   ]
 }
