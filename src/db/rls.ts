@@ -20,7 +20,7 @@
 
 import { sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import type { BusinessId } from "./tenant.js";
+import type { BusinessId } from "./tenant";
 
 /** The Drizzle handle over postgres.js. Schema generic left default. */
 export type Db = PostgresJsDatabase<Record<string, never>>;

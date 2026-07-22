@@ -17,7 +17,7 @@
 | 1 | `add-profit-engine` | `profit-engine` | ✅ **Done** (archived 2026-07-22) |
 | 2 | `add-tenancy-foundation` | `tenancy-foundation` | ✅ **Done** (archived 2026-07-22; live-infra tasks deferred) |
 | 3 | `add-onboarding` | `onboarding` | ✅ **Done** (archived 2026-07-22; live-infra proof deferred) |
-| 4 | `add-estimate-dashboard` | `estimates`, `profit-dashboard` | 📝 Proposed, waiting on #2 + #3 |
+| 4 | `add-estimate-dashboard` | `estimates`, `profit-dashboard` | ✅ **Built** (code + tests + build green; live-infra proof deferred) |
 | 5 | Shared context + suggestions queue | `project-context` | ⏳ Planned |
 | 6 | Tool platform + first tool (Material Finder) | `tool-platform`, `material-finder` | ⏳ Planned |
 | 7 | Photo Advisor + Code Finder (auto-trigger) | `photo-advisor`, `code-finder` | ⏳ Planned |

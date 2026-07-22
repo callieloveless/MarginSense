@@ -14,7 +14,7 @@ import {
   subtractCents,
   sumCents,
   valueOr,
-} from "./money.js";
+} from "./money";
 
 describe("integer cents arithmetic", () => {
   it("adds cents with no floating-point drift (spec scenario)", () => {

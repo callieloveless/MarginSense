@@ -23,14 +23,18 @@ Supabase project + secrets exist. Nothing here happens until the database is pro
 ### 1. Apply migrations (forward-only, `npm run db:migrate`)
 - [ ] `0000_tenant_spine` — `businesses`, `users`, `projects` + RLS + grants.
 - [ ] `0001_brave_spot` — `business_settings`, `overhead_items` + RLS + grants.
+- [ ] `0002_fair_lethal_legion` — `estimates`, `line_items` + RLS + grants + the
+      one-active-version-per-project partial unique index.
 
 ### 2. Prove Row-Level Security end-to-end
 App-layer tenant isolation is already proven by in-memory tests (`tenant.test.ts`,
 `settings.test.ts`). The **RLS layer** (the Postgres policies themselves) needs a real DB.
 - [ ] `npm run test:rls` (opt-in; skipped without `DATABASE_URL`) — the cross-tenant
       read/write contracts in `src/db/tenant.rls.test.ts` against two seeded businesses.
-- [ ] **Known gap:** no RLS test yet for `business_settings` / `overhead_items` (only
-      `projects`). Extend `test:rls` to cover the onboarding tables before trusting them.
+- [ ] **Known gap:** the `test:rls` suite only covers `projects`. Extend it to
+      `business_settings` / `overhead_items` (onboarding) and `estimates` / `line_items`
+      (this change) before trusting those tables in production. Each has app-layer isolation
+      tests, but the DB policies themselves are unproven end-to-end.
 
 ### 3. Walk the money-critical flows live (phone width)
 - [ ] Tenancy: sign-in → create-business → add a project; list is business-scoped.
@@ -41,6 +45,9 @@ App-layer tenant isolation is already proven by in-memory tests (`tenant.test.ts
       $43.75/hr burdened, $93.75/hr loaded, $562.50 break-even day, $165,000 gross-profit
       goal, $87.50/hr target profit/hr. (Conversion math is unit-tested; this confirms the
       live render.)
+- [ ] Estimate + dashboard: open a project → new estimate → add labor + material lines →
+      margin-solve to 45% → green signal → mark active → dashboard shows the job's % of
+      year and % of profit goal, worst-first.
 
 ### 4. Production hosting (later — roadmap launch pass)
 - [ ] Vercel project + env vars.
@@ -52,10 +59,17 @@ App-layer tenant isolation is already proven by in-memory tests (`tenant.test.ts
 - **OpenSpec CLI package** — the CLI is `@fission-ai/openspec` (`npm i -g @fission-ai/openspec`,
   provides the `openspec` bin). The bare `openspec` on npm is a dead 0.0.0 placeholder with
   no bin — don't install it. *(2026-07-22)*
-- **`tsconfig.json` churn** — Next.js tooling likes to rewrite `tsconfig.json` (e.g.
-  `jsx: preserve` → `react-jsx`, adding `.next/dev/types`, reformatting). The project builds
-  and typechecks fine under the committed `jsx: preserve`; if you see an unauthored tsconfig
-  diff, it's tooling — revert it rather than committing it. *(2026-07-22)*
+- **`tsconfig.json` is Next-owned** — `next build` **mandates** `jsx: react-jsx`, adds
+  `.next/dev/types/**/*.ts` to `include`, and sets `exclude: ["node_modules"]`, rewriting the
+  file every build. These are committed as-is; don't fight them (an earlier note said to
+  revert — that was wrong; the build just re-applies them). Everything typechecks under either
+  `jsx` setting. *(updated 2026-07-22)*
+- **No `.js` extensions on relative imports in `src/`** — the project uses
+  `moduleResolution: "Bundler"`, where extensionless imports are idiomatic and Turbopack (the
+  Next 16 build) resolves `./x` → `./x.ts` natively. Explicit `./x.js` specifiers (a NodeNext
+  habit) make `next build` fail with "Module not found". Write `from "./x"`, not `"./x.js"`.
+  tsc and vitest resolve both, so only a build catches it — run `npm run build` when touching
+  imports under `src/`. *(2026-07-22)*
 - **Zod + `tsc` OOM** — deeply-chained `z.union([...]).transform(...)` composed across many
   object fields (then a second object-level `.transform`) blew up `tsc --noEmit` (out of
   memory). Prefer plain, unit-tested converter functions for money/percent parsing over

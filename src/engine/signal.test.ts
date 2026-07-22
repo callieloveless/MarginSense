@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { defined, notApplicable, valueOr } from "./money.js";
-import { resolveConfig } from "./config.js";
-import type { ComparativeInput } from "./signal.js";
+import { defined, notApplicable, valueOr } from "./money";
+import { resolveConfig } from "./config";
+import type { ComparativeInput } from "./signal";
 import {
   portfolioFigures,
   signalAbsolute,
   signalComparative,
-} from "./signal.js";
+} from "./signal";
 
 /** Read the color out of a computed signal, or "n/a". */
 function colorOf(

@@ -15,16 +15,16 @@ import type {
   CentsPerHour,
   Computed,
   Minutes,
-} from "./money.js";
+} from "./money";
 import {
   applyBp,
   notApplicable,
   ratioToBp,
   roundHalfUp,
   sumCents,
-} from "./money.js";
-import type { EngineConfig } from "./config.js";
-import { contingencyBaseAmount, DEFAULT_CONFIG } from "./config.js";
+} from "./money";
+import type { EngineConfig } from "./config";
+import { contingencyBaseAmount, DEFAULT_CONFIG } from "./config";
 
 /** Granular line categories (§3.4). Any grouping (e.g. "subs / equip / permits") is display. */
 export type LineCategory =

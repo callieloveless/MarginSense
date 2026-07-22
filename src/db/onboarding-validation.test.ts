@@ -11,7 +11,7 @@ import {
   parseOverheadItems,
   parseSettingsForm,
   percentToBp,
-} from "./validation.js";
+} from "./validation";
 
 describe("dollarsToCents", () => {
   it("converts plain and formatted dollar strings to integer cents", () => {

@@ -6,8 +6,8 @@
  * settings) via {@link resolveConfig}; the defaults are the fallback, never mutated.
  */
 
-import type { Cents, Ratio } from "./money.js";
-import { roundHalfUp } from "./money.js";
+import type { Cents, Ratio } from "./money";
+import { roundHalfUp } from "./money";
 
 /**
  * Red/yellow/green cutoffs, applied to `ratio` (absolute view) or `weight` (comparative

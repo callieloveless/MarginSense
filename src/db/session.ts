@@ -11,15 +11,15 @@
 
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
-import { getDb } from "./client.js";
-import { businessIdForAuthUser } from "./rls.js";
+import { getDb } from "./client";
+import { businessIdForAuthUser } from "./rls";
 import {
   createDrizzleEstimateBackend,
   createDrizzleProjectBackend,
   createDrizzleSettingsBackend,
-} from "./drizzle-backend.js";
-import { resolveBusinessId, type AuthSession } from "./auth.js";
-import { createTenantDb, type BusinessId, type TenantDb } from "./tenant.js";
+} from "./drizzle-backend";
+import { resolveBusinessId, type AuthSession } from "./auth";
+import { createTenantDb, type BusinessId, type TenantDb } from "./tenant";
 
 export type ServerSession =
   | { status: "unconfigured" }

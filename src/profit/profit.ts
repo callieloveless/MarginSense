@@ -21,7 +21,7 @@ import {
   DEFAULT_CONFIG,
   signalAbsolute,
   signalComparative,
-} from "../engine/index.js";
+} from "../engine/index";
 
 /**
  * The red/yellow/green for a single estimate: the engine's absolute view of its EPH against

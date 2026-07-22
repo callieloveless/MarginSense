@@ -23,7 +23,7 @@ import {
   rollUpTotals,
   solvePriceForMargin,
   sumCents,
-} from "../engine/index.js";
+} from "../engine/index";
 
 /** A stored line item in the builder's shape (integer units; mirrors the DB row). */
 export interface StoredLineItem {

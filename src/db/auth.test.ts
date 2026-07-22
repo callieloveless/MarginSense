@@ -4,7 +4,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { resolveBusinessId, type UserBusinessLookup } from "./auth.js";
+import { resolveBusinessId, type UserBusinessLookup } from "./auth";
 
 function lookupOf(map: Record<string, string>): UserBusinessLookup {
   return {

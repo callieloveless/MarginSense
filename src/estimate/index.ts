@@ -4,4 +4,4 @@
  * never imports `src/profit/` — the roll-up it returns is the seam between the two.
  */
 
-export * from "./estimate.js";
+export * from "./estimate";

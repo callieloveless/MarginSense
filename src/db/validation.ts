@@ -7,8 +7,8 @@
  */
 
 import { z } from "zod";
-import { PROJECT_STATUSES } from "./schema.js";
-import type { OverheadItemInput, SettingsInput } from "./tenant.js";
+import { LINE_CATEGORIES, PROJECT_STATUSES } from "./schema";
+import type { LineItemInput, OverheadItemInput, SettingsInput } from "./tenant";
 
 /** Input for creating a business (the minimal create-business step). */
 export const createBusinessSchema = z.object({
@@ -196,6 +196,58 @@ export function parseOverheadItems(raw: unknown): ParseResult<OverheadItemInput[
     const amountCents = dollarsToCents(i.amount);
     if (amountCents === null) return err(`"${i.name}" must have a non-negative dollar amount.`);
     items.push({ name: i.name, amountCents, category: i.category ?? null });
+  }
+  return { ok: true, data: items };
+}
+
+// --- Estimate line items -----------------------------------------------------------
+
+/** Parse a non-negative number (string or number), else null. */
+function numberOrNull(input: unknown): number | null {
+  if (input === null || input === undefined || input === "") return null;
+  const n = typeof input === "number" ? input : Number(String(input).trim());
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+/** One raw line item as submitted by the estimate editor (labor entered as hours). */
+export const lineItemRawSchema = z.object({
+  category: z.enum(LINE_CATEGORIES),
+  description: z.string().trim().max(200).nullish(),
+  /** Labor lines: hours on the tools (converted to integer minutes). */
+  laborHours: z.union([z.string(), z.number()]).nullish(),
+  /** Non-labor lines: count/measure. */
+  quantity: z.union([z.string(), z.number()]).nullish(),
+  /** Non-labor lines: unit cost in dollars (converted to cents). */
+  unitCost: z.union([z.string(), z.number()]).nullish(),
+});
+
+/**
+ * Parse the estimate editor's line items into {@link LineItemInput} with integer units
+ * (labor hours → minutes, unit dollars → cents). Labor lines need hours; non-labor lines
+ * need a quantity and unit cost. Returns the first clear error.
+ */
+export function parseLineItems(raw: unknown): ParseResult<LineItemInput[]> {
+  const shape = z.array(lineItemRawSchema).max(200).safeParse(raw ?? []);
+  if (!shape.success) {
+    return { ok: false, error: shape.error.issues[0]?.message ?? "Invalid line items." };
+  }
+
+  const items: LineItemInput[] = [];
+  for (const l of shape.data) {
+    const description = l.description ?? null;
+    if (l.category === "labor") {
+      const hours = numberOrNull(l.laborHours);
+      if (hours === null || hours > 24 * 366) {
+        return err("Labor lines need hours (0 or more).");
+      }
+      items.push({ category: "labor", description, laborMinutes: Math.round(hours * 60) });
+    } else {
+      const quantity = numberOrNull(l.quantity);
+      if (quantity === null) return err(`${l.category} lines need a quantity (0 or more).`);
+      const unitCostCents = l.unitCost == null || l.unitCost === "" ? null : dollarsToCents(l.unitCost);
+      if (unitCostCents === null) return err(`${l.category} lines need a unit cost.`);
+      items.push({ category: l.category, description, quantity, unitCostCents });
+    }
   }
   return { ok: true, data: items };
 }

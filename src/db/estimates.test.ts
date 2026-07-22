@@ -12,7 +12,7 @@ import {
   createMemoryProjectBackend,
   createTenantDb,
   type TenantBackends,
-} from "./tenant.js";
+} from "./tenant";
 
 const BUSINESS_A = "biz-a";
 const BUSINESS_B = "biz-b";

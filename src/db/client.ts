@@ -13,7 +13,7 @@
 
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import type { Db } from "./rls.js";
+import type { Db } from "./rls";
 
 let cachedDb: Db | null = null;
 

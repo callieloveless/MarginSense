@@ -5,10 +5,10 @@
  * screens show are `/12` display derivations, never a separate source of truth.
  */
 
-import type { BasisPoints, Cents, CentsPerHour, Computed, Minutes } from "./money.js";
-import { bpToRatio, roundHalfUp, safeDivide } from "./money.js";
-import type { EngineConfig } from "./config.js";
-import { DEFAULT_CONFIG, targetProfitNumerator } from "./config.js";
+import type { BasisPoints, Cents, CentsPerHour, Computed, Minutes } from "./money";
+import { bpToRatio, roundHalfUp, safeDivide } from "./money";
+import type { EngineConfig } from "./config";
+import { DEFAULT_CONFIG, targetProfitNumerator } from "./config";
 
 /**
  * The solo owner-operator business settings the engine needs to derive rates. All money is

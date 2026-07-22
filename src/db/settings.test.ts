@@ -13,8 +13,8 @@ import {
   createMemorySettingsBackend,
   createTenantDb,
   type SettingsInput,
-} from "./tenant.js";
-import type { BusinessSettingsRow } from "./schema.js";
+} from "./tenant";
+import type { BusinessSettingsRow } from "./schema";
 
 const BUSINESS_A = "biz-a";
 const BUSINESS_B = "biz-b";

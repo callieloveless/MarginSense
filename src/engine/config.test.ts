@@ -4,7 +4,7 @@ import {
   DEFAULT_CONFIG,
   resolveConfig,
   targetProfitNumerator,
-} from "./config.js";
+} from "./config";
 
 describe("resolveConfig", () => {
   it("returns the engine defaults when nothing is overridden", () => {

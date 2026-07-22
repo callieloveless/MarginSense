@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import type { BusinessSettings } from "./rates.js";
-import { deriveRates } from "./rates.js";
-import { valueOr } from "./money.js";
+import type { BusinessSettings } from "./rates";
+import { deriveRates } from "./rates";
+import { valueOr } from "./money";
 
 /** The reference business from the constitution (§3.3) and open-questions doc. */
 const REFERENCE: BusinessSettings = {

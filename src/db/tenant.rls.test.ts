@@ -19,9 +19,9 @@ const hasInfra = Boolean(process.env.DATABASE_URL && authA && authB);
 
 describe.skipIf(!hasInfra)("RLS policies over Drizzle (live database)", () => {
   it("a user only sees their own business's projects", async () => {
-    const { getDb } = await import("./client.js");
-    const { withAuthenticatedTx } = await import("./rls.js");
-    const { projects } = await import("./schema.js");
+    const { getDb } = await import("./client");
+    const { withAuthenticatedTx } = await import("./rls");
+    const { projects } = await import("./schema");
     const db = getDb();
 
     const asA = await withAuthenticatedTx(db, authA!, (tx) => tx.select().from(projects));
@@ -33,8 +33,8 @@ describe.skipIf(!hasInfra)("RLS policies over Drizzle (live database)", () => {
   });
 
   it("current_business_id differs per authenticated user", async () => {
-    const { getDb } = await import("./client.js");
-    const { businessIdForAuthUser } = await import("./rls.js");
+    const { getDb } = await import("./client");
+    const { businessIdForAuthUser } = await import("./rls");
     const db = getDb();
 
     const bizA = await businessIdForAuthUser(db, authA!);

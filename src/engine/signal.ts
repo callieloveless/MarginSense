@@ -10,10 +10,10 @@
  * color (§6.6). Colors are always paired with text in the UI — never color alone.
  */
 
-import type { Cents, CentsPerHour, Computed, Ratio } from "./money.js";
-import { notApplicable, safeDivide } from "./money.js";
-import type { EngineConfig, SignalThresholds } from "./config.js";
-import { DEFAULT_CONFIG } from "./config.js";
+import type { Cents, CentsPerHour, Computed, Ratio } from "./money";
+import { notApplicable, safeDivide } from "./money";
+import type { EngineConfig, SignalThresholds } from "./config";
+import { DEFAULT_CONFIG } from "./config";
 
 /** The three signal colors. Never rendered without accompanying text (§3.5). */
 export type SignalColor = "green" | "yellow" | "red";

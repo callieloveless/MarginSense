@@ -13,15 +13,15 @@ import {
   lineItems,
   overheadItems,
   projects,
-} from "./schema.js";
-import { withAuthenticatedTx, type Db, type Tx } from "./rls.js";
+} from "./schema";
+import { withAuthenticatedTx, type Db, type Tx } from "./rls";
 import type {
   BusinessId,
   EstimateBackend,
   EstimatePatch,
   ProjectBackend,
   SettingsBackend,
-} from "./tenant.js";
+} from "./tenant";
 
 export function createDrizzleProjectBackend(db: Db, authUserId: string): ProjectBackend {
   return {

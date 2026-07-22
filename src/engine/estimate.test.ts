@@ -1,13 +1,13 @@
 import { describe, it, expect } from "vitest";
-import type { LineItem } from "./estimate.js";
+import type { LineItem } from "./estimate";
 import {
   lineCost,
   lineLaborHours,
   rollUpEstimate,
   rollUpTotals,
   solvePriceForMargin,
-} from "./estimate.js";
-import { valueOr } from "./money.js";
+} from "./estimate";
+import { valueOr } from "./money";
 
 describe("line-item cost & hours", () => {
   it("computes a labor line's cost from minutes and the burdened rate (spec scenario)", () => {

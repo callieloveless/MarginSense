@@ -6,7 +6,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { computeEstimate, toEngineLine, activeVersion, type StoredEstimate } from "./estimate.js";
+import { computeEstimate, toEngineLine, activeVersion, type StoredEstimate } from "./estimate";
 
 const RATES = { overheadRecoveryRate: 5000, burdenedLaborRate: 4375 } as const;
 

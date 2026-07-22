@@ -12,8 +12,8 @@
  * - {@link module:signal} — the red/yellow/green "pull-their-weight" signal (both views).
  */
 
-export * from "./money.js";
-export * from "./config.js";
-export * from "./rates.js";
-export * from "./estimate.js";
-export * from "./signal.js";
+export * from "./money";
+export * from "./config";
+export * from "./rates";
+export * from "./estimate";
+export * from "./signal";

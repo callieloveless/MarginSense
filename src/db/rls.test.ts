@@ -8,7 +8,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { PgDialect } from "drizzle-orm/pg-core";
 import type { SQL } from "drizzle-orm";
-import { withAuthenticatedTx, type Db, type Tx } from "./rls.js";
+import { withAuthenticatedTx, type Db, type Tx } from "./rls";
 
 const dialect = new PgDialect();
 

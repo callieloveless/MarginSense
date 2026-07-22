@@ -27,7 +27,7 @@ import type {
   OverheadItemRow,
   ProjectRow,
   ProjectStatus,
-} from "./schema.js";
+} from "./schema";
 
 /** A business id. A branded string would be nicer; kept plain for v1 simplicity. */
 export type BusinessId = string;

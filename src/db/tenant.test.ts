@@ -11,8 +11,8 @@ import { describe, expect, it } from "vitest";
 import {
   createMemoryProjectBackend,
   createTenantDb,
-} from "./tenant.js";
-import type { ProjectRow } from "./schema.js";
+} from "./tenant";
+import type { ProjectRow } from "./schema";
 
 const BUSINESS_A = "biz-a";
 const BUSINESS_B = "biz-b";

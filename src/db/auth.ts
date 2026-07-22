@@ -8,7 +8,7 @@
  * without a live Supabase client.
  */
 
-import type { BusinessId } from "./tenant.js";
+import type { BusinessId } from "./tenant";
 
 /** The trusted part of an auth session: the authenticated user id, or null if signed out. */
 export interface AuthSession {

@@ -5,7 +5,7 @@
  * so tests never pull in `postgres`.
  */
 
-export * from "./schema.js";
-export * from "./tenant.js";
-export * from "./auth.js";
-export * from "./validation.js";
+export * from "./schema";
+export * from "./tenant";
+export * from "./auth";
+export * from "./validation";

@@ -10,8 +10,8 @@ import {
   buildPortfolio,
   estimateSignal,
   type PortfolioJobInput,
-} from "./profit.js";
-import { defined, type EstimateRollUp } from "../engine/index.js";
+} from "./profit";
+import { defined, type EstimateRollUp } from "../engine/index";
 
 /** A minimal roll-up carrying just the EPH the signal reads (other fields unused here). */
 function rollUpWithEph(eph: number): EstimateRollUp {
