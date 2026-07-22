@@ -25,6 +25,8 @@ Supabase project + secrets exist. Nothing here happens until the database is pro
 - [ ] `0001_brave_spot` — `business_settings`, `overhead_items` + RLS + grants.
 - [ ] `0002_fair_lethal_legion` — `estimates`, `line_items` + RLS + grants + the
       one-active-version-per-project partial unique index.
+- [ ] `0003_chunky_sumo` — `context_entries`, `conversation_messages`, `suggestions` + RLS +
+      grants.
 
 ### 2. Prove Row-Level Security end-to-end
 App-layer tenant isolation is already proven by in-memory tests (`tenant.test.ts`,
@@ -33,8 +35,9 @@ App-layer tenant isolation is already proven by in-memory tests (`tenant.test.ts
       read/write contracts in `src/db/tenant.rls.test.ts` against two seeded businesses.
 - [ ] **Known gap:** the `test:rls` suite only covers `projects`. Extend it to
       `business_settings` / `overhead_items` (onboarding) and `estimates` / `line_items`
-      (this change) before trusting those tables in production. Each has app-layer isolation
-      tests, but the DB policies themselves are unproven end-to-end.
+      (add-estimate-dashboard) and `context_entries` / `conversation_messages` / `suggestions`
+      (add-project-context) before trusting those tables in production. Each has app-layer
+      isolation tests, but the DB policies themselves are unproven end-to-end.
 
 ### 3. Walk the money-critical flows live (phone width)
 - [ ] Tenancy: sign-in → create-business → add a project; list is business-scoped.

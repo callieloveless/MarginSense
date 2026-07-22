@@ -18,7 +18,7 @@
 | 2 | `add-tenancy-foundation` | `tenancy-foundation` | ✅ **Done** (archived 2026-07-22; live-infra tasks deferred) |
 | 3 | `add-onboarding` | `onboarding` | ✅ **Done** (archived 2026-07-22; live-infra proof deferred) |
 | 4 | `add-estimate-dashboard` | `estimates`, `profit-dashboard` | ✅ **Done** (archived 2026-07-22; live-infra proof deferred) |
-| 5 | `add-project-context` | `project-context` | 📝 Proposed, waiting on #4 |
+| 5 | `add-project-context` | `project-context` | ✅ **Built** (code + tests + build green; live-infra proof deferred) |
 | 6 | Tool platform + first tool (Material Finder) | `tool-platform`, `material-finder` | ⏳ Planned |
 | 7 | Photo Advisor + Code Finder (auto-trigger) | `photo-advisor`, `code-finder` | ⏳ Planned |
 | 8 | Client Estimate Doc | `client-estimate-doc` | ⏳ Planned |

@@ -13,13 +13,35 @@
 
 import { z } from "zod";
 import type { EstimateRollUp } from "../engine/index";
-import {
-  CONTEXT_ENTRY_KINDS,
-  LINE_CATEGORIES,
-  type ContextEntryKindName,
-  type SuggestionStatusName,
-  type SuggestionTargetName,
+// Type-only imports keep this module framework/DB-free (no Drizzle at runtime). The local
+// vocabulary arrays below are tied to the schema's types via `satisfies`, so an invalid or
+// mistyped value fails to compile — one source of truth without importing the ORM.
+import type {
+  ContextEntryKindName,
+  LineCategoryName,
+  SuggestionStatusName,
+  SuggestionTargetName,
 } from "../db/schema";
+
+/** Context-entry kinds (constitution §4.1), matching the schema enum. */
+const CONTEXT_ENTRY_KINDS = [
+  "finding",
+  "material",
+  "code_ref",
+  "photo",
+  "fact",
+] as const satisfies readonly ContextEntryKindName[];
+
+/** Line-item categories, matching the schema enum (for proposed line items). */
+const LINE_CATEGORIES = [
+  "labor",
+  "material",
+  "subcontractor",
+  "equipment",
+  "permit",
+  "disposal",
+  "other",
+] as const satisfies readonly LineCategoryName[];
 
 // --- Author ------------------------------------------------------------------------
 
