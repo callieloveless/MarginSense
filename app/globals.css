@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+/* Phone-first baseline (constitution §1, techstack §6). Design at phone width first. */
+:root {
+  color-scheme: light dark;
+}
+
+html,
+body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}

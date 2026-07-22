@@ -12,3 +12,45 @@ The data plane. See [`constitution.md` §6.3/§6.4](../../constitution.md) and
   Column names make the unit explicit (`*_cents`, `*_minutes`, `*_bp`). Timestamps in UTC.
 - Migrations are **forward-only**, one reviewed file per change, generated and applied
   through Drizzle. No editing production schema by hand.
+
+## Layout
+
+| File | Role |
+|---|---|
+| `schema.ts` | Drizzle tables — the tenant spine (`businesses`, `users`, `projects`). Schema only. |
+| `tenant.ts` | `TenantDb` + the `ProjectBackend` port. Obtaining a handle **requires** a `business_id`; the in-memory backend backs the isolation tests. |
+| `drizzle-backend.ts` | Production backend: SQL that filters/stamps by `business_id`. |
+| `client.ts` | Lazy live connection (Drizzle over postgres.js). Throws if `DATABASE_URL` is unset — importing it does not connect. |
+| `auth.ts` | `resolveBusinessId(session)` — session identity → business, server-side only. |
+| `validation.ts` | Zod boundary schemas for tenant-spine input. |
+| `migrations/` | Forward-only SQL (schema **and** RLS policies, versioned together). |
+
+## The two isolation layers
+
+1. **Application layer** — `TenantDb` is bound to one `business_id` at construction and
+   never exposes a cross-tenant path; `tenant.test.ts` proves it with an in-memory
+   backend (no infra needed).
+2. **Database layer (the guarantee)** — RLS policies in `migrations/0000` restrict every
+   row to `public.current_business_id()`, resolved from `auth.uid()` via `users`.
+   `tenant.rls.test.ts` (opt-in `npm run test:rls`) proves it against a live database.
+
+Later business-owned tables copy this exact pattern: non-null `business_id`, a
+`*_same_business` policy, and an isolation test.
+
+## Environment & the RLS-subject role
+
+Set `DATABASE_URL` (see [`.env.example`](../../.env.example)) to a role that **is subject
+to RLS** — i.e. **not** the `postgres` superuser and **not** Supabase's `service_role`
+(both bypass RLS). If the app connected as a bypassing role, the policies would be inert.
+The only deliberately privileged path is `public.create_business(...)` (a
+`SECURITY DEFINER` function) which bootstraps the first business + user for a new auth
+identity — the one moment the caller has no business yet.
+
+## Commands
+
+```bash
+npm run db:generate   # drizzle-kit: regenerate migration from schema changes
+npm run db:migrate    # apply forward-only migrations (needs DATABASE_URL)
+npm run test          # unit tests incl. helper-layer isolation (no infra)
+npm run test:rls      # opt-in: prove RLS against a live database
+```

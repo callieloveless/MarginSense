@@ -5,14 +5,35 @@
   "type": "module",
   "description": "MarginSense — is this estimate worth the crew hours it takes?",
   "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:engine": "vitest run src/engine",
+    "test:rls": "vitest run --config vitest.rls.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^22.10.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "drizzle-kit": "^0.31.10",
+    "tailwindcss": "^4.3.3",
     "typescript": "^5.7.0",
     "vitest": "^2.1.0"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.12.3",
+    "@supabase/supabase-js": "^2.110.8",
+    "drizzle-orm": "^0.45.2",
+    "next": "^16.2.11",
+    "postgres": "^3.4.9",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "zod": "^4.4.3"
   }
 }

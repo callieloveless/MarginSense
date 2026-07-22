@@ -3,7 +3,8 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "lib": ["ES2022"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "preserve",
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
@@ -12,9 +13,23 @@
     "verbatimModuleSyntax": true,
     "isolatedModules": true,
     "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "allowJs": true,
+    "incremental": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["node"]
+    "types": ["node"],
+    "plugins": [{ "name": "next" }],
+    "paths": { "@/*": ["./*"] }
   },
-  "include": ["src", "vitest.config.ts"]
+  "include": [
+    "src",
+    "app",
+    "vitest.config.ts",
+    "vitest.rls.config.ts",
+    "drizzle.config.ts",
+    "middleware.ts",
+    "next-env.d.ts",
+    ".next/types/**/*.ts"
+  ]
 }
