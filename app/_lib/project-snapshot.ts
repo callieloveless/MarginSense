@@ -14,21 +14,23 @@ import {
   type ProjectSnapshot,
 } from "@/src/context";
 import { type EstimateRollUp } from "@/src/engine";
+import { activeVersion } from "@/src/estimate";
 import { type TenantDb } from "@/src/db/tenant";
 import { businessRates, computeFromRows } from "./estimate-compute";
 
 /** Build the read-only snapshot for a project: its entries, its one conversation, and its
  * active estimate's roll-up (null when there's no active version or the business has no
- * billable capacity set yet). */
+ * billable capacity set yet). Scoped to this one project — it fetches only this project's
+ * estimates and the active version's lines, not the whole business's portfolio. */
 export async function assembleProjectSnapshot(
   tenantDb: TenantDb,
   projectId: string,
 ): Promise<ProjectSnapshot> {
-  const [entries, messages, settings, actives] = await Promise.all([
+  const [entries, messages, settings, estimates] = await Promise.all([
     tenantDb.listContextEntries(projectId),
     tenantDb.listMessages(projectId),
     tenantDb.getSettings(),
-    tenantDb.listActiveEstimatesWithLines(),
+    tenantDb.listEstimates(projectId),
   ]);
 
   const entryViews: ContextEntryView[] = entries.map((e) => ({
@@ -44,9 +46,10 @@ export async function assembleProjectSnapshot(
   }));
 
   let activeEstimate: EstimateRollUp | null = null;
-  const active = actives.find((a) => a.estimate.projectId === projectId);
+  const active = activeVersion(estimates);
   if (active && settings) {
-    const computed = computeFromRows(active.estimate, active.lines, businessRates(settings));
+    const lines = await tenantDb.getLineItems(active.id);
+    const computed = computeFromRows(active, lines, businessRates(settings));
     if (computed.ok) activeEstimate = computed.value.rollUp;
   }
 

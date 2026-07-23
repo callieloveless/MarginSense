@@ -9,9 +9,14 @@ import { tenantToolRunnerPorts } from "@/app/_lib/tool-runner";
 
 export type RunToolResult = { ok: true; message: string } | { ok: false; error: string };
 
-function field(formData: FormData, name: string): string {
-  const v = formData.get(name);
-  return typeof v === "string" ? v : "";
+/** Collect the form's string fields into a plain input object (values trimmed). Each tool's
+ * `inputSchema` validates the shape it needs; the reference tool reads `note`. */
+function formInput(formData: FormData): Record<string, string> {
+  const input: Record<string, string> = {};
+  for (const [key, value] of formData.entries()) {
+    if (typeof value === "string") input[key] = value.trim();
+  }
+  return input;
 }
 
 /**
@@ -40,10 +45,10 @@ export async function runToolAction(
   const project = await tenantDb.getProject(projectId);
   if (!project) return { ok: false, error: "Project not found." };
 
-  // For the reference tool the only input is a note. Per-tool input forms arrive with each
-  // real tool; here a friendly guard keeps the reference run from surfacing a raw Zod error.
-  const note = field(formData, "note").trim();
-  if (toolName === "reference" && note === "") {
+  // Build the tool's input from the form; each tool's `inputSchema` validates it. A friendly
+  // guard keeps the reference run from surfacing a raw Zod error on an empty note.
+  const input = formInput(formData);
+  if (toolName === "reference" && (input.note ?? "") === "") {
     return { ok: false, error: "Enter a note for the reference tool first." };
   }
 
@@ -52,19 +57,21 @@ export async function runToolAction(
   try {
     const outcome = await runTool(
       tool,
-      { projectId, input: { note }, ai: createMockModelPort(), snapshot, source: "user" },
+      { projectId, input, ai: createMockModelPort(), snapshot, source: "user" },
       tenantToolRunnerPorts(tenantDb),
     );
     revalidatePath(`/projects/${projectId}/context`);
     revalidatePath(`/projects/${projectId}/tools`);
     const created = outcome.createdSuggestionIds.length;
     const dupe = outcome.skippedDuplicates;
+    // Report only what actually happened — derive the "posted" clause from the outcome.
     const parts = [
       created > 0 ? `${created} suggestion${created === 1 ? "" : "s"} added to the queue` : null,
       dupe > 0 ? `${dupe} duplicate skipped` : null,
-      "posted to the job conversation",
+      outcome.messageId !== null ? "posted to the job conversation" : null,
     ].filter(Boolean);
-    return { ok: true, message: `Ran ${tool.title}: ${parts.join(", ")}.` };
+    const detail = parts.length > 0 ? parts.join(", ") : "no changes proposed";
+    return { ok: true, message: `Ran ${tool.title}: ${detail}.` };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "The tool run failed." };
   }

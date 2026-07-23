@@ -161,7 +161,8 @@ export async function runTool(
     for (const s of suggestions) assertValidProposal(tool.name, s);
     message = result.message;
   } catch (err) {
-    await recordError();
+    // Never let a failure to log the error run mask the real tool error the caller needs.
+    await recordError().catch(() => {});
     throw err;
   }
 
