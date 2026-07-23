@@ -2,26 +2,16 @@
 
 ## Why
 
-The tool platform (change #6) records a `tool_run` **once, after a run finishes**, invokes a
-tool through an ad-hoc direct call, and has no way to fire a tool on an **event**. That shape
-is fine for one synchronous reference tool, but it compounds into real debt the moment four
-real tools land:
-
-- **No in-flight state.** A run is invisible until it completes, so no UI can show
-  "running…" — a problem the *next* tool already has (Material Finder's web search takes
-  seconds), not a distant one.
-- **No single invocation path.** Each tool would wire its own call to the runner; auto-triggers
-  (#9) and the tool-graph editor (#12) would each bolt on a different mechanism.
-- **Nothing fires tools on events.** The runner has a `source: "auto"` field and a step budget,
-  but no trigger dispatch — so #8's photo upload would have to *call* Code Finder directly
-  instead of *emitting an event* it subscribes to.
-
-This change reshapes those foundations **now, at one tool**, so #7–#12 extend one mechanism
-instead of reworking four. It deliberately builds the **seam, not the infra**: runs still
-execute inline (synchronously) here — the queue/worker that lets a run outlive its request
-arrives with the first tool that needs it (#9). The tell is explicit: real background
-execution is warranted only when a run must survive past the HTTP request; until then, one
-dispatch entry point shaped to enqueue is enough.
+The tool platform (change #6) records a `tool_run` **only after a run finishes**, invokes a
+tool through an ad-hoc direct call, and has no way to fire a tool on an **event**. That
+compounds into debt the moment four real tools land: no in-flight state (so no "running…" UI —
+a problem Material Finder's web search already has), no single invocation path (each tool would
+wire its own; #9 and #12 would each bolt on a different mechanism), and nothing to fire tools
+on events (so #8's photo upload would *call* Code Finder rather than *emit an event* it
+subscribes to). This change reshapes those foundations **now, at one tool**, so #7–#12 extend
+one mechanism instead of reworking four. It builds the **seam, not the infra**: runs execute
+inline here — the queue that lets a run outlive its request arrives with the first tool that
+needs it (#9).
 
 ## What Changes
 

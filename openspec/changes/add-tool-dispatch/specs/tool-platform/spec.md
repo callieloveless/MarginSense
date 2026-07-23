@@ -2,7 +2,7 @@
 
 ## MODIFIED Requirements
 
-### Requirement: Tool runs have an observable lifecycle and are traceable
+### Requirement: Tool runs are logged and traceable to what they produced
 Every tool invocation SHALL create a `tool_run` when it starts and finalize it when it
 completes: the run is recorded as running (no terminal status) at start, then finalized to
 `ok` or `error` — with token usage, latency, tool name, project, and source — including runs
