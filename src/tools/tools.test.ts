@@ -1,9 +1,9 @@
 /**
- * Unit tests for the tool platform (add-tool-platform). All offline against the mock port and
- * a fake persistence adapter. They prove the runner's contract: read-only snapshot in;
- * de-duplicated pending suggestions + a linked conversation post out; failed runs still
- * logged; the step budget; and the structural safety boundary (the tool context exposes no
- * write path, and the runner never commits — its only outputs are pending suggestions).
+ * Unit tests for the tool dispatch seam (add-tool-dispatch). All offline against the mock port
+ * and a fake lifecycle-persistence adapter. They prove: dispatch starts and finalizes a run;
+ * an unknown tool starts no run; invalid input starts no run; a failure finalizes `error`
+ * without masking the real error; dedup + linked emissions; the read-only boundary; the step
+ * budget; and that an empty trigger registry makes `emit` a no-op.
  */
 
 import { describe, expect, it } from "vitest";
@@ -12,11 +12,12 @@ import { buildProjectSnapshot } from "../context";
 import { createMockModelPort } from "../ai";
 import {
   MAX_TOOL_STEPS,
+  dispatch,
+  emit,
   referenceTool,
-  runTool,
+  type DispatchDeps,
   type PendingSuggestionKey,
   type Tool,
-  type ToolRunnerPorts,
 } from "./index";
 
 const NOTE = "Add a GFCI outlet by the sink";
@@ -34,80 +35,82 @@ function snapshot(entryCount = 0) {
   });
 }
 
-function makePorts(pending: PendingSuggestionKey[] = []) {
+/** A fake lifecycle adapter + deps. `tool` is what getTool resolves; `pending` seeds dedup. */
+function makeDeps(tool: Tool<never, unknown> | null, pending: PendingSuggestionKey[] = []) {
   let n = 0;
   const runs: Array<Record<string, unknown> & { id: string }> = [];
+  const finals: Array<Record<string, unknown> & { id: string }> = [];
   const suggestions: Array<Record<string, unknown> & { id: string }> = [];
   const messages: Array<Record<string, unknown> & { id: string }> = [];
-  const ports: ToolRunnerPorts = {
-    async listPendingSuggestions() {
-      return pending;
-    },
-    async recordToolRun(input) {
-      const id = `run-${++n}`;
-      runs.push({ id, ...input });
-      return { id };
-    },
-    async createSuggestion(input) {
-      const id = `sug-${++n}`;
-      suggestions.push({ id, ...input });
-      return { id };
-    },
-    async postMessage(input) {
-      const id = `msg-${++n}`;
-      messages.push({ id, ...input });
-      return { id };
+  const deps: DispatchDeps = {
+    getTool: () => tool as never,
+    ai: createMockModelPort(),
+    buildSnapshot: async () => snapshot(1),
+    ports: {
+      async startToolRun(input) {
+        const id = `run-${++n}`;
+        runs.push({ id, ...input });
+        return { id };
+      },
+      async completeToolRun(id, input) {
+        finals.push({ id, ...input });
+      },
+      async listPendingSuggestions() {
+        return pending;
+      },
+      async createSuggestion(input) {
+        const id = `sug-${++n}`;
+        suggestions.push({ id, ...input });
+        return { id };
+      },
+      async postMessage(input) {
+        const id = `msg-${++n}`;
+        messages.push({ id, ...input });
+        return { id };
+      },
     },
   };
-  return { ports, runs, suggestions, messages };
+  return { deps, runs, finals, suggestions, messages };
 }
 
-const refInput = { projectId: "p1", input: { note: NOTE }, ai: createMockModelPort(), snapshot: snapshot(1) };
+const req = { toolName: "reference", projectId: "p1", input: { note: NOTE } };
 
-describe("runTool — happy path", () => {
-  it("emits one pending suggestion + one post + one linked tool_run", async () => {
-    const { ports, runs, suggestions, messages } = makePorts();
-    const outcome = await runTool(referenceTool, refInput, ports);
+describe("dispatch — happy path", () => {
+  it("starts a run, emits one linked suggestion + post, finalizes ok", async () => {
+    const { deps, runs, finals, suggestions, messages } = makeDeps(referenceTool as never);
+    const outcome = await dispatch(req, deps);
 
     expect(runs).toHaveLength(1);
-    expect(runs[0]).toMatchObject({ toolName: "reference", status: "ok", source: "user" });
-    expect(outcome.usage.outputTokens).toBeGreaterThan(0);
+    expect(runs[0]).toMatchObject({ toolName: "reference", source: "user" });
+    expect(finals).toHaveLength(1);
+    expect(finals[0]).toMatchObject({ id: outcome.toolRunId, status: "ok" });
+    expect(Number(finals[0]?.outputTokens ?? 0)).toBeGreaterThan(0);
 
-    expect(suggestions).toHaveLength(1);
-    expect(suggestions[0]).toMatchObject({
-      target: "context_entry",
-      author: { tool: "reference" },
-      toolRunId: outcome.toolRunId,
-    });
-    expect(messages).toHaveLength(1);
+    expect(suggestions[0]).toMatchObject({ target: "context_entry", author: { tool: "reference" }, toolRunId: outcome.toolRunId });
     expect(messages[0]).toMatchObject({ author: { tool: "reference" }, toolRunId: outcome.toolRunId });
-
     expect(outcome.output).toEqual({ echo: expect.any(String), entryCount: 1 });
-    expect(outcome.skippedDuplicates).toBe(0);
     expect(outcome.createdSuggestionIds).toHaveLength(1);
   });
 });
 
-describe("runTool — de-duplication", () => {
-  it("skips a proposal identical to one already pending, but still runs and posts", async () => {
+describe("dispatch — de-duplication", () => {
+  it("skips a proposal identical to one already pending, still runs + posts", async () => {
     const duplicate: PendingSuggestionKey = {
       target: "context_entry",
       targetEstimateId: null,
-      // Same payload the reference tool proposes, with keys in a different order.
-      payload: { payload: { value: NOTE, label: "Reference note" }, kind: "fact" },
+      payload: { payload: { value: NOTE, label: "Reference note" }, kind: "fact" }, // reordered keys
     };
-    const { ports, runs, suggestions, messages } = makePorts([duplicate]);
-    const outcome = await runTool(referenceTool, refInput, ports);
+    const { deps, finals, suggestions, messages } = makeDeps(referenceTool as never, [duplicate]);
+    const outcome = await dispatch(req, deps);
 
     expect(outcome.skippedDuplicates).toBe(1);
-    expect(outcome.createdSuggestionIds).toHaveLength(0);
-    expect(suggestions).toHaveLength(0); // nothing created
-    expect(runs).toHaveLength(1); // run still logged
-    expect(messages).toHaveLength(1); // post still made
+    expect(suggestions).toHaveLength(0);
+    expect(messages).toHaveLength(1);
+    expect(finals[0]).toMatchObject({ status: "ok" });
   });
 });
 
-describe("runTool — safety boundary", () => {
+describe("dispatch — safety boundary", () => {
   it("hands the tool a frozen snapshot and a context with no write path", async () => {
     let seenKeys: string[] = [];
     let frozen = false;
@@ -122,25 +125,27 @@ describe("runTool — safety boundary", () => {
         return { output: { ok: true } };
       },
     };
-    const { ports } = makePorts();
-    await runTool(probe, { projectId: "p1", input: {}, ai: createMockModelPort(), snapshot: snapshot() }, ports);
-
-    // The only things a tool receives are the snapshot, its input, and the model port.
+    const { deps } = makeDeps(probe as never);
+    await dispatch({ toolName: "probe", projectId: "p1", input: {} }, deps);
     expect(seenKeys).toEqual(["ai", "input", "snapshot"]);
     expect(frozen).toBe(true);
   });
 });
 
-describe("runTool — failures", () => {
-  it("rejects invalid input and records no run", async () => {
-    const { ports, runs } = makePorts();
-    await expect(
-      runTool(referenceTool, { projectId: "p1", input: {}, ai: createMockModelPort(), snapshot: snapshot() }, ports),
-    ).rejects.toThrow();
-    expect(runs).toHaveLength(0); // invalid input is not a run
+describe("dispatch — failures", () => {
+  it("rejects an unknown tool and starts no run", async () => {
+    const { deps, runs } = makeDeps(null);
+    await expect(dispatch({ toolName: "nope", projectId: "p1", input: {} }, deps)).rejects.toThrow(/unknown tool/i);
+    expect(runs).toHaveLength(0);
   });
 
-  it("records an error tool_run when the tool throws, and commits nothing", async () => {
+  it("rejects invalid input and starts no run", async () => {
+    const { deps, runs } = makeDeps(referenceTool as never);
+    await expect(dispatch({ toolName: "reference", projectId: "p1", input: {} }, deps)).rejects.toThrow();
+    expect(runs).toHaveLength(0);
+  });
+
+  it("finalizes error when the tool throws, and commits nothing", async () => {
     const boom: Tool<Record<string, never>, unknown> = {
       name: "boom",
       title: "Boom",
@@ -150,42 +155,41 @@ describe("runTool — failures", () => {
         throw new Error("kaboom");
       },
     };
-    const { ports, runs, suggestions, messages } = makePorts();
-    await expect(
-      runTool(boom, { projectId: "p1", input: {}, ai: createMockModelPort(), snapshot: snapshot() }, ports),
-    ).rejects.toThrow(/kaboom/);
+    const { deps, runs, finals, suggestions, messages } = makeDeps(boom as never);
+    await expect(dispatch({ toolName: "boom", projectId: "p1", input: {} }, deps)).rejects.toThrow(/kaboom/);
     expect(runs).toHaveLength(1);
-    expect(runs[0]).toMatchObject({ status: "error", toolName: "boom" });
+    expect(finals[0]).toMatchObject({ status: "error" });
     expect(suggestions).toHaveLength(0);
     expect(messages).toHaveLength(0);
   });
 
-  it("rejects (and error-logs) a tool that proposes an invalid suggestion", async () => {
+  it("finalizes error on an invalid proposal", async () => {
     const bad: Tool<Record<string, never>, Record<string, never>> = {
       name: "bad",
       title: "Bad",
       inputSchema: z.object({}),
       outputSchema: z.object({}),
       run() {
-        return {
-          output: {},
-          // A context_entry proposal whose payload doesn't match any entry kind.
-          suggestions: [{ target: "context_entry", payload: { kind: "nope", payload: {} } }],
-        };
+        return { output: {}, suggestions: [{ target: "context_entry", payload: { kind: "nope", payload: {} } }] };
       },
     };
-    const { ports, runs, suggestions } = makePorts();
-    await expect(
-      runTool(bad, { projectId: "p1", input: {}, ai: createMockModelPort(), snapshot: snapshot() }, ports),
-    ).rejects.toThrow(/invalid suggestion/i);
-    expect(runs[0]).toMatchObject({ status: "error" });
+    const { deps, finals, suggestions } = makeDeps(bad as never);
+    await expect(dispatch({ toolName: "bad", projectId: "p1", input: {} }, deps)).rejects.toThrow(/invalid suggestion/i);
+    expect(finals[0]).toMatchObject({ status: "error" });
     expect(suggestions).toHaveLength(0);
   });
 
   it("enforces the composed-run step budget", async () => {
-    const { ports } = makePorts();
-    await expect(
-      runTool(referenceTool, { ...refInput, source: "compose", step: MAX_TOOL_STEPS }, ports),
-    ).rejects.toThrow(/step budget/i);
+    const { deps, runs } = makeDeps(referenceTool as never);
+    await expect(dispatch({ ...req, source: "compose", step: MAX_TOOL_STEPS }, deps)).rejects.toThrow(/step budget/i);
+    expect(runs).toHaveLength(0);
+  });
+});
+
+describe("emit — dormant trigger registry", () => {
+  it("dispatches nothing when no tool subscribes", async () => {
+    const { deps, runs } = makeDeps(referenceTool as never);
+    await emit("photo.uploaded", { projectId: "p1", input: { note: NOTE } }, deps);
+    expect(runs).toHaveLength(0);
   });
 });

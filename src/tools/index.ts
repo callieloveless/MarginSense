@@ -8,5 +8,6 @@
 
 export * from "./contract";
 export * from "./runner";
+export * from "./triggers";
 export * from "./registry";
 export { referenceTool } from "./reference";

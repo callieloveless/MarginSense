@@ -323,12 +323,17 @@ export const toolRuns = pgTable("tool_runs", {
     .notNull()
     .references(() => projects.id, { onDelete: "cascade" }),
   toolName: text("tool_name").notNull(),
-  status: toolRunStatus("status").notNull(),
+  /** Terminal status once the run finishes. NULL while the run is in flight — see
+   * {@link runStatus} (add-tool-dispatch). Nullable rather than a `running` enum value so the
+   * migration avoids the Postgres "ALTER TYPE … ADD VALUE inside a transaction" hazard. */
+  status: toolRunStatus("status"),
   source: toolRunSource("source").notNull().default("user"),
   inputTokens: integer("input_tokens").notNull().default(0),
   outputTokens: integer("output_tokens").notNull().default(0),
   latencyMs: integer("latency_ms").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  /** When the run reached a terminal status. NULL while running (add-tool-dispatch). */
+  completedAt: timestamp("completed_at", { withTimezone: true }),
 });
 
 export type BusinessRow = typeof businesses.$inferSelect;
@@ -386,8 +391,14 @@ export type LineCategoryName = (typeof LINE_CATEGORIES)[number];
 export const PROJECT_STATUSES = ["active", "complete", "archived"] as const;
 export type ProjectStatus = (typeof PROJECT_STATUSES)[number];
 
-/** Valid tool-run sources and statuses, for boundary validation. */
+/** Valid tool-run sources and terminal statuses, for boundary validation. */
 export const TOOL_RUN_SOURCES = ["user", "auto", "compose"] as const;
 export type ToolRunSourceName = (typeof TOOL_RUN_SOURCES)[number];
 export const TOOL_RUN_STATUSES = ["ok", "error"] as const;
 export type ToolRunStatusName = (typeof TOOL_RUN_STATUSES)[number];
+
+/** The lifecycle state of a tool run: `running` while its terminal `status` is still NULL,
+ * otherwise the terminal status (add-tool-dispatch). */
+export function runStatus(row: { status: ToolRunStatusName | null }): "running" | ToolRunStatusName {
+  return row.status ?? "running";
+}

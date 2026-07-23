@@ -2,10 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { getServerSession, tenantDbForSession } from "@/src/db/session";
-import { getTool, runTool } from "@/src/tools";
-import { createMockModelPort } from "@/src/ai";
-import { assembleProjectSnapshot } from "@/app/_lib/project-snapshot";
-import { tenantToolRunnerPorts } from "@/app/_lib/tool-runner";
+import { dispatch, getTool } from "@/src/tools";
+import { dispatchDeps } from "@/app/_lib/tool-runner";
 
 export type RunToolResult = { ok: true; message: string } | { ok: false; error: string };
 
@@ -52,13 +50,10 @@ export async function runToolAction(
     return { ok: false, error: "Enter a note for the reference tool first." };
   }
 
-  const snapshot = await assembleProjectSnapshot(tenantDb, projectId);
-
   try {
-    const outcome = await runTool(
-      tool,
-      { projectId, input, ai: createMockModelPort(), snapshot, source: "user" },
-      tenantToolRunnerPorts(tenantDb),
+    const outcome = await dispatch(
+      { toolName: tool.name, projectId, input, source: "user" },
+      dispatchDeps(tenantDb),
     );
     revalidatePath(`/projects/${projectId}/context`);
     revalidatePath(`/projects/${projectId}/tools`);

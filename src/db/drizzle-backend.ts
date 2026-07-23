@@ -390,10 +390,26 @@ export function createDrizzleToolRunsBackend(db: Db, authUserId: string): ToolRu
           .orderBy(desc(toolRuns.createdAt)),
       );
     },
-    insert(row) {
+    startRun(row) {
       return withAuthenticatedTx(db, authUserId, async (tx) => {
         const inserted = await tx.insert(toolRuns).values(row).returning();
         return inserted[0]!;
+      });
+    },
+    finalizeRun(businessId: BusinessId, id: string, patch) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const updated = await tx
+          .update(toolRuns)
+          .set({
+            status: patch.status,
+            inputTokens: patch.inputTokens,
+            outputTokens: patch.outputTokens,
+            latencyMs: patch.latencyMs,
+            completedAt: new Date(),
+          })
+          .where(and(eq(toolRuns.id, id), eq(toolRuns.businessId, businessId)))
+          .returning();
+        return updated[0] ?? null;
       });
     },
   };

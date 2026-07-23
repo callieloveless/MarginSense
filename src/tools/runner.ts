@@ -1,20 +1,20 @@
 /**
- * The tool runner (constitution §5; techstack §4) — the ONE code path that invokes a tool.
- * It is the only impure step in the platform, yet it still has no path that commits an
- * estimate or context fact directly: the only things that leave a run are `pending`
- * suggestions and a conversation post. It:
- *   1. validates the tool's input at the boundary (invalid input → the tool never runs);
- *   2. runs the tool with a **metered** model port and the read-only snapshot;
- *   3. validates the tool's `output` and every proposed suggestion;
- *   4. records a `tool_run` (tokens, latency, status) — for failed runs too;
- *   5. **de-duplicates** proposals against the project's pending queue (the gap change #5
- *      handed the platform), then creates the survivors as `pending`;
- *   6. posts one conversation message; and stamps `tool_run_id` on both, so every emission is
- *      traceable to the run — and cost — that produced it.
+ * The tool dispatch seam (constitution §5; techstack §4) — the ONE code path that invokes a
+ * tool. Every invocation (a user tap, an event trigger, a composed hop) flows through
+ * {@link dispatch}. It starts an observable `tool_run`, runs the tool with a **metered** model
+ * port and the read-only snapshot, validates the output and every proposed suggestion,
+ * **de-duplicates** against the pending queue, creates the survivors as `pending` linked to the
+ * run, posts one conversation message, and **finalizes** the run to `ok` or `error`. The only
+ * things that leave a run are `pending` suggestions and a conversation post — never a direct
+ * estimate/context write.
  *
- * It is framework/DB-free: it persists only through the injected {@link ToolRunnerPorts}, which
- * an app-layer adapter backs with the tenant-scoped `TenantDb`. That keeps the runner unit-
- * testable with a fake and keeps `business_id` stamping on the tenant side.
+ * Because the run id exists *before* any emission and the status is set *after*, a run that
+ * fails to persist its emissions is finalized `error`, never a misleading `ok`.
+ *
+ * It is framework/DB-free: it persists only through the injected {@link DispatchDeps.ports} and
+ * gets its snapshot from an injected `buildSnapshot`, so an app-layer binding supplies the
+ * tenant-scoped `TenantDb`. Runs execute inline today; a queue driver can wrap the
+ * start → run → finalize body without changing this signature or any caller.
  */
 
 import { suggestionEffect, type Author, type ProjectSnapshot } from "../context";
@@ -34,21 +34,26 @@ export interface PendingSuggestionKey {
 }
 
 /**
- * The persistence the runner needs, bound to a tenant by the caller's adapter. Every method
- * takes an explicit `projectId`; the adapter (over `TenantDb`) stamps `business_id` from the
- * session handle, never from here.
+ * The persistence dispatch needs, bound to a tenant by the caller's adapter. Every method
+ * takes an explicit `projectId`/id; the adapter (over `TenantDb`) stamps `business_id` from the
+ * session handle, never from here. `startToolRun`/`completeToolRun` are the run lifecycle.
  */
-export interface ToolRunnerPorts {
-  listPendingSuggestions(projectId: string): Promise<readonly PendingSuggestionKey[]>;
-  recordToolRun(input: {
+export interface DispatchPorts {
+  startToolRun(input: {
     projectId: string;
     toolName: string;
-    status: "ok" | "error";
     source: ToolRunSourceName;
-    inputTokens: number;
-    outputTokens: number;
-    latencyMs: number;
   }): Promise<{ id: string }>;
+  completeToolRun(
+    id: string,
+    input: {
+      status: "ok" | "error";
+      inputTokens: number;
+      outputTokens: number;
+      latencyMs: number;
+    },
+  ): Promise<unknown>;
+  listPendingSuggestions(projectId: string): Promise<readonly PendingSuggestionKey[]>;
   createSuggestion(input: {
     projectId: string;
     target: SuggestionTargetName;
@@ -65,23 +70,28 @@ export interface ToolRunnerPorts {
   }): Promise<{ id: string }>;
 }
 
-/** What the caller passes for one invocation. `snapshot` is assembled by the caller (it needs
- * the app-layer roll-up glue); the runner keeps it read-only. */
-export interface RunToolInput {
+/** Everything dispatch needs, injected by the caller (app-layer binding or a test fake). */
+export interface DispatchDeps {
+  getTool(name: string): AnyTool | null;
+  ports: DispatchPorts;
+  ai: ModelPort;
+  buildSnapshot(projectId: string): Promise<ProjectSnapshot>;
+}
+
+/** One invocation. `source` defaults to `user`; `step` is the composition depth (0 = direct). */
+export interface DispatchRequest {
+  readonly toolName: string;
   readonly projectId: string;
   readonly input: unknown;
-  readonly ai: ModelPort;
-  readonly snapshot: ProjectSnapshot;
-  /** Who/what invoked the run; drives the step budget. Defaults to `user`. */
   readonly source?: ToolRunSourceName | undefined;
-  /** Composition depth (0 = a direct run). Enforced only for non-`user` sources. */
   readonly step?: number | undefined;
 }
 
-/** The result of a run: the id of the logged `tool_run`, the validated output, and what it
- * emitted (with how many duplicates were skipped). */
+/** The result of a run: the id + terminal status of its `tool_run`, the validated output, and
+ * what it emitted (with how many duplicates were skipped). */
 export interface ToolRunOutcome {
   readonly toolRunId: string;
+  readonly status: "ok";
   readonly output: unknown;
   readonly createdSuggestionIds: readonly string[];
   readonly skippedDuplicates: number;
@@ -117,97 +127,85 @@ function assertValidProposal(toolName: string, s: ProposedSuggestion): void {
 }
 
 /**
- * Run one tool end to end. See the module note for the pipeline. Throws on invalid input
- * (before any run is recorded), and on a tool/validation failure (after recording a
- * `status: "error"` run so partial AI spend stays observable).
+ * Dispatch one tool run end to end. Rejects an unknown tool and invalid input **before** any
+ * run is started (that isn't a run). Once started, always finalizes the run — `ok` on success,
+ * `error` on any failure (the error is re-thrown; finalizing never masks it).
  */
-export async function runTool(
-  tool: AnyTool,
-  input: RunToolInput,
-  ports: ToolRunnerPorts,
-): Promise<ToolRunOutcome> {
-  const source: ToolRunSourceName = input.source ?? "user";
-  const step = input.step ?? 0;
+export async function dispatch(request: DispatchRequest, deps: DispatchDeps): Promise<ToolRunOutcome> {
+  const source: ToolRunSourceName = request.source ?? "user";
+  const step = request.step ?? 0;
   if (source !== "user" && step >= MAX_TOOL_STEPS) {
-    throw new Error(`Tool "${tool.name}" exceeded the composed-run step budget (${MAX_TOOL_STEPS}).`);
+    throw new Error(`Tool "${request.toolName}" exceeded the composed-run step budget (${MAX_TOOL_STEPS}).`);
   }
 
-  // 1. Validate input at the boundary — the tool's `run` never sees invalid input, and an
-  //    invalid-input rejection is not a run (nothing is recorded).
-  const parsedInput = tool.inputSchema.parse(input.input);
+  const tool = deps.getTool(request.toolName);
+  if (!tool) throw new Error(`Unknown tool "${request.toolName}".`);
 
-  const metered = meterModelPort(input.ai);
+  // Validate input at the boundary — the tool's `run` never sees invalid input, and an
+  // invalid-input rejection is not a run (nothing is started).
+  const parsedInput = tool.inputSchema.parse(request.input);
+
+  const run = await deps.ports.startToolRun({ projectId: request.projectId, toolName: tool.name, source });
+  const metered = meterModelPort(deps.ai);
   const startedAt = Date.now();
   const author: Author = { tool: tool.name };
-
-  const recordError = () =>
-    ports.recordToolRun({
-      projectId: input.projectId,
-      toolName: tool.name,
-      status: "error",
-      source,
+  const finalize = (status: "ok" | "error") =>
+    deps.ports.completeToolRun(run.id, {
+      status,
       ...metered.usage(),
       latencyMs: Date.now() - startedAt,
     });
 
-  // 2. Run the tool, then 3. validate its output + proposals. Any failure records an error run.
-  let output: unknown;
-  let suggestions: readonly ProposedSuggestion[];
-  let message: { body: string; disclaimer?: string | undefined } | undefined;
   try {
-    const result = await tool.run({ snapshot: input.snapshot, input: parsedInput, ai: metered.port });
-    output = tool.outputSchema.parse(result.output);
-    suggestions = result.suggestions ?? [];
+    const snapshot = await deps.buildSnapshot(request.projectId);
+    const result = await tool.run({ snapshot, input: parsedInput, ai: metered.port });
+    const output = tool.outputSchema.parse(result.output);
+    const suggestions = result.suggestions ?? [];
     for (const s of suggestions) assertValidProposal(tool.name, s);
-    message = result.message;
+
+    // De-dupe against the pending queue (and within this batch), then create the survivors.
+    const pending = await deps.ports.listPendingSuggestions(request.projectId);
+    const seen = new Set(pending.map(suggestionKey));
+    const createdSuggestionIds: string[] = [];
+    let skippedDuplicates = 0;
+    for (const s of suggestions) {
+      const key = suggestionKey({ target: s.target, targetEstimateId: s.targetEstimateId ?? null, payload: s.payload });
+      if (seen.has(key)) {
+        skippedDuplicates += 1;
+        continue;
+      }
+      seen.add(key);
+      const created = await deps.ports.createSuggestion({
+        projectId: request.projectId,
+        target: s.target,
+        payload: s.payload,
+        targetEstimateId: s.targetEstimateId ?? null,
+        author,
+        toolRunId: run.id,
+      });
+      createdSuggestionIds.push(created.id);
+    }
+
+    let messageId: string | null = null;
+    if (result.message) {
+      const body = result.message.disclaimer ? `${result.message.body}\n\n${result.message.disclaimer}` : result.message.body;
+      const posted = await deps.ports.postMessage({ projectId: request.projectId, body, author, toolRunId: run.id });
+      messageId = posted.id;
+    }
+
+    await finalize("ok");
+    return {
+      toolRunId: run.id,
+      status: "ok",
+      output,
+      createdSuggestionIds,
+      skippedDuplicates,
+      messageId,
+      usage: metered.usage(),
+    };
   } catch (err) {
-    // Never let a failure to log the error run mask the real tool error the caller needs.
-    await recordError().catch(() => {});
+    // Finalize as error, but never let a finalize failure mask the real error.
+    await finalize("error").catch(() => {});
     throw err;
   }
-
-  // 4. Record the successful run first, so its id can link the emissions.
-  const usage = metered.usage();
-  const run = await ports.recordToolRun({
-    projectId: input.projectId,
-    toolName: tool.name,
-    status: "ok",
-    source,
-    inputTokens: usage.inputTokens,
-    outputTokens: usage.outputTokens,
-    latencyMs: Date.now() - startedAt,
-  });
-
-  // 5. De-dupe against the pending queue (and within this batch), then create the survivors.
-  const pending = await ports.listPendingSuggestions(input.projectId);
-  const seen = new Set(pending.map(suggestionKey));
-  const createdSuggestionIds: string[] = [];
-  let skippedDuplicates = 0;
-  for (const s of suggestions) {
-    const key = suggestionKey({ target: s.target, targetEstimateId: s.targetEstimateId ?? null, payload: s.payload });
-    if (seen.has(key)) {
-      skippedDuplicates += 1;
-      continue;
-    }
-    seen.add(key);
-    const created = await ports.createSuggestion({
-      projectId: input.projectId,
-      target: s.target,
-      payload: s.payload,
-      targetEstimateId: s.targetEstimateId ?? null,
-      author,
-      toolRunId: run.id,
-    });
-    createdSuggestionIds.push(created.id);
-  }
-
-  // 6. Post the conversation message (with any disclaimer), linked to the run.
-  let messageId: string | null = null;
-  if (message) {
-    const body = message.disclaimer ? `${message.body}\n\n${message.disclaimer}` : message.body;
-    const posted = await ports.postMessage({ projectId: input.projectId, body, author, toolRunId: run.id });
-    messageId = posted.id;
-  }
-
-  return { toolRunId: run.id, output, createdSuggestionIds, skippedDuplicates, messageId, usage };
 }

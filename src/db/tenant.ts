@@ -207,13 +207,18 @@ export interface SuggestionInput {
   toolRunId?: string | null | undefined;
 }
 
-/** A tool-run audit record to write (constitution §2, §7). `business_id` is stamped by
- * `TenantDb`, never accepted from input. Recorded for successful and failed runs alike. */
-export interface ToolRunInput {
+/** Start a tool run (add-tool-dispatch): inserts a running record (terminal `status` NULL).
+ * `business_id` is stamped by `TenantDb`, never accepted from input. */
+export interface StartToolRunInput {
   projectId: string;
   toolName: string;
-  status: ToolRunStatusName;
   source?: ToolRunSourceName | undefined;
+}
+
+/** Finalize a running tool run to its terminal status + cost. Recorded for `ok` and `error`
+ * alike, so partial AI spend stays observable (§7). */
+export interface CompleteToolRunInput {
+  status: ToolRunStatusName;
   inputTokens?: number | undefined;
   outputTokens?: number | undefined;
   latencyMs?: number | undefined;
@@ -261,8 +266,14 @@ export interface ContextBackend {
  */
 export interface ToolRunsBackend {
   listByProject(businessId: BusinessId, projectId: string): Promise<ToolRunRow[]>;
-  /** `row.businessId` is set by `TenantDb`; the backend persists it verbatim. */
-  insert(row: NewToolRunRow): Promise<ToolRunRow>;
+  /** Insert a running record (`row.status` NULL). `row.businessId` is set by `TenantDb`. */
+  startRun(row: NewToolRunRow): Promise<ToolRunRow>;
+  /** Finalize a run to its terminal status + cost, scoped to the business. Null if not ours. */
+  finalizeRun(
+    businessId: BusinessId,
+    id: string,
+    patch: { status: ToolRunStatusName; inputTokens: number; outputTokens: number; latencyMs: number },
+  ): Promise<ToolRunRow | null>;
 }
 
 /** Backends a {@link TenantDb} composes. All but `projects` are optional so tests wire just
@@ -550,20 +561,32 @@ export class TenantDb {
 
   // --- Tool runs (constitution §2, §7; add-tool-platform) --------------------------
 
-  /** This project's tool-run audit records, scoped to this business. */
+  /** This project's tool-run records, scoped to this business. */
   listToolRuns(projectId: string): Promise<ToolRunRow[]> {
     return this.#toolRunsBackend.listByProject(this.businessId, projectId);
   }
 
-  /** Record one tool invocation's cost/outcome. The stored `business_id` is always this
-   * handle's — never input. Called for successful and failed runs alike. */
-  recordToolRun(input: ToolRunInput): Promise<ToolRunRow> {
-    return this.#toolRunsBackend.insert({
+  /** Start a tool run — insert a running record (terminal `status` NULL) and return it, so its
+   * id links the run's emissions. The stored `business_id` is always this handle's. */
+  startToolRun(input: StartToolRunInput): Promise<ToolRunRow> {
+    return this.#toolRunsBackend.startRun({
       businessId: this.businessId,
       projectId: input.projectId,
       toolName: input.toolName,
-      status: input.status,
+      status: null,
       source: input.source ?? "user",
+      inputTokens: 0,
+      outputTokens: 0,
+      latencyMs: 0,
+      completedAt: null,
+    });
+  }
+
+  /** Finalize a running tool run to its terminal status + cost, scoped to this business. Null
+   * if it isn't ours (no-op). Called for `ok` and `error` alike. */
+  completeToolRun(id: string, input: CompleteToolRunInput): Promise<ToolRunRow | null> {
+    return this.#toolRunsBackend.finalizeRun(this.businessId, id, {
+      status: input.status,
       inputTokens: input.inputTokens ?? 0,
       outputTokens: input.outputTokens ?? 0,
       latencyMs: input.latencyMs ?? 0,
@@ -947,21 +970,32 @@ export function createMemoryToolRunsBackend(seed: ToolRunRow[] = []): ToolRunsBa
     async listByProject(businessId, projectId) {
       return rows.filter((r) => r.businessId === businessId && r.projectId === projectId);
     },
-    async insert(row) {
+    async startRun(row) {
       const stored: ToolRunRow = {
         id: `mem-run-${++seq}`,
         businessId: row.businessId,
         projectId: row.projectId,
         toolName: row.toolName,
-        status: row.status,
+        status: row.status ?? null,
         source: row.source ?? "user",
         inputTokens: row.inputTokens ?? 0,
         outputTokens: row.outputTokens ?? 0,
         latencyMs: row.latencyMs ?? 0,
         createdAt: now,
+        completedAt: row.completedAt ?? null,
       };
       rows.push(stored);
       return stored;
+    },
+    async finalizeRun(businessId, id, patch) {
+      const row = rows.find((r) => r.id === id && r.businessId === businessId);
+      if (!row) return null;
+      row.status = patch.status;
+      row.inputTokens = patch.inputTokens;
+      row.outputTokens = patch.outputTokens;
+      row.latencyMs = patch.latencyMs;
+      row.completedAt = now;
+      return row;
     },
   };
 }
