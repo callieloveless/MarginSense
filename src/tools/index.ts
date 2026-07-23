@@ -11,3 +11,11 @@ export * from "./runner";
 export * from "./triggers";
 export * from "./registry";
 export { referenceTool } from "./reference";
+export {
+  materialFinderTool,
+  manualMaterialSchema,
+  manualMaterialSuggestions,
+  type ManualMaterial,
+  type MaterialFinderInput,
+  type MaterialFinderOutput,
+} from "./material-finder";

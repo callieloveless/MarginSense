@@ -5,7 +5,7 @@
 
 ## 1. Material Finder result schema
 
-- [ ] 1.1 Define the port `resultSchema` for a search: `{ need, options: [{ name, priceCents,
+- [x] 1.1 Define the port `resultSchema` for a search: `{ need, options: [{ name, priceCents,
       unit, supplier?, sourceUrl (required) }] }[]`, plus the tool's `inputSchema`/`outputSchema`.
 
 ## 2. Snapshot active estimate id + service area on settings
@@ -22,25 +22,25 @@
 
 ## 3. Material Finder tool (`src/tools/material-finder/`)
 
-- [ ] 3.1 Schemas: `inputSchema` (`{ mode, query?, location? }`), `outputSchema` (needs+options),
+- [x] 3.1 Schemas: `inputSchema` (`{ mode, query?, location? }`), `outputSchema` (needs+options),
       `resultSchema` for the port (per need, options of `{ name, priceCents, unit, supplier?,
       sourceUrl (required) }`).
-- [ ] 3.2 `run(ctx)`: build the prompt from mode (query vs active-estimate needs) + read-only
+- [x] 3.2 `run(ctx)`: build the prompt from mode (query vs active-estimate needs) + read-only
       context + `location`; call the port with `serverTools: [web_search]` + `resultSchema`; map
       each option → an `estimate_line_item` suggestion (when `activeEstimateId`) else a `material`
       context-entry, dropping any option without a `sourceUrl`; `message` = summary grouped by
       need with source links + verify-with-supplier note.
-- [ ] 3.3 Register Material Finder in the tool registry.
-- [ ] 3.4 Unit tests: query + estimate modes; options → sourced suggestions; line items when
+- [x] 3.3 Register Material Finder in the tool registry.
+- [x] 3.4 Unit tests: query + estimate modes; options → sourced suggestions; line items when
       active estimate, context entries when not; unsourced option dropped; dedup across repeat
       searches; nothing commits (pending only).
 
 ## 4. Manual add (no model)
 
-- [ ] 4.1 A tenant-scoped server action that creates the same suggestions (`material` context
+- [x] 4.1 A tenant-scoped server action that creates the same suggestions (`material` context
       entry + `estimate_line_item` when there's an active estimate) from typed values, **without**
       a model call or a `tool_run` — a plain user-authored pending suggestion.
-- [ ] 4.2 Unit/integration coverage that manual add needs no `ANTHROPIC_API_KEY` and produces
+- [x] 4.2 Unit/integration coverage that manual add needs no `ANTHROPIC_API_KEY` and produces
       pending suggestions that flow through the existing accept path.
 
 ## 5. UI (phone-first, per-tool input pattern)

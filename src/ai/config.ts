@@ -31,3 +31,11 @@ export const AI_DEFAULTS = {
 
 /** The environment variable that gates the real Anthropic client. Unset → AI is unconfigured. */
 export const ANTHROPIC_API_KEY_ENV = "ANTHROPIC_API_KEY";
+
+/**
+ * The Anthropic server-side web-search tool (constitution §7). Declared on a request via
+ * `serverTools`; the real port forwards it to the API and the mock ignores it. Centralized
+ * here so the tool-type version string lives in one place — Material Finder (#7b) is the first
+ * consumer, later web tools reuse it.
+ */
+export const WEB_SEARCH_TOOL = { type: "web_search_20260209", name: "web_search" } as const;

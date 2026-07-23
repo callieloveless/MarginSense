@@ -10,15 +10,19 @@
  */
 
 import { getTool, type DispatchDeps } from "@/src/tools";
-import { createMockModelPort } from "@/src/ai";
+import { createMockModelPort, type ModelPort } from "@/src/ai";
 import { type TenantDb } from "@/src/db/tenant";
 import { assembleProjectSnapshot } from "./project-snapshot";
 
-/** Build the dispatch dependencies over a tenant-bound handle. */
-export function dispatchDeps(tenantDb: TenantDb): DispatchDeps {
+/**
+ * Build the dispatch dependencies over a tenant-bound handle. `ai` defaults to the mock (the
+ * reference tool proves the wire with no key); a real tool passes the resolved live port and
+ * gates on configuration itself (see the Material Finder action).
+ */
+export function dispatchDeps(tenantDb: TenantDb, ai: ModelPort = createMockModelPort()): DispatchDeps {
   return {
     getTool,
-    ai: createMockModelPort(),
+    ai,
     buildSnapshot: (projectId) => assembleProjectSnapshot(tenantDb, projectId),
     ports: {
       async startToolRun(input) {
