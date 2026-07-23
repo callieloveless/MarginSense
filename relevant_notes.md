@@ -27,6 +27,8 @@ Supabase project + secrets exist. Nothing here happens until the database is pro
       one-active-version-per-project partial unique index.
 - [ ] `0003_chunky_sumo` — `context_entries`, `conversation_messages`, `suggestions` + RLS +
       grants.
+- [ ] `0004_careful_scarlet_spider` — `tool_runs` + RLS + grants, and the nullable
+      `tool_run_id` columns added to `suggestions` / `conversation_messages` (add-tool-platform).
 
 ### 2. Prove Row-Level Security end-to-end
 App-layer tenant isolation is already proven by in-memory tests (`tenant.test.ts`,
@@ -36,8 +38,9 @@ App-layer tenant isolation is already proven by in-memory tests (`tenant.test.ts
 - [ ] **Known gap:** the `test:rls` suite only covers `projects`. Extend it to
       `business_settings` / `overhead_items` (onboarding) and `estimates` / `line_items`
       (add-estimate-dashboard) and `context_entries` / `conversation_messages` / `suggestions`
-      (add-project-context) before trusting those tables in production. Each has app-layer
-      isolation tests, but the DB policies themselves are unproven end-to-end.
+      (add-project-context) and `tool_runs` (add-tool-platform) before trusting those tables in
+      production. Each has app-layer isolation tests, but the DB policies themselves are
+      unproven end-to-end.
 
 ### 3. Walk the money-critical flows live (phone width)
 - [ ] Tenancy: sign-in → create-business → add a project; list is business-scoped.
@@ -56,6 +59,20 @@ App-layer tenant isolation is already proven by in-memory tests (`tenant.test.ts
 - [ ] Vercel project + env vars.
 - [ ] Production Supabase (separate from dev); apply all migrations there.
 - [ ] Confirm middleware session refresh + auth redirects on the deployed domain.
+
+### 5. Live AI — model calls + web search (opt-in, deferred) *(2026-07-22)*
+The tool platform (change #6) builds `src/ai/` as a **mockable model port**: unit tests run
+against an in-memory/mock impl; the real Anthropic impl sits behind `ANTHROPIC_API_KEY` and
+is never exercised in tests. Same shape as the Supabase/RLS deferral — everything is
+buildable and typed now, live calls wait on a key.
+- [ ] Set `ANTHROPIC_API_KEY` in `.env.local` (add to `.env.example`). Until set, `src/ai/`
+      reports `unconfigured` and tools that need the model render a "connect AI" state.
+- [ ] Prove one real model call end-to-end (the reference/echo tool), then Material Finder's
+      **server-side `web_search`** (`web_search_20260209`, model `claude-opus-4-8`) returning
+      real prices + citations.
+- [ ] Confirm `tool_run` cost logging (tokens, latency) records against live usage.
+- Each tool change (#7 Material Finder, #8 Photo Advisor, #9 Code Finder) adds its own
+  live-AI proof item here when built — mirror this entry.
 
 ## Future direction (north-star)
 

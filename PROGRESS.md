@@ -19,11 +19,18 @@
 | 3 | `add-onboarding` | `onboarding` | ✅ **Done** (archived 2026-07-22; live-infra proof deferred) |
 | 4 | `add-estimate-dashboard` | `estimates`, `profit-dashboard` | ✅ **Done** (archived 2026-07-22; live-infra proof deferred) |
 | 5 | `add-project-context` | `project-context` | ✅ **Done** (archived 2026-07-22; live-infra proof deferred) |
-| 6 | Tool platform + first tool (Material Finder) | `tool-platform`, `material-finder` | ⏳ Planned |
-| 7 | Photo Advisor + Code Finder (auto-trigger) | `photo-advisor`, `code-finder` | ⏳ Planned |
-| 8 | Client Estimate Doc | `client-estimate-doc` | ⏳ Planned |
-| 9 | Hardening & launch pass | — | ⏳ Planned |
-| 10 | Tool graph editor (meta) | — | 🌟 North-star (after core tools ship) |
+| 6 | `add-tool-platform` (contract, `src/ai/`, `tool_run`) | `tool-platform` | ✅ **Done** (archived 2026-07-23; live-AI + live-infra proof deferred) |
+| 7 | Material Finder (proves the platform) | `material-finder` | ⏳ Planned |
+| 8 | Photo Advisor (photo upload + vision) | `photo-advisor` | ⏳ Planned |
+| 9 | Code Finder (auto-trigger on photo upload) | `code-finder` | ⏳ Planned |
+| 10 | Client Estimate Doc | `client-estimate-doc` | ⏳ Planned |
+| 11 | Hardening & launch pass | — | ⏳ Planned |
+| 12 | Tool graph editor (meta) | — | 🌟 North-star (after core tools ship) |
+
+> **Tools each ship as their own change** (one capability per change, one tool per
+> stage) — the platform (#6) lands first with no user-facing tool, then each tool (#7–#10)
+> is a separate proposal on top of it. This is a change from the earlier plan that bundled
+> the platform with Material Finder (#6) and Photo Advisor with Code Finder (#7).
 
 Legend: ✅ done · 🔨 in progress · 📝 proposal written, not started · ⏳ planned, not yet proposed · 🌟 north-star, later
 
@@ -84,27 +91,49 @@ portfolio "against your year" dashboard). Proposal:
 queue with accept/dismiss. This is the substrate every Tool depends on — it ships
 before any tool. Estimate creation seeds the context (wired here).
 
-### 6. ⏳ Tool platform + Material Finder
-The tool contract (techstack §4): uniform `inputSchema`/`outputSchema`/`run(ctx)` shape,
-**read-only** context/estimate snapshots in, suggestions out, posts to the one
-conversation, `tool_run` cost logging via `src/ai/`. Material Finder proves the platform
-(web search → `material` entries + suggested line items).
+### 6. ✅ Tool platform — the tool contract & AI layer — DONE (archived 2026-07-23)
+All in-code work is complete, reviewed, and archived; the spec is synced into
+[`openspec/specs/tool-platform/`](./openspec/specs/tool-platform/spec.md). The uniform tool
+contract (techstack §4): every tool in `src/tools/*` exports `inputSchema`/`outputSchema`/
+`run(ctx)`, receives a **read-only** context + estimate snapshot, and returns a `ToolResult`
+that separates a typed **`output`** (read-only, routable for the future graph editor #12)
+from **`suggestions`** (the only commit path, into change #5's queue) and a **`message`**
+(the single conversation, with an optional disclaimer). The runner de-duplicates identical
+pending suggestions, records a `tool_run` (tokens, latency, status — failed runs too), and
+links each emission back via `tool_run_id`. Adds `src/ai/` — a **mockable model port** shaped
+for web search + vision (system/messages/images/server-tools → content/usage/citations),
+memory/mock impl for tests, real Anthropic impl behind `ANTHROPIC_API_KEY`, model IDs/config
+centralized. Ships a trivial reference/echo tool + the project-page **Tools** surface shell;
+no real tool. **The only open items are deferred to live infra** (see
+[`relevant_notes.md`](./relevant_notes.md) §5): apply migration `0004`, prove `tool_runs` RLS,
+and prove one live model call through the reference tool once a key exists.
 
-### 7. ⏳ Photo Advisor + Code Finder
-Photo upload + storage (tenant-scoped Supabase Storage), vision-based findings, and the
-first **auto-trigger**: photo upload event → Code Finder runs → still only suggests.
-Both carry the licensed-professional disclaimer (constitution §5, §7).
+### 7. ⏳ Material Finder
+First real tool (constitution §5): web-searches materials, current prices, and suppliers
+via Anthropic's **server-side `web_search`**. Emits `material` context entries + suggested
+material line items as `pending` suggestions and posts findings (with citations) to the
+project conversation. Proves the platform end-to-end.
 
-### 8. ⏳ Client Estimate Doc
+### 8. ⏳ Photo Advisor
+Adds tenant-scoped **photo upload + storage** (Supabase Storage) and vision-based
+findings: emits `finding` entries + candidate line items. Carries the
+licensed-professional / non-authoritative disclaimer (constitution §5, §7).
+
+### 9. ⏳ Code Finder (auto-trigger)
+Surfaces relevant **local** building codes — the first **auto-trigger**: the photo-upload
+event (from #8) runs Code Finder → still only suggests `code_ref` entries + compliance
+notes. Same disclaimer (constitution §5, §7).
+
+### 10. ⏳ Client Estimate Doc
 The client-facing document tool — separate from the internal estimate (true costs,
 overhead, EPH never leak into it). Generates the polished proposal as a `document`.
 
-### 9. ⏳ Hardening & launch pass
+### 11. ⏳ Hardening & launch pass
 Money-critical e2e suite (onboarding → estimate → signal → accept suggestion → client
 doc), tenant-isolation audit, AI cost observability review, accessibility pass
 (colors always paired with text), Vercel + production Supabase setup.
 
-### 10. 🌟 Tool graph editor (meta) — north-star, later
+### 12. 🌟 Tool graph editor (meta) — north-star, later
 A **visual tool-graph editor** where tools are nodes and their connections are edges: one
 tool's output feeds another's input, and auto-triggers (photo upload → Code Finder) are drawn
 rather than coded (constitution §5, "Composing tools"). Starts as a **meta / admin** surface
