@@ -71,18 +71,18 @@
 
 ## 4. Stage C — the phone-first UI
 
-- [ ] 4.1 Add the client uploader component (`"use client"`) under
+- [x] 4.1 Add the client uploader component (`"use client"`) under
       `app/(app)/projects/[id]/context/`: file input with `capture`, canvas downscale to
       `MAX_LONG_EDGE_PX`, JPEG re-encode (which drops EXIF/GPS), a `THUMB_LONG_EDGE_PX`
       thumbnail from the same pass, and a clear message when an image can't be decoded (HEIC).
-- [ ] 4.2 Add the gallery to the job context page: a phone-first grid of thumbnails via
+- [x] 4.2 Add the gallery to the job context page: a phone-first grid of thumbnails via
       short-lived signed URLs, each with its caption, a caption editor, and delete with
       confirmation.
-- [ ] 4.3 Render the "connect storage" state when `resolvePhotoStorage()` is unconfigured —
+- [x] 4.3 Render the "connect storage" state when `resolvePhotoStorage()` is unconfigured —
       uploader disabled, plain explanatory copy, nothing thrown.
-- [ ] 4.4 Raise `experimental.serverActions.bodySizeLimit` in `next.config.mjs` above
+- [x] 4.4 Raise `experimental.serverActions.bodySizeLimit` in `next.config.mjs` above
       `MAX_UPLOAD_BYTES`, with a comment tying it to the constant.
-- [ ] 4.5 Check the surface at phone width first; keep color paired with text and every action
+- [x] 4.5 Check the surface at phone width first; keep color paired with text and every action
       labelled.
 
 ## 5. Verification and close-out
