@@ -183,6 +183,13 @@ export interface ProjectSnapshot {
   readonly entries: readonly ContextEntryView[];
   readonly conversation: readonly MessageView[];
   readonly activeEstimate: EstimateRollUp | null;
+  /**
+   * The id of the active estimate (or null when the project has none). The roll-up above is
+   * the estimate's *numbers*; this is its *identity*, so a tool can target an
+   * `estimate_line_item` suggestion at it (add-material-finder). It confers no write power —
+   * it targets a `pending` suggestion, which still only commits on accept (§5).
+   */
+  readonly activeEstimateId: string | null;
 }
 
 /** Assemble a read-only project snapshot. The active-estimate roll-up is the engine's. */
@@ -191,11 +198,13 @@ export function buildProjectSnapshot(input: {
   entries: readonly ContextEntryView[];
   conversation: readonly MessageView[];
   activeEstimate?: EstimateRollUp | null | undefined;
+  activeEstimateId?: string | null | undefined;
 }): ProjectSnapshot {
   return Object.freeze({
     projectId: input.projectId,
     entries: Object.freeze([...input.entries]),
     conversation: Object.freeze([...input.conversation]),
     activeEstimate: input.activeEstimate ?? null,
+    activeEstimateId: input.activeEstimateId ?? null,
   });
 }

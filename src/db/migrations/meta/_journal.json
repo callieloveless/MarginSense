@@ -43,6 +43,13 @@
       "when": 1784784776931,
       "tag": "0005_faulty_songbird",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1784842509842,
+      "tag": "0006_lyrical_catseye",
+      "breakpoints": true
     }
   ]
 }

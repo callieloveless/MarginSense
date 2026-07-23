@@ -56,6 +56,7 @@ function seedSettings(over: Partial<BusinessSettingsRow> & Pick<BusinessSettings
     defaultContingencyBp: 0,
     defaultMarkupBp: null,
     defaultTaxRateBp: null,
+    serviceArea: null,
     createdAt: new Date(0),
     updatedAt: new Date(0),
     ...over,
@@ -102,6 +103,20 @@ describe("tenant isolation — business settings", () => {
     const saved = await a.saveSettings(REFERENCE_INPUT);
     expect(saved.defaultMarkupBp).toBeNull();
     expect(saved.defaultTaxRateBp).toBeNull();
+    // Service area is optional too — null until the owner sets it.
+    expect(saved.serviceArea).toBeNull();
+  });
+
+  it("stores the service area when set, and updates it in place", async () => {
+    const backend = createMemorySettingsBackend();
+    const a = handle(BUSINESS_A, backend);
+
+    const first = await a.saveSettings({ ...REFERENCE_INPUT, serviceArea: "Austin, TX" });
+    expect(first.serviceArea).toBe("Austin, TX");
+
+    const second = await a.saveSettings({ ...REFERENCE_INPUT, serviceArea: "Round Rock, TX" });
+    expect(second.id).toBe(first.id);
+    expect((await a.getSettings())?.serviceArea).toBe("Round Rock, TX");
   });
 });
 

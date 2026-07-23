@@ -73,6 +73,7 @@ describe("parseSettingsForm", () => {
       defaultContingencyBp: 1_000,
       defaultMarkupBp: null,
       defaultTaxRateBp: null,
+      serviceArea: null,
     });
   });
 
@@ -87,6 +88,15 @@ describe("parseSettingsForm", () => {
     const result = parseSettingsForm({ ...REFERENCE_FORM, defaultMarkup: "20", defaultTaxRate: "8.25" });
     expect(result.ok && result.data.defaultMarkupBp).toBe(2_000);
     expect(result.ok && result.data.defaultTaxRateBp).toBe(825);
+  });
+
+  it("stores a service area verbatim (trimmed), and treats blank as null", () => {
+    const set = parseSettingsForm({ ...REFERENCE_FORM, serviceArea: "  Austin, TX  " });
+    expect(set.ok && set.data.serviceArea).toBe("Austin, TX");
+    const blank = parseSettingsForm({ ...REFERENCE_FORM, serviceArea: "   " });
+    expect(blank.ok && blank.data.serviceArea).toBeNull();
+    const absent = parseSettingsForm(REFERENCE_FORM);
+    expect(absent.ok && absent.data.serviceArea).toBeNull();
   });
 
   it("rejects a target margin of 100% or more (margin is profit/price)", () => {

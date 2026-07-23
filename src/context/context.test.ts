@@ -126,4 +126,18 @@ describe("buildProjectSnapshot — read-only tool seam", () => {
       (snapshot as { projectId: string }).projectId = "hacked";
     }).toThrow();
   });
+
+  it("carries the active estimate id so a tool can target a line (null when none)", () => {
+    const withEstimate = buildProjectSnapshot({
+      projectId: "p1",
+      entries: [],
+      conversation: [],
+      activeEstimateId: "est-1",
+    });
+    expect(withEstimate.activeEstimateId).toBe("est-1");
+
+    // Absent id → null, matching a project with no active estimate.
+    const withoutEstimate = buildProjectSnapshot({ projectId: "p2", entries: [], conversation: [] });
+    expect(withoutEstimate.activeEstimateId).toBeNull();
+  });
 });

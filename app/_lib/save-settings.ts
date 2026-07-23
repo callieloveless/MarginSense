@@ -42,6 +42,7 @@ export async function saveSettingsFromForm(formData: FormData): Promise<SaveSett
     defaultContingency: field(formData, "defaultContingency"),
     defaultMarkup: field(formData, "defaultMarkup"),
     defaultTaxRate: field(formData, "defaultTaxRate"),
+    serviceArea: field(formData, "serviceArea"),
   });
   if (!parsed.ok) return { ok: false, error: parsed.error };
 

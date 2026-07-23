@@ -106,6 +106,7 @@ export function createDrizzleSettingsBackend(db: Db, authUserId: string): Settin
               defaultContingencyBp: row.defaultContingencyBp,
               defaultMarkupBp: row.defaultMarkupBp ?? null,
               defaultTaxRateBp: row.defaultTaxRateBp ?? null,
+              serviceArea: row.serviceArea ?? null,
               updatedAt: new Date(),
             },
           })

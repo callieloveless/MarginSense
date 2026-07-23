@@ -98,6 +98,8 @@ export interface SettingsInput {
   defaultMarkupBp?: number | null | undefined;
   /** Advanced (full settings only). */
   defaultTaxRateBp?: number | null | undefined;
+  /** Where the business works (e.g. "Austin, TX"); stored only, biases Material Finder search. */
+  serviceArea?: string | null | undefined;
 }
 
 /** One optional overhead line item. `business_id` is stamped by `TenantDb`, not accepted. */
@@ -393,6 +395,7 @@ export class TenantDb {
       defaultContingencyBp: input.defaultContingencyBp,
       defaultMarkupBp: input.defaultMarkupBp ?? null,
       defaultTaxRateBp: input.defaultTaxRateBp ?? null,
+      serviceArea: input.serviceArea ?? null,
     });
   }
 
@@ -701,6 +704,7 @@ export function createMemorySettingsBackend(
         defaultContingencyBp: row.defaultContingencyBp,
         defaultMarkupBp: row.defaultMarkupBp ?? null,
         defaultTaxRateBp: row.defaultTaxRateBp ?? null,
+        serviceArea: row.serviceArea ?? null,
         createdAt: now,
         updatedAt: now,
       };

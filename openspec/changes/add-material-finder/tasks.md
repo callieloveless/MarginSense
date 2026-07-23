@@ -10,10 +10,10 @@
 
 ## 2. Snapshot active estimate id + service area on settings
 
-- [ ] 2.1 Add `activeEstimateId: string | null` to `ProjectSnapshot` (`src/context`,
+- [x] 2.1 Add `activeEstimateId: string | null` to `ProjectSnapshot` (`src/context`,
       `buildProjectSnapshot`); the app assembler sets it. Unit test: snapshot carries it (null
       when none).
-- [ ] 2.2 Add nullable `service_area` to `business_settings` (schema + row types);
+- [x] 2.2 Add nullable `service_area` to `business_settings` (schema + row types);
       `npm run db:generate` → migration `0006` (`ADD COLUMN`, additive; no RLS change). Thread
       through `SettingsInput` / `saveSettings` / `parseSettingsForm` as an optional input (stored
       only, never derived).

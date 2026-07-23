@@ -94,6 +94,8 @@ export const settingsFormRawSchema = z.object({
   defaultContingency: z.string(),
   defaultMarkup: z.string().optional(),
   defaultTaxRate: z.string().optional(),
+  /** Free-text service area (e.g. "Austin, TX"); optional, stored as-is. */
+  serviceArea: z.string().optional(),
 });
 export type SettingsFormRaw = z.infer<typeof settingsFormRawSchema>;
 
@@ -145,6 +147,11 @@ export function parseSettingsForm(raw: unknown): ParseResult<SettingsInput> {
   const defaultTaxRateBp = optionalBp(r.defaultTaxRate, 10_000);
   if (defaultTaxRateBp === INVALID) return err("Default tax rate must be a percentage between 0 and 100.");
 
+  // Free text, stored only (never derived-from): trim, cap length, empty → null.
+  const serviceAreaRaw = (r.serviceArea ?? "").trim();
+  if (serviceAreaRaw.length > 120) return err("Service area must be 120 characters or fewer.");
+  const serviceArea = serviceAreaRaw === "" ? null : serviceAreaRaw;
+
   return {
     ok: true,
     data: {
@@ -159,6 +166,7 @@ export function parseSettingsForm(raw: unknown): ParseResult<SettingsInput> {
       defaultContingencyBp,
       defaultMarkupBp,
       defaultTaxRateBp,
+      serviceArea,
     },
   };
 }

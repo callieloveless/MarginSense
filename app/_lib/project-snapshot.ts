@@ -53,5 +53,16 @@ export async function assembleProjectSnapshot(
     if (computed.ok) activeEstimate = computed.value.rollUp;
   }
 
-  return buildProjectSnapshot({ projectId, entries: entryViews, conversation, activeEstimate });
+  // The active estimate's id (independent of whether its roll-up computed — a tool can target a
+  // line at it even before the business sets billable capacity). Null when there's no active
+  // version.
+  const activeEstimateId = active?.id ?? null;
+
+  return buildProjectSnapshot({
+    projectId,
+    entries: entryViews,
+    conversation,
+    activeEstimate,
+    activeEstimateId,
+  });
 }

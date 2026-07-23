@@ -103,6 +103,12 @@ export const businessSettings = pgTable("business_settings", {
   defaultMarkupBp: integer("default_markup_bp"),
   /** Advanced (full settings only) — nullable until set. */
   defaultTaxRateBp: integer("default_tax_rate_bp"),
+  /**
+   * Where the business works (e.g. "Austin, TX"). Free text, nullable until set. Stored only —
+   * never derived-from — and used by Material Finder (#7b) to bias its web search toward local
+   * suppliers and prices. A blank service area falls back to a non-local search.
+   */
+  serviceArea: text("service_area"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
