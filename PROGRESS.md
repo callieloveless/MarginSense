@@ -6,7 +6,7 @@
 > stands on ground that already exists. Specs are the source of truth
 > ([`openspec/`](./openspec/)); this file is the at-a-glance view.
 
-**Last updated:** 2026-07-22
+**Last updated:** 2026-07-23
 
 ---
 
@@ -22,8 +22,9 @@
 | 6 | `add-tool-platform` (contract, `src/ai/`, `tool_run`) | `tool-platform` | ✅ **Done** (archived 2026-07-23; live-AI + live-infra proof deferred) |
 | 7a | `add-structured-result-port` (port typed result + citations, real Anthropic impl) | `tool-platform` | ✅ **Done** (archived 2026-07-23; live-AI proof deferred) |
 | 7b | `add-material-finder` (the first real tool) | `material-finder`, `project-context`, `onboarding` | ✅ **Done** (archived 2026-07-23; live-AI + live-infra proof deferred) |
-| 8 | Photo Advisor (photo upload + vision) | `photo-advisor` | ⏳ Planned |
-| 9 | Code Finder (auto-trigger on photo upload) | `code-finder` | ⏳ Planned |
+| 8a | `add-photo-capture` (job photo upload + tenant-scoped storage) | `job-photos` | ✅ **Done** (archived 2026-07-23; live-storage proof deferred) |
+| 8b | Photo Advisor (the vision tool) | `photo-advisor` | ⏳ Planned |
+| 9 | Code Finder (auto-trigger on `photo.uploaded`) | `code-finder` | ⏳ Planned |
 | 10 | Client Estimate Doc | `client-estimate-doc` | ⏳ Planned |
 | 11 | Hardening & launch pass | — | ⏳ Planned |
 | 12 | Tool graph editor (meta) | — | 🌟 North-star (after core tools ship) |
@@ -131,14 +132,31 @@ Per-tool input UI (mode toggle + query + location + hand-add) sets the pattern f
 `0006`, and prove real `web_search` returns sourced prices + citations with live `tool_run`
 token usage once a key exists.
 
-### 8. ⏳ Photo Advisor
-Adds tenant-scoped **photo upload + storage** (Supabase Storage) and vision-based
-findings: emits `finding` entries + candidate line items. Carries the
-licensed-professional / non-authoritative disclaimer (constitution §5, §7).
+### 8a. ✅ Job photo capture & storage
+Split out of #8 (as #7 split into 7a/7b) so the storage slab stands alone — it involves **no
+AI at all**. A job photo is a tenant-isolated asset: `project_photos` + RLS (migration `0007`),
+a `PhotoStorageBackend` on the `TenantDb` seam (memory impl for isolation tests; Supabase
+Storage over the **session-scoped** SSR client, never service-role), a private bucket with a
+`storage.objects` policy on the same `business_id/project_id/…` key prefix the app derives, and
+short-lived signed URLs. Uploading is an **outer-layer user action** — it commits a `photo`
+context entry directly, never a suggestion — and the client downscales, re-encodes (dropping
+**EXIF/GPS**, §7), and thumbnails on the device. Caption, delete, and a phone-first gallery on
+the job context page. A successful upload emits **`photo.uploaded`** through P1's dormant
+trigger seam (`TRIGGERS` still empty, so a no-op today) — #9 subscribes Code Finder with one
+entry. **Open items are deferred to live infra** (relevant_notes.md §1, §2b): create the
+private bucket, apply `0007`, and prove object isolation + signed-URL expiry end to end.
+
+### 8b. ⏳ Photo Advisor (the vision tool)
+The tool on top of 8a: one photo per run, its bytes passed in as tool **input** (tools get no
+storage handle) to the model port's existing `images`, proposing `finding` entries + candidate
+**labor and material** line items as `pending` suggestions — so P2's profit preview shows what
+the work would do to the job's profit per hour before you accept. Carries the
+licensed-professional / non-authoritative disclaimer via `message.disclaimer` **and** as a
+standing notice on the tool panel (constitution §5, §7).
 
 ### 9. ⏳ Code Finder (auto-trigger)
-Surfaces relevant **local** building codes — the first **auto-trigger**: the photo-upload
-event (from #8) runs Code Finder → still only suggests `code_ref` entries + compliance
+Surfaces relevant **local** building codes — the first **auto-trigger**: the `photo.uploaded`
+event (emitted by #8a) runs Code Finder → still only suggests `code_ref` entries + compliance
 notes. Same disclaimer (constitution §5, §7).
 
 ### 10. ⏳ Client Estimate Doc

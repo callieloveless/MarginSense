@@ -87,12 +87,12 @@
 
 ## 5. Verification and close-out
 
-- [ ] 5.1 `npm run typecheck`, `npx vitest run`, and `npm run build` green after each stage
+- [x] 5.1 `npm run typecheck`, `npx vitest run`, and `npm run build` green after each stage
       (the build is the only check that catches Turbopack/App-Router issues; relative imports in
       `src/` stay extensionless).
-- [ ] 5.2 Add the deferred live-infra items to `relevant_notes.md`: create the private bucket,
+- [x] 5.2 Add the deferred live-infra items to `relevant_notes.md`: create the private bucket,
       apply `0007`, prove a signed URL from business A cannot read business B's object, and
       confirm signed-URL expiry.
-- [ ] 5.3 Update `PROGRESS.md`: #8 split into 8a (this change) and 8b (Photo Advisor, the vision
+- [x] 5.3 Update `PROGRESS.md`: #8 split into 8a (this change) and 8b (Photo Advisor, the vision
       tool), with 8a's status.
 - [ ] 5.4 `openspec validate add-photo-capture --strict`, then archive on its own commit.

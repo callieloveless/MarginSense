@@ -34,6 +34,12 @@ Supabase project + secrets exist. Nothing here happens until the database is pro
       `ALTER TYPE … ADD VALUE` footgun).
 - [ ] `0006_lyrical_catseye` — `business_settings.service_area` (nullable text; additive, no
       RLS change — the table's per-business policy already covers it) (add-material-finder).
+- [ ] `0007_burly_quicksilver` — `project_photos` + RLS + grants, **and** the object-storage
+      block: an idempotent private `job-photos` bucket plus a `storage.objects` policy keyed on
+      `(storage.foldername(name))[1] = public.current_business_id()::text` (add-photo-capture).
+      **If the migration role is refused `storage.objects`** (it's owned by the storage
+      extension), run that block once from the Supabase SQL editor — the app-layer prefix rule
+      in `src/photos/` holds either way, but the DB half is the guarantee.
 
 ### 2. Prove Row-Level Security end-to-end
 App-layer tenant isolation is already proven by in-memory tests (`tenant.test.ts`,
@@ -43,9 +49,23 @@ App-layer tenant isolation is already proven by in-memory tests (`tenant.test.ts
 - [ ] **Known gap:** the `test:rls` suite only covers `projects`. Extend it to
       `business_settings` / `overhead_items` (onboarding) and `estimates` / `line_items`
       (add-estimate-dashboard) and `context_entries` / `conversation_messages` / `suggestions`
-      (add-project-context) and `tool_runs` (add-tool-platform) before trusting those tables in
-      production. Each has app-layer isolation tests, but the DB policies themselves are
-      unproven end-to-end.
+      (add-project-context) and `tool_runs` (add-tool-platform) and `project_photos`
+      (add-photo-capture) before trusting those tables in production. Each has app-layer
+      isolation tests, but the DB policies themselves are unproven end-to-end.
+
+### 2b. Prove **object** storage isolation (new with add-photo-capture) *(2026-07-23)*
+Photo bytes live in Supabase Storage — **outside Postgres and outside table RLS**. Three layers
+guard them (keys derived only by `src/photos/photoObjectKey()` from the tenant handle; every
+`PhotoStorageBackend` method refusing a key outside the caller's prefix; the `storage.objects`
+policy in `0007`). The first two are unit-tested; the third needs a live bucket.
+- [ ] Create the **private** `job-photos` bucket (or apply `0007`'s bucket block) and confirm
+      `public = false` — the app never mints a public URL.
+- [ ] Prove business A cannot sign or read an object under business B's prefix, and that a
+      direct Storage call with B's key is refused by the policy (not just by app code).
+- [ ] Confirm signed URLs expire (`SIGNED_URL_TTL_SECONDS`, 60s) and that an expired URL 400s.
+- [ ] Walk the flow on a phone: take a photo → it uploads downscaled with **no EXIF/GPS**
+      (check the stored object's metadata) → caption it → delete it and confirm **both** the
+      full-size and thumbnail objects are gone.
 
 ### 3. Walk the money-critical flows live (phone width)
 - [ ] Tenancy: sign-in → create-business → add a project; list is business-scoped.
