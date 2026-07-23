@@ -2,21 +2,16 @@
 
 ## Why
 
-Today a job is split across three routes and a tool's output lands on a *different* screen
-than where you ran it: you run a tool under `/tools`, then navigate to `/context` to find the
-suggestion, accept it, then open `/estimates/[id]` to see whether the profit signal moved.
-For the primary user — on a ladder, phone, dirty hands, one bar of signal — that's too much
-navigation for one decision, and the decision itself is blind: **accepting a line-item
-suggestion gives no sense of what it does to the job's profit.** The whole product exists to
-answer "is this job pulling its weight" as red/yellow/green EPH — yet the moment a tool
-proposes adding a $500 material line, that signal is nowhere in view.
-
-This change makes the suggestion the place the decision happens: a **tool-agnostic suggestion
-card** that **previews the profit impact of accepting** (EPH and its color, now → after), shown
-**in place where the tool ran**, under a persistent profit-signal header. It wires tools
-directly to the profit spine — the app's reason for being — and does it in a way that survives
-heavy tool churn, because the card is driven entirely by the suggestion's shape, never by which
-tool produced it.
+A job is split across routes and a tool's output lands on a *different* screen than where you
+ran it: run a tool under `/tools`, navigate to `/context` for the suggestion, accept, then open
+the estimate to see whether the signal moved. For the primary user — on a ladder, one bar of
+signal — that's too much navigation for one decision, and the decision is blind: accepting a
+line-item suggestion gives no sense of what it does to the job's profit, though red/yellow/green
+profit-per-hour is the whole point. This change makes the suggestion the place the decision
+happens: a **tool-agnostic card** that **previews the profit impact of accepting** (EPH + color,
+now → after), shown **in place where the tool ran**, under a persistent profit-signal header. It
+wires tools to the profit spine and survives heavy tool churn, because the card is driven by the
+suggestion's shape, never by which tool produced it.
 
 ## What Changes
 

@@ -22,6 +22,10 @@ are now and as they would be if the line were added.
 - **THEN** the suggestion becomes `dismissed`, nothing is committed, and it is not surfaced
   again as pending
 
+#### Scenario: Nothing auto-applies
+- **WHEN** a suggestion is created
+- **THEN** it is `pending` and no context entry or estimate changes until the user accepts it
+
 #### Scenario: A line-item suggestion previews its profit impact
 - **WHEN** a pending `estimate_line_item` suggestion is shown for a project with an active
   estimate
