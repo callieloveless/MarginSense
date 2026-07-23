@@ -95,4 +95,4 @@
       confirm signed-URL expiry.
 - [x] 5.3 Update `PROGRESS.md`: #8 split into 8a (this change) and 8b (Photo Advisor, the vision
       tool), with 8a's status.
-- [ ] 5.4 `openspec validate add-photo-capture --strict`, then archive on its own commit.
+- [x] 5.4 `openspec validate add-photo-capture --strict`, then archive on its own commit.
