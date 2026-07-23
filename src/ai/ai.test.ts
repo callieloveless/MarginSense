@@ -4,11 +4,13 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 import {
   AI_DEFAULTS,
   MODELS,
   createMockModelPort,
   meterModelPort,
+  readResult,
   resolveModelPort,
 } from "./index";
 
@@ -47,6 +49,39 @@ describe("metered model port", () => {
     await metered.port.complete({ messages: [{ role: "user", content: "a" }] });
     await metered.port.complete({ messages: [{ role: "user", content: "b" }] });
     expect(metered.usage()).toEqual({ inputTokens: 20, outputTokens: 8 });
+  });
+});
+
+describe("structured result (mock)", () => {
+  const schema = z.object({
+    items: z.array(z.object({ name: z.string(), priceCents: z.number().int() })),
+  });
+
+  it("returns a schema-valid result + citations, narrowed by readResult", async () => {
+    const port = createMockModelPort({
+      result: { items: [{ name: "2x4x8 stud", priceCents: 387 }] },
+      citations: [{ url: "https://homedepot.com/p/123", title: "Home Depot" }],
+    });
+    const res = await port.complete({
+      messages: [{ role: "user", content: "find studs" }],
+      resultSchema: schema,
+    });
+    const parsed = readResult(res, schema);
+    expect(parsed.items[0]?.name).toBe("2x4x8 stud");
+    expect(res.citations?.[0]?.url).toContain("homedepot");
+  });
+
+  it("fails loudly when the canned result violates the schema", async () => {
+    const port = createMockModelPort({ result: { items: [{ name: "no price" }] } });
+    await expect(
+      port.complete({ messages: [{ role: "user", content: "x" }], resultSchema: schema }),
+    ).rejects.toThrow();
+  });
+
+  it("returns no result when no resultSchema is requested", async () => {
+    const port = createMockModelPort({ result: { items: [] } });
+    const res = await port.complete({ messages: [{ role: "user", content: "x" }] });
+    expect(res.result).toBeUndefined();
   });
 });
 

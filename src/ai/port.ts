@@ -10,6 +10,7 @@
  * The mock ignores images/server-tools — those tools add *behaviour*, not a new interface.
  */
 
+import { type z } from "zod";
 import { type Effort } from "./config";
 
 /** A block a tool sends in. Text or an image (base64, e.g. a job photo for vision). */
@@ -37,6 +38,14 @@ export interface ModelRequest {
   /** Convenience image inputs; the real impl appends them to the last user turn. */
   readonly images?: readonly Extract<InputBlock, { type: "image" }>[] | undefined;
   readonly serverTools?: readonly ServerToolSpec[] | undefined;
+  /**
+   * When set, the model must return a value of this shape (add-structured-result-port). The
+   * real impl obtains it via a **strict result-tool** the model calls — deliberately not
+   * `output_config.format`, which the API forbids alongside citations — so the same call can
+   * run web search, cite its sources, and return typed data. The response's `result` is
+   * validated against this schema.
+   */
+  readonly resultSchema?: z.ZodType<unknown> | undefined;
   readonly model?: string | undefined;
   readonly effort?: Effort | undefined;
   readonly maxTokens?: number | undefined;
@@ -64,6 +73,15 @@ export interface ModelResponse {
   readonly content: readonly OutputBlock[];
   readonly usage: Usage;
   readonly citations?: readonly Citation[] | undefined;
+  /** The validated structured result, present iff the request carried a `resultSchema`. Typed
+   * as `unknown` at the interface; narrow it at the call site with {@link readResult}. */
+  readonly result?: unknown;
+}
+
+/** Narrow a response's `result` to the caller's schema (the same schema it passed as
+ * `resultSchema`). Throws if the port returned a value that doesn't match. */
+export function readResult<T>(response: ModelResponse, schema: z.ZodType<T>): T {
+  return schema.parse(response.result);
 }
 
 /** The seam every tool calls. Implementations: the mock (`mock.ts`) and the real Anthropic

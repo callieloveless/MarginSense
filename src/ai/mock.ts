@@ -6,7 +6,7 @@
  * the same token counts.
  */
 
-import { type ModelPort, type ModelRequest, type ModelResponse, type Usage } from "./port";
+import { type Citation, type ModelPort, type ModelRequest, type ModelResponse, type Usage } from "./port";
 
 /** Options to steer the mock in a specific test (e.g. a canned reply or fixed usage). */
 export interface MockModelOptions {
@@ -14,6 +14,11 @@ export interface MockModelOptions {
   readonly reply?: (request: ModelRequest) => string;
   /** Override the reported usage. Defaults to a deterministic char-based estimate. */
   readonly usage?: Usage;
+  /** A canned structured result. When the request carries a `resultSchema`, it is validated
+   * through that schema (so a test fails loudly if the canned shape drifts). */
+  readonly result?: unknown;
+  /** Canned citations to return (as a web-search call would). */
+  readonly citations?: readonly Citation[];
 }
 
 /** Flatten a request's message text (ignoring images) for the default reply/estimate. */
@@ -52,7 +57,18 @@ export function createMockModelPort(options: MockModelOptions = {}): ModelPort {
         inputTokens: estimateTokens(requestText(request)),
         outputTokens: estimateTokens(text),
       };
-      const response: ModelResponse = { text, content: [{ type: "text", text }], usage };
+      // `result` is present only when a `resultSchema` was requested (matching the contract);
+      // the canned value is validated through the schema so a drifted shape fails loudly.
+      const result = request.resultSchema
+        ? request.resultSchema.parse(options.result)
+        : undefined;
+      const response: ModelResponse = {
+        text,
+        content: [{ type: "text", text }],
+        usage,
+        result,
+        citations: options.citations,
+      };
       return response;
     },
   };
