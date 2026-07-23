@@ -8,6 +8,7 @@ import { SuggestionCard } from "@/app/_components/suggestion-card";
 import { ProfitHeader } from "@/app/_components/profit-header";
 import { acceptSuggestionAction, dismissSuggestionAction } from "../context/actions";
 import { RunReferenceForm } from "./run-form";
+import { MaterialFinderForm } from "./material-finder-form";
 
 /**
  * The project-page Tools surface (constitution §5) — where a job's AI tools open. Tools read
@@ -39,10 +40,12 @@ export default async function ProjectToolsPage({
 
   const tools = listTools();
   const aiConfigured = resolveModelPort().status === "configured";
-  const [pending, job] = await Promise.all([
+  const [pending, job, settings] = await Promise.all([
     tenantDb.listPendingSuggestions(projectId),
     loadJobProfit(tenantDb, projectId),
+    tenantDb.getSettings(),
   ]);
+  const serviceArea = settings?.serviceArea ?? "";
 
   return (
     <Shell projectId={projectId}>
@@ -72,7 +75,20 @@ export default async function ProjectToolsPage({
         {tools.map((tool) => (
           <li key={tool.name} className="rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
             <h2 className="text-lg font-semibold">{tool.title}</h2>
-            {tool.name === "reference" ? (
+            {tool.name === "material-finder" ? (
+              <>
+                <p className="mt-1 text-sm text-neutral-500">
+                  Search the web for materials, prices, and suppliers — or add one by hand.
+                  Each option is proposed below with its profit-per-hour impact; nothing changes
+                  your estimate until you accept it.
+                </p>
+                <MaterialFinderForm
+                  projectId={projectId}
+                  serviceArea={serviceArea}
+                  aiConfigured={aiConfigured}
+                />
+              </>
+            ) : tool.name === "reference" ? (
               <>
                 <p className="mt-1 text-sm text-neutral-500">
                   A wiring check: echoes your note back as a fact suggestion and posts to the

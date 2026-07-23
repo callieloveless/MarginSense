@@ -17,5 +17,6 @@ export {
   manualMaterialSuggestions,
   type ManualMaterial,
   type MaterialFinderInput,
+  type MaterialFinderMode,
   type MaterialFinderOutput,
 } from "./material-finder";

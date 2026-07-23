@@ -17,7 +17,7 @@
       `npm run db:generate` → migration `0006` (`ADD COLUMN`, additive; no RLS change). Thread
       through `SettingsInput` / `saveSettings` / `parseSettingsForm` as an optional input (stored
       only, never derived).
-- [ ] 2.3 Settings form: a service-area field, saved and read back; tenant-isolated with the rest
+- [x] 2.3 Settings form: a service-area field, saved and read back; tenant-isolated with the rest
       of settings. Update the settings isolation/parse tests for the new optional field.
 
 ## 3. Material Finder tool (`src/tools/material-finder/`)
@@ -45,27 +45,27 @@
 
 ## 5. UI (phone-first, per-tool input pattern)
 
-- [ ] 5.1 Material Finder surface (per-tool pattern, e.g. `/projects/[id]/tools/[toolName]` or a
+- [x] 5.1 Material Finder surface (per-tool pattern, e.g. `/projects/[id]/tools/[toolName]` or a
       registry-keyed form): query field + **mode toggle** ("this material" / "everything for this
       estimate") + **location field** pre-filled from the service area (overridable) + the
       **manual-add form**.
-- [ ] 5.2 Search runs via a server action through `dispatch` (source `user`); manual add via its
+- [x] 5.2 Search runs via a server action through `dispatch` (source `user`); manual add via its
       own action (§4). Results surface in place via P2's `SuggestionCard` + profit preview
       (options compared by EPH impact); citations render as source links; a "connect AI" state
       when the model is unconfigured (manual add still works).
-- [ ] 5.3 Generalize the reference tool's one-off form into the shared per-tool pattern;
+- [x] 5.3 Generalize the reference tool's one-off form into the shared per-tool pattern;
       phone-first; every number via the engine (`formatCents`); no color-only cues.
 
 ## 6. Verification
 
-- [ ] 6.1 `npm run typecheck`, full Vitest suite, and `npm run build` green.
-- [ ] 6.2 `src/tools/` depends only on the `ModelPort` interface (mock in tests); only the real
+- [x] 6.1 `npm run typecheck`, full Vitest suite, and `npm run build` green.
+- [x] 6.2 `src/tools/` depends only on the `ModelPort` interface (mock in tests); only the real
       `src/ai/` impl imports `@anthropic-ai/sdk`; `src/engine/`/`src/context/` stay SDK-free;
       `src/` relative imports extensionless.
-- [ ] 6.3 No unsourced price becomes a suggestion; proposals stay `pending` until accept; the
+- [x] 6.3 No unsourced price becomes a suggestion; proposals stay `pending` until accept; the
       profit preview renders for line-item options (via the existing card path); manual add
       works with no key.
-- [ ] 6.4 `openspec validate add-material-finder --strict` passes.
+- [x] 6.4 `openspec validate add-material-finder --strict` passes.
 
 ## Deferred to live infra (owner provisions Supabase + `ANTHROPIC_API_KEY`)
 

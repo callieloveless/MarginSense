@@ -90,5 +90,6 @@ function rowToFormValues(row: BusinessSettingsRow): Record<string, string> {
     defaultContingency: String(row.defaultContingencyBp / 100),
     defaultMarkup: row.defaultMarkupBp === null ? "" : String(row.defaultMarkupBp / 100),
     defaultTaxRate: row.defaultTaxRateBp === null ? "" : String(row.defaultTaxRateBp / 100),
+    serviceArea: row.serviceArea ?? "",
   };
 }

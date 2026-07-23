@@ -93,6 +93,30 @@ export function PercentField(props: {
   );
 }
 
+export function TextField(props: {
+  name: string;
+  label: string;
+  hint?: string;
+  value: string;
+  onChange: (val: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <div className="space-y-1">
+      <Label htmlFor={props.name}>{props.label}</Label>
+      {props.hint ? <p className="text-sm text-neutral-500">{props.hint}</p> : null}
+      <input
+        id={props.name}
+        name={props.name}
+        value={props.value}
+        onChange={(e) => props.onChange(e.target.value)}
+        placeholder={props.placeholder}
+        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-base dark:border-neutral-700 dark:bg-neutral-900"
+      />
+    </div>
+  );
+}
+
 export function NumberField(props: {
   name: string;
   label: string;

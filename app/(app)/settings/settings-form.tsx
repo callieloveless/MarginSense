@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { MoneyField, NumberField, PercentField } from "@/app/_components/fields";
+import { MoneyField, NumberField, PercentField, TextField } from "@/app/_components/fields";
 import { saveSettingsAction, type SettingsActionResult } from "./actions";
 
 /**
@@ -31,6 +31,15 @@ export function SettingsForm({ initial }: { initial: Record<string, string> }) {
       <MoneyField name="profitTarget" label="Profit target" value={v("profitTarget")} onChange={(x) => set("profitTarget", x)} />
       <PercentField name="targetMargin" label="Target margin" value={v("targetMargin")} onChange={(x) => set("targetMargin", x)} />
       <PercentField name="defaultContingency" label="Default contingency" value={v("defaultContingency")} onChange={(x) => set("defaultContingency", x)} />
+
+      <TextField
+        name="serviceArea"
+        label="Service area"
+        hint="Where you work (e.g. “Austin, TX”). Material Finder uses it to find local prices. Optional."
+        value={v("serviceArea")}
+        onChange={(x) => set("serviceArea", x)}
+        placeholder="City, state"
+      />
 
       <details className="rounded-md border border-neutral-200 px-3 py-2 dark:border-neutral-800">
         <summary className="cursor-pointer text-sm font-medium">Advanced defaults</summary>
