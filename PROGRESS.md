@@ -20,7 +20,8 @@
 | 4 | `add-estimate-dashboard` | `estimates`, `profit-dashboard` | ✅ **Done** (archived 2026-07-22; live-infra proof deferred) |
 | 5 | `add-project-context` | `project-context` | ✅ **Done** (archived 2026-07-22; live-infra proof deferred) |
 | 6 | `add-tool-platform` (contract, `src/ai/`, `tool_run`) | `tool-platform` | ✅ **Done** (archived 2026-07-23; live-AI + live-infra proof deferred) |
-| 7 | Material Finder (proves the platform) | `material-finder` | ⏳ Planned |
+| 7a | `add-structured-result-port` (port typed result + citations, real Anthropic impl) | `tool-platform` | ✅ **Done** (archived 2026-07-23; live-AI proof deferred) |
+| 7b | `add-material-finder` (the first real tool) | `material-finder`, `project-context`, `onboarding` | ✅ **Done** (archived 2026-07-23; live-AI + live-infra proof deferred) |
 | 8 | Photo Advisor (photo upload + vision) | `photo-advisor` | ⏳ Planned |
 | 9 | Code Finder (auto-trigger on photo upload) | `code-finder` | ⏳ Planned |
 | 10 | Client Estimate Doc | `client-estimate-doc` | ⏳ Planned |
@@ -108,11 +109,27 @@ no real tool. **The only open items are deferred to live infra** (see
 [`relevant_notes.md`](./relevant_notes.md) §5): apply migration `0004`, prove `tool_runs` RLS,
 and prove one live model call through the reference tool once a key exists.
 
-### 7. ⏳ Material Finder
-First real tool (constitution §5): web-searches materials, current prices, and suppliers
-via Anthropic's **server-side `web_search`**. Emits `material` context entries + suggested
-material line items as `pending` suggestions and posts findings (with citations) to the
-project conversation. Proves the platform end-to-end.
+### 7a. ✅ Structured-result port
+Split out of #7: the model port's structured-output capability. `ModelRequest.resultSchema`
+(Zod) + `ModelResponse.result` (validated) + `readResult()`; the mock returns a canned,
+schema-validated result + citations; the **real Anthropic impl** (`src/ai/anthropic.ts`) makes
+one `messages.create` combining `web_search_20260209`, citations, and a strict `record_result`
+tool built from the schema via `z.toJSONSchema` — deliberately not `output_config.format`
+(incompatible with citations). SDK loaded lazily; resolver stays unconfigured without a key.
+**Live end-to-end proof deferred** (relevant_notes.md §5).
+
+### 7b. ✅ Material Finder
+First real tool (constitution §5): web-searches materials, current prices, and suppliers via
+`web_search` + #7a's structured result. Two modes (free-text query / everything-for-this-
+estimate); returns **comparable, sourced options** — each an `estimate_line_item` suggestion
+when there's an active estimate (so options compare by profit-per-hour via P2's card) else a
+`material` context entry; an unsourced option is dropped (§7). Localizes to a new
+`business_settings.service_area` (migration `0006`, edited in Settings); snapshot exposes
+`activeEstimateId`; **manual add** proposes the same suggestions with no model/no `tool_run`.
+Per-tool input UI (mode toggle + query + location + hand-add) sets the pattern for #8–#10.
+**The only open items are deferred to live infra** (relevant_notes.md §5): apply migration
+`0006`, and prove real `web_search` returns sourced prices + citations with live `tool_run`
+token usage once a key exists.
 
 ### 8. ⏳ Photo Advisor
 Adds tenant-scoped **photo upload + storage** (Supabase Storage) and vision-based

@@ -29,6 +29,11 @@ Supabase project + secrets exist. Nothing here happens until the database is pro
       grants.
 - [ ] `0004_careful_scarlet_spider` — `tool_runs` + RLS + grants, and the nullable
       `tool_run_id` columns added to `suggestions` / `conversation_messages` (add-tool-platform).
+- [ ] `0005_*` — `tool_runs.status` made **nullable** (null = running) + `completed_at`
+      (add-tool-dispatch; nullable instead of an enum value to dodge the in-transaction
+      `ALTER TYPE … ADD VALUE` footgun).
+- [ ] `0006_lyrical_catseye` — `business_settings.service_area` (nullable text; additive, no
+      RLS change — the table's per-business policy already covers it) (add-material-finder).
 
 ### 2. Prove Row-Level Security end-to-end
 App-layer tenant isolation is already proven by in-memory tests (`tenant.test.ts`,
@@ -73,6 +78,17 @@ buildable and typed now, live calls wait on a key.
 - [ ] Confirm `tool_run` cost logging (tokens, latency) records against live usage.
 - Each tool change (#7 Material Finder, #8 Photo Advisor, #9 Code Finder) adds its own
   live-AI proof item here when built — mirror this entry.
+- [ ] **#7a structured-result port** (`add-structured-result-port`): prove the real port returns
+      a validated `result` **and** citations in one `messages.create` — a strict `record_result`
+      tool (built from a Zod schema via `z.toJSONSchema`) declared alongside `web_search_20260209`
+      with `tool_choice` auto (forcing it would pre-empt the search). `output_config.format` is
+      **incompatible with citations** (400) — that's why we use the result-tool. Everything is
+      proven offline via the mock's canned result; only the live wire is deferred.
+- [ ] **#7b Material Finder** (`add-material-finder`): after applying `0006` and setting the key,
+      set a service area in Settings → search both modes → comparable **sourced** options appear
+      in place with profit-per-hour previews → accept one → the signal header moves; and hand-add
+      a material with the key unset (no model, no `tool_run`). No option without a `sourceUrl` may
+      become a suggestion.
 
 ## Future direction (north-star)
 
