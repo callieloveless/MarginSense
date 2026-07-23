@@ -36,6 +36,7 @@ export async function acceptSuggestionAction(projectId: string, suggestionId: st
   if (session.status !== "ready") return;
   await tenantDbForSession(session.authUserId, session.businessId).acceptSuggestion(suggestionId);
   revalidatePath(`/projects/${projectId}/context`);
+  revalidatePath(`/projects/${projectId}/tools`);
   revalidatePath(`/projects/${projectId}`);
   revalidatePath("/dashboard");
 }
@@ -46,4 +47,5 @@ export async function dismissSuggestionAction(projectId: string, suggestionId: s
   if (session.status !== "ready") return;
   await tenantDbForSession(session.authUserId, session.businessId).dismissSuggestion(suggestionId);
   revalidatePath(`/projects/${projectId}/context`);
+  revalidatePath(`/projects/${projectId}/tools`);
 }

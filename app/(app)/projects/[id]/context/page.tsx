@@ -3,7 +3,10 @@ import { notFound, redirect } from "next/navigation";
 import { getServerSession, tenantDbForSession } from "@/src/db/session";
 import { formatCents } from "@/src/engine";
 import { authorFromRow, authorLabel } from "@/src/context";
-import type { ContextEntryKindName, SuggestionRow } from "@/src/db/schema";
+import type { ContextEntryKindName } from "@/src/db/schema";
+import { loadJobProfit, previewForSuggestion } from "@/app/_lib/job-profit";
+import { SuggestionCard } from "@/app/_components/suggestion-card";
+import { ProfitHeader } from "@/app/_components/profit-header";
 import { PostMessageForm } from "./post-message-form";
 import { acceptSuggestionAction, dismissSuggestionAction } from "./actions";
 
@@ -35,10 +38,11 @@ export default async function ProjectContextPage({
   const project = await tenantDb.getProject(projectId);
   if (!project) notFound();
 
-  const [entries, messages, pending] = await Promise.all([
+  const [entries, messages, pending, job] = await Promise.all([
     tenantDb.listContextEntries(projectId),
     tenantDb.listMessages(projectId),
     tenantDb.listPendingSuggestions(projectId),
+    loadJobProfit(tenantDb, projectId),
   ]);
 
   return (
@@ -48,6 +52,10 @@ export default async function ProjectContextPage({
         One job, one memory. Findings, materials, and notes live here; tools will add
         suggestions you accept or dismiss.
       </p>
+
+      <div className="mt-4">
+        <ProfitHeader job={job} projectId={projectId} />
+      </div>
 
       {/* Suggestions queue */}
       <section className="mt-6">
@@ -60,21 +68,13 @@ export default async function ProjectContextPage({
         ) : (
           <ul className="mt-2 space-y-2">
             {pending.map((s) => (
-              <li key={s.id} className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
-                <p className="text-sm">{describeSuggestion(s)}</p>
-                <div className="mt-2 flex gap-2">
-                  <form action={acceptSuggestionAction.bind(null, projectId, s.id)}>
-                    <button className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white dark:bg-white dark:text-neutral-900">
-                      Accept
-                    </button>
-                  </form>
-                  <form action={dismissSuggestionAction.bind(null, projectId, s.id)}>
-                    <button className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium dark:border-neutral-700">
-                      Dismiss
-                    </button>
-                  </form>
-                </div>
-              </li>
+              <SuggestionCard
+                key={s.id}
+                suggestion={s}
+                preview={previewForSuggestion(s, job)}
+                accept={acceptSuggestionAction.bind(null, projectId, s.id)}
+                dismiss={dismissSuggestionAction.bind(null, projectId, s.id)}
+              />
             ))}
           </ul>
         )}
@@ -151,15 +151,6 @@ function describeEntry(kind: ContextEntryKindName, payload: unknown): string {
     case "fact":
       return `${s(p.label)}: ${s(p.value)}`;
   }
-}
-
-/** A plain-language summary of what a pending suggestion proposes. */
-function describeSuggestion(s: SuggestionRow): string {
-  const p = (s.payload ?? {}) as Record<string, unknown>;
-  if (s.target === "estimate_line_item") {
-    return `Add a ${String(p.category ?? "line item")}${p.description ? ` — ${String(p.description)}` : ""} to the estimate.`;
-  }
-  return `Add a ${String(p.kind ?? "context")} entry to this job.`;
 }
 
 function Shell({ projectId, children }: { projectId: string; children: React.ReactNode }) {
