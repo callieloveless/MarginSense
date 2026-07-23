@@ -78,6 +78,27 @@ describe("job photos — storage and identity", () => {
     expect(await a.signedPhotoUrl(theirs.storageKey)).toBeNull();
     expect(await a.signedPhotoUrl("../biz-b/p-b/anything.jpg")).toBeNull();
   });
+
+  it("signs a whole gallery in one call, dropping keys that aren't ours", async () => {
+    const { a, b } = sharedTenants();
+    const one = await upload(a, "p-a");
+    const two = await upload(a, "p-a");
+    const theirs = await upload(b, "p-b");
+
+    const signed = await a.signedPhotoUrls([one.thumbKey, two.thumbKey, theirs.thumbKey]);
+
+    expect(signed.get(one.thumbKey)).toContain(one.thumbKey);
+    expect(signed.get(two.thumbKey)).toContain(two.thumbKey);
+    // Another business's key is absent from the map, not an error that fails the page.
+    expect(signed.has(theirs.thumbKey)).toBe(false);
+    expect(signed.size).toBe(2);
+  });
+
+  it("returns an empty map without touching storage when no key is ours", async () => {
+    const { a } = sharedTenants();
+    expect(await a.signedPhotoUrls([])).toEqual(new Map());
+    expect(await a.signedPhotoUrls(["biz-b/p-b/x.jpg"])).toEqual(new Map());
+  });
 });
 
 describe("tenant isolation — job photos", () => {

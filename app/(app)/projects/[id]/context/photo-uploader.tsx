@@ -9,6 +9,7 @@ import {
   THUMB_LONG_EDGE_PX,
   scaledDimensions,
 } from "@/src/photos";
+import { inputClassName } from "@/app/_components/fields";
 import { uploadPhotoAction, type PhotoActionResult } from "./photo-actions";
 
 /**
@@ -81,21 +82,23 @@ export function PhotoUploader({ projectId }: { projectId: string }) {
   return (
     <form ref={formRef} onSubmit={onSubmit} className="mt-2 space-y-2">
       <label className="block">
-        <span className="sr-only">Choose a job photo</span>
+        <span className="sr-only">Take or choose a job photo</span>
+        {/* No `capture` attribute on purpose: it forces the camera and hides the library, so a
+            photo already taken on site — the common case when you're back at the truck — would
+            be unreachable. Without it the picker still offers the camera on both platforms. */}
         <input
           ref={fileRef}
           type="file"
           name="file"
           accept="image/*"
-          capture="environment"
           onChange={(e) => setFileName(e.currentTarget.files?.[0]?.name ?? "")}
-          className="w-full rounded-md border border-neutral-300 px-3 py-2 text-base file:mr-3 file:rounded file:border-0 file:bg-neutral-900 file:px-3 file:py-1 file:text-white dark:border-neutral-700 dark:bg-neutral-900 dark:file:bg-white dark:file:text-neutral-900"
+          className={`${inputClassName} file:mr-3 file:rounded file:border-0 file:bg-neutral-900 file:px-3 file:py-1 file:text-white dark:file:bg-white dark:file:text-neutral-900`}
         />
       </label>
       <input
         name="caption"
         placeholder="What is this? (optional — e.g. joist under the tub)"
-        className="w-full min-w-0 rounded-md border border-neutral-300 px-3 py-2 text-base dark:border-neutral-700 dark:bg-neutral-900"
+        className={inputClassName}
       />
       <button
         type="submit"

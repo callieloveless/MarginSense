@@ -1,20 +1,21 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { inputClassName } from "@/app/_components/fields";
 import {
   deletePhotoAction,
   setPhotoCaptionAction,
+  signedPhotoUrlAction,
   type PhotoActionResult,
 } from "./photo-actions";
 
-/** One photo as the gallery needs it: identity, a signed thumbnail URL, and its caption. */
+/** One photo as the gallery needs it: identity, a signed thumbnail URL, its caption, and the
+ * stored pixel dimensions (so a tile reserves the right space before its image loads). */
 export interface PhotoView {
   id: string;
   caption: string | null;
-  /** Short-lived signed URL, or null when the object couldn't be signed (missing/expired). */
+  /** Short-lived signed URL, or null when the object couldn't be signed (missing/refused). */
   thumbUrl: string | null;
-  /** Short-lived signed URL for the full-size image. */
-  fullUrl: string | null;
   width: number;
   height: number;
 }
@@ -24,6 +25,11 @@ export interface PhotoView {
  * full-size, captionable, and deletable. Every URL is a **short-lived signed URL** issued
  * server-side for this tenant's own objects (constitution §7); nothing here is public, and a
  * tile whose object can't be signed says so in words rather than showing a broken image.
+ *
+ * Opening a photo asks the server for a fresh signature at that moment. Signing full-size URLs
+ * during render would mint links that expire before anyone taps them, and falling back to the
+ * thumbnail would quietly show a 400px image in place of the real photo — on a surface whose
+ * whole job is letting someone look closely at a defect.
  */
 export function PhotoGallery({ projectId, photos }: { projectId: string; photos: PhotoView[] }) {
   if (photos.length === 0) {
@@ -46,6 +52,32 @@ export function PhotoGallery({ projectId, photos }: { projectId: string; photos:
 function PhotoTile({ projectId, photo }: { projectId: string; photo: PhotoView }) {
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [opening, setOpening] = useState(false);
+  const [openError, setOpenError] = useState<string | null>(null);
+
+  /** Open the full-size photo in a new tab with a URL signed right now. The tab is opened
+   * synchronously (before the await) so the browser attributes it to the tap and doesn't block
+   * it as a popup; its location is filled in once the signature comes back. */
+  async function openFullSize(): Promise<void> {
+    setOpening(true);
+    setOpenError(null);
+    const tab = window.open("", "_blank", "noopener,noreferrer");
+    try {
+      const url = await signedPhotoUrlAction(photo.id);
+      if (!url) {
+        tab?.close();
+        setOpenError("That photo can't be opened right now.");
+        return;
+      }
+      if (tab) tab.location.href = url;
+      else window.location.href = url; // popup blocked — fall back to this tab
+    } catch {
+      tab?.close();
+      setOpenError("That photo can't be opened right now.");
+    } finally {
+      setOpening(false);
+    }
+  }
 
   const [captionState, captionAction, savingCaption] = useActionState<
     PhotoActionResult | null,
@@ -64,15 +96,23 @@ function PhotoTile({ projectId, photo }: { projectId: string; photo: PhotoView }
   return (
     <li className="overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-800">
       {photo.thumbUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element -- signed URLs are short-lived and
-        // per-request; next/image would cache and re-request them after they expire.
-        <a href={photo.fullUrl ?? photo.thumbUrl} target="_blank" rel="noreferrer">
+        <button
+          type="button"
+          onClick={openFullSize}
+          disabled={opening}
+          aria-label={photo.caption ? `Open "${photo.caption}" full size` : "Open photo full size"}
+          className="block w-full"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- signed URLs are short-lived
+              and per-request; next/image would cache and re-request them after they expire. */}
           <img
             src={photo.thumbUrl}
             alt={photo.caption ?? "Job photo"}
+            width={photo.width}
+            height={photo.height}
             className="aspect-square w-full object-cover"
           />
-        </a>
+        </button>
       ) : (
         <div className="flex aspect-square w-full items-center justify-center bg-neutral-100 p-2 text-center text-xs text-neutral-500 dark:bg-neutral-900">
           Image unavailable
@@ -88,7 +128,7 @@ function PhotoTile({ projectId, photo }: { projectId: string; photo: PhotoView }
                 name="caption"
                 defaultValue={photo.caption ?? ""}
                 placeholder="What is this?"
-                className="w-full min-w-0 rounded-md border border-neutral-300 px-2 py-1 text-sm dark:border-neutral-700 dark:bg-neutral-900"
+                className={inputClassName}
               />
             </label>
             <div className="flex gap-1">
@@ -135,6 +175,7 @@ function PhotoTile({ projectId, photo }: { projectId: string; photo: PhotoView }
           </>
         )}
 
+        {openError ? <p className="text-xs text-red-600">{openError}</p> : null}
         {captionState && !captionState.ok ? (
           <p className="text-xs text-red-600">{captionState.error}</p>
         ) : null}

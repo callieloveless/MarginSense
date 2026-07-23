@@ -9,6 +9,15 @@ import type { ReactNode } from "react";
  * renders a hidden input under its own `name` so controlled values submit with the form.
  */
 
+/**
+ * The one phone-first input style, as a class string. The fields below are *controlled*
+ * (value/onChange, for the wizard and settings); plenty of surfaces post plain uncontrolled
+ * forms to a server action instead, and those reach for this rather than re-typing the classes.
+ * Restyling an input — height, focus ring, dark-mode border — happens here, once.
+ */
+export const inputClassName =
+  "w-full min-w-0 rounded-md border border-neutral-300 px-3 py-2 text-base dark:border-neutral-700 dark:bg-neutral-900";
+
 export function Label({ htmlFor, children }: { htmlFor?: string; children: ReactNode }) {
   return (
     <label htmlFor={htmlFor} className="block text-sm font-medium">
@@ -111,7 +120,7 @@ export function TextField(props: {
         value={props.value}
         onChange={(e) => props.onChange(e.target.value)}
         placeholder={props.placeholder}
-        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-base dark:border-neutral-700 dark:bg-neutral-900"
+        className={inputClassName}
       />
     </div>
   );
@@ -136,7 +145,7 @@ export function NumberField(props: {
         onChange={(e) => props.onChange(e.target.value)}
         inputMode="numeric"
         placeholder={props.placeholder}
-        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-base dark:border-neutral-700 dark:bg-neutral-900"
+        className={inputClassName}
       />
     </div>
   );

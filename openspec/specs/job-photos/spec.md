@@ -77,12 +77,20 @@ maximum size, so an oversized or non-image file never reaches storage.
 ### Requirement: Photos are shown through short-lived signed URLs
 Stored photos SHALL never be served from a public URL. Displaying a job's photos SHALL issue
 short-lived signed URLs for the requesting tenant's own photos only, and the gallery SHALL be
-phone-first, showing each photo's thumbnail with its caption.
+phone-first, showing each photo's thumbnail with its caption. A URL the user follows later —
+opening one photo full-size — SHALL be signed in response to that action rather than when the
+page was rendered, so it is not already expired, and SHALL NOT be substituted with a
+lower-resolution image when it cannot be signed.
 
 #### Scenario: A gallery renders signed URLs
 - **WHEN** a user opens a project's photos
 - **THEN** each photo is displayed via a short-lived signed URL scoped to that photo, and no
   publicly readable URL is produced
+
+#### Scenario: Opening a photo signs it at that moment
+- **WHEN** a user opens a photo full-size some minutes after the page was rendered
+- **THEN** a URL is signed for that photo at that moment and the full-size photo opens; if it
+  cannot be signed the user is told so, and the thumbnail is never shown in its place
 
 #### Scenario: Photos appear on the job surface
 - **WHEN** a project has photos
@@ -91,17 +99,23 @@ phone-first, showing each photo's thumbnail with its caption.
 
 ### Requirement: A photo can be captioned and deleted
 A user SHALL be able to set or change a short caption on their own photo, and SHALL be able to
-delete their own photo — which removes the photo row and both the full-size and thumbnail
-objects from storage. Both actions SHALL be tenant-scoped and server-side.
+delete their own photo — which removes the photo row, both the full-size and thumbnail objects
+from storage, and the `photo` context entry that referenced it, so the job's shared memory never
+cites a photo that no longer exists. Both actions SHALL be tenant-scoped and server-side.
 
 #### Scenario: Caption a photo
 - **WHEN** a user sets a caption on one of their photos
 - **THEN** the caption is stored with the photo and shown with it
 
-#### Scenario: Delete removes the row and the objects
+#### Scenario: Delete removes the row, the objects, and the context entry
 - **WHEN** a user deletes one of their photos
-- **THEN** the photo row is removed and both the full-size and thumbnail objects are deleted from
-  storage, so no orphaned object remains
+- **THEN** the photo row is removed, both the full-size and thumbnail objects are deleted from
+  storage so no orphaned object remains, and the `photo` context entry naming that object is
+  removed from the project's shared context
+
+#### Scenario: Deleting one photo leaves the others untouched
+- **WHEN** a user deletes one photo from a project that has several, and other context entries
+- **THEN** only that photo's row, objects, and context entry are removed
 
 ### Requirement: A successful upload emits a photo-uploaded event
 A successful photo upload SHALL emit a `photo.uploaded` event through the platform's event seam,

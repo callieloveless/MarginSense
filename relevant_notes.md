@@ -34,12 +34,16 @@ Supabase project + secrets exist. Nothing here happens until the database is pro
       `ALTER TYPE … ADD VALUE` footgun).
 - [ ] `0006_lyrical_catseye` — `business_settings.service_area` (nullable text; additive, no
       RLS change — the table's per-business policy already covers it) (add-material-finder).
-- [ ] `0007_burly_quicksilver` — `project_photos` + RLS + grants, **and** the object-storage
-      block: an idempotent private `job-photos` bucket plus a `storage.objects` policy keyed on
-      `(storage.foldername(name))[1] = public.current_business_id()::text` (add-photo-capture).
-      **If the migration role is refused `storage.objects`** (it's owned by the storage
-      extension), run that block once from the Supabase SQL editor — the app-layer prefix rule
-      in `src/photos/` holds either way, but the DB half is the guarantee.
+- [ ] `0007_burly_quicksilver` — `project_photos` + RLS + grants (add-photo-capture).
+- [ ] `0008_job_photos_bucket` — the private `job-photos` bucket + the `storage.objects` policy
+      keyed on `(storage.foldername(name))[1] = public.current_business_id()::text`. **Its own
+      migration on purpose**: `storage` is Supabase-provided, so on a plain Postgres (the
+      `test:rls` target) it doesn't exist, and a hosted project may refuse `storage.objects` to
+      the migration role — bundled with `0007` either would roll the table back. Both blocks
+      **self-skip with a NOTICE** instead of raising, so they can never block the chain.
+      **If you see those NOTICEs, the DB half of object isolation is not in place** — run the
+      file's statements once from the Supabase SQL editor and confirm with
+      `select * from pg_policies where tablename = 'objects';`.
 
 ### 2. Prove Row-Level Security end-to-end
 App-layer tenant isolation is already proven by in-memory tests (`tenant.test.ts`,
@@ -58,8 +62,9 @@ Photo bytes live in Supabase Storage — **outside Postgres and outside table RL
 guard them (keys derived only by `src/photos/photoObjectKey()` from the tenant handle; every
 `PhotoStorageBackend` method refusing a key outside the caller's prefix; the `storage.objects`
 policy in `0007`). The first two are unit-tested; the third needs a live bucket.
-- [ ] Create the **private** `job-photos` bucket (or apply `0007`'s bucket block) and confirm
-      `public = false` — the app never mints a public URL.
+- [ ] Create the **private** `job-photos` bucket (or apply `0008`) and confirm `public = false`
+      — the app never mints a public URL. The bucket name is fixed in `src/photos/`
+      (`PHOTO_BUCKET`) because the policy names one bucket; don't parameterize it.
 - [ ] Prove business A cannot sign or read an object under business B's prefix, and that a
       direct Storage call with B's key is refused by the policy (not just by app code).
 - [ ] Confirm signed URLs expire (`SIGNED_URL_TTL_SECONDS`, 60s) and that an expired URL 400s.

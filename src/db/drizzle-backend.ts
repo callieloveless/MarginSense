@@ -259,6 +259,15 @@ export function createDrizzleContextBackend(db: Db, authUserId: string): Context
         return inserted[0]!;
       });
     },
+    deleteEntry(businessId: BusinessId, id: string) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const deleted = await tx
+          .delete(contextEntries)
+          .where(and(eq(contextEntries.id, id), eq(contextEntries.businessId, businessId)))
+          .returning();
+        return deleted[0] ?? null;
+      });
+    },
     listMessages(businessId: BusinessId, projectId: string) {
       return withAuthenticatedTx(db, authUserId, (tx) =>
         tx

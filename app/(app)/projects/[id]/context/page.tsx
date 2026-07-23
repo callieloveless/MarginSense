@@ -49,17 +49,18 @@ export default async function ProjectContextPage({
     storageReady ? tenantDb.listPhotos(projectId) : Promise.resolve([]),
   ]);
 
-  // Signed per request and short-lived (constitution §7) — a photo is never served publicly.
-  const photos: PhotoView[] = await Promise.all(
-    photoRows.map(async (p) => ({
-      id: p.id,
-      caption: p.caption,
-      thumbUrl: await tenantDb.signedPhotoUrl(p.thumbKey),
-      fullUrl: await tenantDb.signedPhotoUrl(p.storageKey),
-      width: p.width,
-      height: p.height,
-    })),
-  );
+  // Thumbnails are signed for the whole gallery in ONE round trip, short-lived (constitution §7
+  // — a photo is never served publicly). The full-size URL is deliberately NOT signed here: the
+  // user follows it minutes later, by which time a render-time signature has expired, so the
+  // gallery asks for one when a photo is actually opened.
+  const thumbUrls = await tenantDb.signedPhotoUrls(photoRows.map((p) => p.thumbKey));
+  const photos: PhotoView[] = photoRows.map((p) => ({
+    id: p.id,
+    caption: p.caption,
+    thumbUrl: thumbUrls.get(p.thumbKey) ?? null,
+    width: p.width,
+    height: p.height,
+  }));
 
   return (
     <Shell projectId={projectId}>

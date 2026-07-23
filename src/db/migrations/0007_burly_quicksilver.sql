@@ -33,40 +33,8 @@ CREATE POLICY "project_photos_same_business" ON "project_photos"
 
 -- Privileges for the `authenticated` role (RLS decides WHICH rows; grants decide table
 -- access at all). The app drops to `authenticated` per transaction (src/db/rls.ts).
-GRANT SELECT, INSERT, UPDATE, DELETE ON "project_photos" TO authenticated;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE ON "project_photos" TO authenticated;
 
--- ============================================================================
--- Object storage (add-photo-capture) — the bytes live in Supabase Storage, which
--- is outside this table's RLS. A photo is therefore isolated TWICE: the row policy
--- above, and the object policy below, which compares the first key segment against
--- the caller's business. Keys are built only by src/photos/photoObjectKey() as
--- "{business_id}/{project_id}/{photo_id}.{ext}", and the business id is always
--- stamped from the tenant handle — never from input.
---
--- The bucket is PRIVATE (public = false): the app never mints a public URL, it
--- issues short-lived signed URLs. The app reaches Storage through the
--- session-scoped SSR client (anon key + the user's JWT), never the service-role
--- key, so auth.uid() resolves and this policy actually applies.
---
--- Both statements are idempotent. If a hosted environment refuses them to the
--- migration role (storage.objects is owned by the storage extension), create the
--- bucket and this policy once from the Supabase dashboard's SQL editor — the
--- app-layer prefix rule in src/photos/ holds either way.
--- ============================================================================
-INSERT INTO storage.buckets (id, name, public)
-VALUES ('job-photos', 'job-photos', false)
-ON CONFLICT (id) DO NOTHING;--> statement-breakpoint
-
-DROP POLICY IF EXISTS "job_photos_objects_same_business" ON storage.objects;--> statement-breakpoint
-
-CREATE POLICY "job_photos_objects_same_business" ON storage.objects
-  FOR ALL
-  TO authenticated
-  USING (
-    bucket_id = 'job-photos'
-    AND (storage.foldername(name))[1] = public.current_business_id()::text
-  )
-  WITH CHECK (
-    bucket_id = 'job-photos'
-    AND (storage.foldername(name))[1] = public.current_business_id()::text
-  );
+-- The photo BYTES live in Supabase Storage, outside this table and outside its RLS.
+-- The object-side policy that isolates them is migration 0008 — kept separate so a
+-- Supabase-specific statement can never roll back this table.

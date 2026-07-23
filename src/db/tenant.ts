@@ -253,6 +253,9 @@ export type SuggestionResolution =
 export interface ContextBackend {
   listEntries(businessId: BusinessId, projectId: string): Promise<ContextEntryRow[]>;
   addEntry(row: NewContextEntryRow): Promise<ContextEntryRow>;
+  /** Remove an entry the user is retracting (e.g. the `photo` entry for a deleted photo), scoped
+   * to the business. Returns the removed row, or null if it isn't ours. */
+  deleteEntry(businessId: BusinessId, id: string): Promise<ContextEntryRow | null>;
   listMessages(businessId: BusinessId, projectId: string): Promise<ConversationMessageRow[]>;
   addMessage(row: NewConversationMessageRow): Promise<ConversationMessageRow>;
   listSuggestions(
@@ -330,8 +333,17 @@ export interface PhotoStorageBackend {
     businessId: BusinessId,
     input: { key: string; contentType: string; bytes: Uint8Array },
   ): Promise<void>;
-  /** A short-lived signed URL, or null when the key isn't this business's / doesn't exist. */
-  signedUrl(businessId: BusinessId, key: string, expiresInSeconds: number): Promise<string | null>;
+  /**
+   * Short-lived signed URLs for a **set** of keys, as a `key → url` map. Batched on purpose: a
+   * gallery signs every thumbnail in one round trip instead of one per photo. Keys outside the
+   * business's prefix, and keys that don't exist or the policy refuses, are simply absent from
+   * the map — an unsignable photo is a plain "unavailable" tile, not a failed page.
+   */
+  signedUrls(
+    businessId: BusinessId,
+    keys: readonly string[],
+    expiresInSeconds: number,
+  ): Promise<Map<string, string>>;
   /** Delete objects by key; keys outside the business's prefix are ignored. Idempotent. */
   deleteObjects(businessId: BusinessId, keys: readonly string[]): Promise<void>;
 }
@@ -600,6 +612,12 @@ export class TenantDb {
     });
   }
 
+  /** Remove a context entry, scoped to this business. Used when the thing an entry points at is
+   * withdrawn by the user (a deleted photo), so the job's memory never cites something gone. */
+  deleteContextEntry(id: string): Promise<ContextEntryRow | null> {
+    return this.#contextBackend.deleteEntry(this.businessId, id);
+  }
+
   /** This project's single conversation, oldest-first (the backend's ordering). */
   listMessages(projectId: string): Promise<ConversationMessageRow[]> {
     return this.#contextBackend.listMessages(this.businessId, projectId);
@@ -759,12 +777,27 @@ export class TenantDb {
   }
 
   /**
-   * A short-lived signed URL for one of this business's photo objects (constitution §7 — a
-   * photo is never served from a public URL). Null when the key isn't ours or doesn't exist.
+   * Short-lived signed URLs for a set of this business's photo objects, as a `key → url` map
+   * (constitution §7 — a photo is never served from a public URL). One round trip for the whole
+   * set; a key that isn't ours, doesn't exist, or is refused is simply absent from the map.
    */
-  signedPhotoUrl(key: string, expiresInSeconds = SIGNED_URL_TTL_SECONDS): Promise<string | null> {
-    if (!keyBelongsToBusiness(this.businessId, key)) return Promise.resolve(null);
-    return this.#photoStorageBackend.signedUrl(this.businessId, key, expiresInSeconds);
+  signedPhotoUrls(
+    keys: readonly string[],
+    expiresInSeconds = SIGNED_URL_TTL_SECONDS,
+  ): Promise<Map<string, string>> {
+    const ours = keys.filter((key) => keyBelongsToBusiness(this.businessId, key));
+    if (ours.length === 0) return Promise.resolve(new Map());
+    return this.#photoStorageBackend.signedUrls(this.businessId, ours, expiresInSeconds);
+  }
+
+  /**
+   * A signed URL for **one** photo object. Meant to be called in response to a user action
+   * (opening a photo full-size) rather than at render time — a URL signed during render has
+   * usually expired by the time anyone taps it.
+   */
+  async signedPhotoUrl(key: string, expiresInSeconds = SIGNED_URL_TTL_SECONDS): Promise<string | null> {
+    const signed = await this.signedPhotoUrls([key], expiresInSeconds);
+    return signed.get(key) ?? null;
   }
 
   /** Accept a suggestion — the ONLY path that commits its proposed change (server-side, one
@@ -1039,6 +1072,11 @@ export function createMemoryContextBackend(
       entries.push(stored);
       return stored;
     },
+    async deleteEntry(businessId, id) {
+      const i = entries.findIndex((e) => e.id === id && e.businessId === businessId);
+      if (i < 0) return null;
+      return entries.splice(i, 1)[0]!;
+    },
     async listMessages(businessId, projectId) {
       return messages.filter((m) => m.businessId === businessId && m.projectId === projectId);
     },
@@ -1245,9 +1283,14 @@ export function createMemoryPhotoStorageBackend(): PhotoStorageBackend & {
       }
       objects.set(input.key, { contentType: input.contentType, bytes: input.bytes });
     },
-    async signedUrl(businessId, key) {
-      if (!keyBelongsToBusiness(businessId, key)) return null;
-      return objects.has(key) ? `memory://${key}` : null;
+    async signedUrls(businessId, keys) {
+      const signed = new Map<string, string>();
+      for (const key of keys) {
+        if (keyBelongsToBusiness(businessId, key) && objects.has(key)) {
+          signed.set(key, `memory://${key}`);
+        }
+      }
+      return signed;
     },
     async deleteObjects(businessId, keys) {
       for (const key of keys) {

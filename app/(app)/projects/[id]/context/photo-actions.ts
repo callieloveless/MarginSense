@@ -3,11 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { getServerSession, tenantDbForSession } from "@/src/db/session";
 import { type TenantDb } from "@/src/db/tenant";
-import { validateUpload } from "@/src/photos";
+import { SIGNED_URL_TTL_SECONDS_ON_DEMAND, validateUpload } from "@/src/photos";
 import { emit } from "@/src/tools";
 import { resolveModelPort } from "@/src/ai";
 import { dispatchDeps } from "@/app/_lib/tool-runner";
-import { storePhotoForProject } from "@/app/_lib/photo-upload";
+import { deletePhotoForProject, storePhotoForProject } from "@/app/_lib/photo-upload";
 
 /**
  * Job-photo actions (add-photo-capture). Uploading a photo is an **outer-layer user action**,
@@ -55,8 +55,9 @@ async function emitPhotoUploaded(
         ? dispatchDeps(tenantDb, resolution.port)
         : dispatchDeps(tenantDb);
     await emit("photo.uploaded", { projectId: input.projectId, input }, deps);
-  } catch {
-    // Deliberately ignored — see the doc comment.
+  } catch (err) {
+    // Never re-thrown (see the doc comment) — but never invisible either.
+    console.error(`[photos] photo.uploaded subscribers failed for photo ${input.photoId}:`, err);
   }
 }
 
@@ -150,8 +151,12 @@ export async function setPhotoCaptionAction(
   return { ok: true, message: caption === "" ? "Caption removed." : "Caption saved." };
 }
 
-/** Delete a photo — its objects and its row, tenant-scoped. The `photo` context entry stays as
- * the job's record that a photo was taken; it is a fact of the job's history, not the asset. */
+/**
+ * Delete a photo — its objects, its row, **and** the `photo` context entry that pointed at it,
+ * so the job's memory never cites bytes that are gone (see `photo-upload.ts`). Deleting is often
+ * a privacy action (the wrong house), and leaving the storage key in the shared context would
+ * defeat it.
+ */
 export async function deletePhotoAction(
   projectId: string,
   photoId: string,
@@ -166,9 +171,26 @@ export async function deletePhotoAction(
     return { ok: false, error: "Photo storage isn't connected yet." };
   }
 
-  const deleted = await tenantDb.deletePhoto(photoId);
-  if (!deleted) return { ok: false, error: "Photo not found." };
+  const result = await deletePhotoForProject(tenantDb, projectId, photoId);
+  if (!result.ok) return result;
 
   revalidate(projectId);
   return { ok: true, message: "Photo deleted." };
+}
+
+/**
+ * A fresh signed URL for one photo, issued **when the user asks to see it full-size**. Signed on
+ * demand rather than at render time: a URL minted while the page rendered would have expired
+ * long before anyone tapped it. Tenant-scoped — another business's photo id resolves to null.
+ */
+export async function signedPhotoUrlAction(photoId: string): Promise<string | null> {
+  const session = await getServerSession();
+  if (session.status !== "ready") return null;
+
+  const tenantDb = tenantDbForSession(session.authUserId, session.businessId);
+  if (!tenantDb.hasPhotoStorage) return null;
+
+  const photo = await tenantDb.getPhoto(photoId);
+  if (!photo) return null;
+  return tenantDb.signedPhotoUrl(photo.storageKey, SIGNED_URL_TTL_SECONDS_ON_DEMAND);
 }

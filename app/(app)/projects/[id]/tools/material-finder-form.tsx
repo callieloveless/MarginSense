@@ -7,6 +7,7 @@ import {
   type MaterialActionResult,
 } from "./material-finder-actions";
 import { type MaterialFinderMode } from "@/src/tools";
+import { inputClassName } from "@/app/_components/fields";
 
 /**
  * Material Finder's per-tool surface (add-material-finder) — the pattern #8–#10 reuse. A search
@@ -50,8 +51,9 @@ export function MaterialFinderForm({
     null,
   );
 
-  const inputClass =
-    "w-full min-w-0 rounded-md border border-neutral-300 px-3 py-2 text-base dark:border-neutral-700 dark:bg-neutral-900";
+  // The one shared input style (app/_components/fields.tsx) — these are uncontrolled fields
+  // posting to a server action, so they use the class rather than the controlled `TextField`.
+  const inputClass = inputClassName;
 
   return (
     <div className="mt-3 space-y-6">

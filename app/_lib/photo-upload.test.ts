@@ -5,7 +5,7 @@
  * suggestion — uploading is a user action, so the `photo` entry is committed directly (§5).
  */
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createMemoryContextBackend,
   createMemoryPhotoBackend,
@@ -13,7 +13,7 @@ import {
   createMemoryProjectBackend,
   createTenantDb,
 } from "@/src/db/tenant";
-import { storePhotoForProject } from "./photo-upload";
+import { deletePhotoForProject, storePhotoForProject } from "./photo-upload";
 
 const BUSINESS = "biz-a";
 const PROJECT = "p-1";
@@ -78,6 +78,7 @@ describe("storePhotoForProject", () => {
 
   it("rolls the photo back when the context entry can't be written", async () => {
     const { tenantDb, storage } = wire({ failEntry: true });
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const result = await storePhotoForProject(tenantDb, input);
 
@@ -88,6 +89,10 @@ describe("storePhotoForProject", () => {
     expect(await tenantDb.listPhotos(PROJECT)).toHaveLength(0);
     expect(await tenantDb.listContextEntries(PROJECT)).toHaveLength(0);
     expect(storage.keys()).toHaveLength(0);
+    // The user gets one plain sentence, but the real cause is never swallowed: without this,
+    // a bucket-policy rejection and a flaky signal look identical in production.
+    expect(logged).toHaveBeenCalledWith(expect.stringContaining("job context failed"), expect.any(Error));
+    logged.mockRestore();
   });
 
   it("reports a plain failure when storage isn't configured, writing nothing", async () => {
@@ -97,10 +102,62 @@ describe("storePhotoForProject", () => {
       photos: createMemoryPhotoBackend(),
       context,
     });
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const result = await storePhotoForProject(tenantDb, input);
 
     expect(result.ok).toBe(false);
     expect(await tenantDb.listContextEntries(PROJECT)).toHaveLength(0);
+    expect(logged).toHaveBeenCalled();
+    logged.mockRestore();
+  });
+});
+
+describe("deletePhotoForProject", () => {
+  it("removes the row, both objects, and the photo entry that cited it", async () => {
+    const { tenantDb, storage } = wire();
+    const stored = await storePhotoForProject(tenantDb, input);
+    expect(stored.ok).toBe(true);
+    if (!stored.ok) return;
+
+    const result = await deletePhotoForProject(tenantDb, PROJECT, stored.photo.id);
+
+    expect(result.ok).toBe(true);
+    expect(await tenantDb.listPhotos(PROJECT)).toHaveLength(0);
+    expect(storage.keys()).toHaveLength(0);
+    // The job's memory must not keep citing a storage key whose bytes are gone — deleting a
+    // photo is often a privacy action, and a dangling entry would defeat it.
+    expect(await tenantDb.listContextEntries(PROJECT)).toHaveLength(0);
+  });
+
+  it("leaves other photos and unrelated entries alone", async () => {
+    const { tenantDb } = wire();
+    const keep = await storePhotoForProject(tenantDb, input);
+    const drop = await storePhotoForProject(tenantDb, input);
+    await tenantDb.addContextEntry({
+      projectId: PROJECT,
+      kind: "fact",
+      payload: { label: "Access", value: "Gate code 1234" },
+    });
+    expect(keep.ok && drop.ok).toBe(true);
+    if (!keep.ok || !drop.ok) return;
+
+    await deletePhotoForProject(tenantDb, PROJECT, drop.photo.id);
+
+    const photos = await tenantDb.listPhotos(PROJECT);
+    expect(photos.map((p) => p.id)).toEqual([keep.photo.id]);
+
+    const entries = await tenantDb.listContextEntries(PROJECT);
+    expect(entries).toHaveLength(2);
+    expect(entries.filter((e) => e.kind === "photo")).toHaveLength(1);
+    expect(entries.find((e) => e.kind === "photo")?.payload).toEqual({
+      storageKey: keep.photo.storageKey,
+    });
+  });
+
+  it("reports not-found for another business's photo id", async () => {
+    const { tenantDb } = wire();
+    const result = await deletePhotoForProject(tenantDb, PROJECT, "someone-elses-photo");
+    expect(result).toEqual({ ok: false, error: "Photo not found." });
   });
 });

@@ -18,6 +18,15 @@
  * server because a client can always lie.
  */
 
+/**
+ * The private bucket job photos live in. **Not configurable**: the `storage.objects` policy that
+ * enforces the `business_id` key prefix is written against this exact bucket id, so pointing the
+ * app at a different bucket would silently leave it outside that policy — the app-layer prefix
+ * check would become the only thing between one tenant's photos and another's. One name, in one
+ * place, matching the migration that creates the bucket and its policy.
+ */
+export const PHOTO_BUCKET = "job-photos";
+
 /** Image types the server accepts. The uploader normally re-encodes to JPEG; PNG and WebP are
  * accepted so a direct post of a legitimate image isn't rejected for its container. */
 export const ACCEPTED_CONTENT_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
@@ -42,8 +51,17 @@ export const MAX_LONG_EDGE_PX = 1568;
  * downloads full-size images. */
 export const THUMB_LONG_EDGE_PX = 400;
 
-/** How long a signed photo URL stays valid. Short: a signed URL is a bearer link. */
+/**
+ * How long a signed photo URL stays valid. Short, because a signed URL is a bearer link. This
+ * is safe for images the browser fetches during render (a thumbnail grid); a URL the *user*
+ * follows later must be signed **on demand**, not at render time, or it expires before the tap
+ * — see {@link SIGNED_URL_TTL_SECONDS_ON_DEMAND}.
+ */
 export const SIGNED_URL_TTL_SECONDS = 60;
+
+/** TTL for a URL signed in response to a user action (opening one photo full-size). Long enough
+ * to load and look at the photo, still short enough that a leaked link dies quickly. */
+export const SIGNED_URL_TTL_SECONDS_ON_DEMAND = 300;
 
 /** True when `value` is a content type we accept. */
 export function isAcceptedContentType(value: string): value is AcceptedContentType {
