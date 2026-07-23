@@ -14,18 +14,18 @@
  */
 
 import { WEB_SEARCH_TOOL } from "../../ai";
-import { readResult } from "../../ai";
 import { type ContextEntryView, type ProjectSnapshot } from "../../context";
 import { type ProposedSuggestion, type Tool } from "../contract";
 import {
   inputSchema,
+  type MaterialResult,
   materialResultSchema,
   outputSchema,
   type MaterialFinderInput,
   type MaterialFinderOutput,
   type MaterialNeed,
 } from "./schema";
-import { searchOptionSuggestions } from "./suggestions";
+import { isSourceUrl, searchOptionSuggestions } from "./suggestions";
 
 /** A compact, read-only description of the job for the search prompt (materials/findings the
  * job already knows about bias the search toward the right products). */
@@ -68,7 +68,7 @@ const SYSTEM = [
 function summarize(needs: readonly MaterialNeed[]): string {
   if (needs.length === 0) return "No sourced materials were found. Try a more specific search, or add one by hand.";
   const blocks = needs.map((n) => {
-    const sourced = n.options.filter((o) => (o.sourceUrl ?? "") !== "");
+    const sourced = n.options.filter((o) => isSourceUrl(o.sourceUrl));
     if (sourced.length === 0) return `**${n.need}**: no sourced options found.`;
     const lines = sourced.map((o) => {
       const price = `$${(o.priceCents / 100).toFixed(2)}/${o.unit}`;
@@ -98,10 +98,12 @@ export const materialFinderTool: Tool<MaterialFinderInput, MaterialFinderOutput>
       serverTools: [WEB_SEARCH_TOOL],
       resultSchema: materialResultSchema,
     });
-    const result = readResult(response, materialResultSchema);
+    // The port already validated `result` against `materialResultSchema` (mock and real impl
+    // both parse it), so read it directly rather than re-parsing the same value here.
+    const result = response.result as MaterialResult;
 
-    // Each sourced option → a suggestion (line item when there's an active estimate, else a
-    // context entry). Unsourced options are dropped by `searchOptionSuggestions`.
+    // Each sourced option → its suggestions (a `material` context entry carrying the source, plus
+    // a line item when there's an active estimate). Unsourced options are dropped.
     const suggestions: ProposedSuggestion[] = [];
     for (const need of result.needs) {
       for (const option of need.options) {
@@ -113,7 +115,7 @@ export const materialFinderTool: Tool<MaterialFinderInput, MaterialFinderOutput>
     const output: MaterialFinderOutput = {
       needs: result.needs.map((n) => ({
         need: n.need,
-        options: n.options.filter((o) => (o.sourceUrl ?? "") !== ""),
+        options: n.options.filter((o) => isSourceUrl(o.sourceUrl)),
       })),
     };
 

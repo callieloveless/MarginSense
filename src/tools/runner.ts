@@ -110,8 +110,10 @@ function stableStringify(value: unknown): string {
     .join(",")}}`;
 }
 
-/** The dedup key for a suggestion: target + target estimate + canonical payload. */
-function suggestionKey(s: PendingSuggestionKey): string {
+/** The dedup key for a suggestion: target + target estimate + canonical payload. Exported so a
+ * non-dispatch path (e.g. Material Finder's manual add) can dedup against the pending queue with
+ * the exact same key the runner uses. */
+export function suggestionKey(s: PendingSuggestionKey): string {
   return `${s.target}|${s.targetEstimateId ?? ""}|${stableStringify(s.payload)}`;
 }
 

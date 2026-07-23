@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getServerSession, tenantDbForSession } from "@/src/db/session";
-import { dispatch } from "@/src/tools";
+import { dispatch, suggestionKey } from "@/src/tools";
 import {
   manualMaterialSchema,
   manualMaterialSuggestions,
@@ -10,17 +10,11 @@ import {
   type MaterialFinderInput,
 } from "@/src/tools";
 import { resolveModelPort } from "@/src/ai";
+import { dollarsToCents } from "@/src/db/validation";
 import { dispatchDeps } from "@/app/_lib/tool-runner";
 import { assembleProjectSnapshot } from "@/app/_lib/project-snapshot";
 
 export type MaterialActionResult = { ok: true; message: string } | { ok: false; error: string };
-
-/** Cents from a human dollar string ("$3.87" → 387), or null if not a non-negative amount. */
-function dollarsToCents(raw: string): number | null {
-  const n = Number(raw.replace(/[$,\s]/g, ""));
-  if (!Number.isFinite(n) || n < 0) return null;
-  return Math.round(n * 100);
-}
 
 /** Revalidate the surfaces a new pending suggestion shows up on. */
 function revalidate(projectId: string): void {
@@ -116,10 +110,22 @@ export async function addMaterialAction(
   if (!project) return { ok: false, error: "Project not found." };
 
   // The active estimate id decides whether the material also proposes a line item (P2 preview).
-  const snapshot = await assembleProjectSnapshot(tenantDb, projectId);
-  const suggestions = manualMaterialSuggestions(parsed.data, snapshot.activeEstimateId);
+  const [snapshot, pending] = await Promise.all([
+    assembleProjectSnapshot(tenantDb, projectId),
+    tenantDb.listPendingSuggestions(projectId),
+  ]);
 
+  // Dedup against the pending queue with the runner's exact key, so hand-adding the same material
+  // twice doesn't stack duplicate cards (matching how a search dedups).
+  const seen = new Set(
+    pending.map((p) => suggestionKey({ target: p.target, targetEstimateId: p.targetEstimateId, payload: p.payload })),
+  );
+  const suggestions = manualMaterialSuggestions(parsed.data, snapshot.activeEstimateId);
+  let created = 0;
   for (const s of suggestions) {
+    const key = suggestionKey({ target: s.target, targetEstimateId: s.targetEstimateId ?? null, payload: s.payload });
+    if (seen.has(key)) continue;
+    seen.add(key);
     await tenantDb.createSuggestion({
       projectId,
       target: s.target,
@@ -127,9 +133,13 @@ export async function addMaterialAction(
       targetEstimateId: s.targetEstimateId ?? null,
       author: "user",
     });
+    created++;
   }
 
   revalidate(projectId);
+  if (created === 0) {
+    return { ok: true, message: `"${parsed.data.name}" is already waiting in the queue — nothing added.` };
+  }
   const line = snapshot.activeEstimateId ? " and a line item on the active estimate" : "";
   return { ok: true, message: `Added "${parsed.data.name}" as a pending material${line}. Accept it to commit.` };
 }

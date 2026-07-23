@@ -90,12 +90,21 @@ describe("Material Finder — search proposes comparable, sourced options", () =
     const { deps, suggestions, messages } = makeDeps(ESTIMATE_ID);
     const outcome = await dispatch(queryReq, deps);
 
-    // 2 sourced studs + 1 adhesive = 3; the unsourced stud is dropped.
-    expect(outcome.createdSuggestionIds).toHaveLength(3);
-    expect(suggestions).toHaveLength(3);
-    for (const s of suggestions) {
-      expect(s).toMatchObject({ target: "estimate_line_item", targetEstimateId: ESTIMATE_ID });
+    // 3 sourced options (2 studs + 1 adhesive; the unsourced stud is dropped). Each carries a
+    // `material` context entry (name/price/unit/supplier/source) AND a line item on the estimate.
+    expect(outcome.createdSuggestionIds).toHaveLength(6);
+    const lineItems = suggestions.filter((s) => s.target === "estimate_line_item");
+    const contexts = suggestions.filter((s) => s.target === "context_entry");
+    expect(lineItems).toHaveLength(3);
+    expect(contexts).toHaveLength(3);
+    for (const s of lineItems) {
+      expect(s).toMatchObject({ targetEstimateId: ESTIMATE_ID });
       expect((s.payload as { category: string }).category).toBe("material");
+    }
+    // Each option keeps its source on the context entry (traceable after accept).
+    for (const s of contexts) {
+      const inner = (s.payload as { payload: { sourceUrl?: string } }).payload;
+      expect(inner.sourceUrl).toMatch(/^https?:\/\//);
     }
     // The post carries the source links + a verify note.
     const body = String(messages[0]?.body ?? "");
@@ -120,8 +129,10 @@ describe("Material Finder — search proposes comparable, sourced options", () =
       { toolName: "material-finder", projectId: "p1", input: { mode: "estimate" } },
       deps,
     );
-    expect(outcome.createdSuggestionIds).toHaveLength(3);
-    expect(suggestions.every((s) => s.target === "estimate_line_item")).toBe(true);
+    // 3 sourced options × (context entry + line item) = 6.
+    expect(outcome.createdSuggestionIds).toHaveLength(6);
+    expect(suggestions.filter((s) => s.target === "estimate_line_item")).toHaveLength(3);
+    expect(suggestions.filter((s) => s.target === "context_entry")).toHaveLength(3);
   });
 
   it("never proposes an unsourced price (the third stud is dropped from output too)", async () => {
@@ -143,14 +154,20 @@ describe("Material Finder — search proposes comparable, sourced options", () =
     const { deps, suggestions } = makeDeps(ESTIMATE_ID, [already]);
     const outcome = await dispatch(queryReq, deps);
 
+    // Only the duplicate stud LINE ITEM is skipped; its context entry and the other options remain.
     expect(outcome.skippedDuplicates).toBe(1);
-    expect(suggestions).toHaveLength(2); // the duplicate stud is not restacked
+    expect(suggestions).toHaveLength(5);
   });
 });
 
 describe("Material Finder — option → suggestion mapping", () => {
   it("drops an option with no source", () => {
     expect(searchOptionSuggestions({ name: "x", priceCents: 100, unit: "each" }, ESTIMATE_ID)).toEqual([]);
+  });
+
+  it("drops an option whose source is not a real URL (never a price it cannot source)", () => {
+    const bogus = { name: "x", priceCents: 100, unit: "each", sourceUrl: "see catalog" };
+    expect(searchOptionSuggestions(bogus, ESTIMATE_ID)).toEqual([]);
   });
 
   it("a hand-added material is always a context entry, plus a line when there's an estimate", () => {

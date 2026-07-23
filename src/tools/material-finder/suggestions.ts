@@ -8,10 +8,12 @@
  * - An `estimate_line_item` (`category: "material"`, quantity 1 at the found unit price) targets
  *   the active estimate so its profit-per-hour impact previews (P2) before the user accepts.
  *
- * Search and manual add differ deliberately (see the spec): a **search option** is EITHER a line
- * (when there's an active estimate — so options compare by EPH) OR a context entry (when there
- * isn't); a **hand-added** material is always a context entry, PLUS a line when there's an active
- * estimate. Nothing here commits — every value is a `pending` proposal (§5).
+ * A material — searched or hand-added — is always proposed as a `material` **context entry**
+ * (which carries name, price, unit, supplier, AND source, per the spec) and, when there's an
+ * active estimate, ALSO as an `estimate_line_item` so its profit-per-hour impact previews (P2).
+ * The two are the same shape; only the source rule differs — a searched option needs a valid
+ * source URL (§7: never propose a price it cannot source), a hand-added one does not (the user
+ * is the source). Nothing here commits — every value is a `pending` proposal (§5).
  */
 
 import { type ProposedSuggestion } from "../contract";
@@ -24,6 +26,26 @@ interface MaterialFields {
   readonly unit: string;
   readonly supplier?: string | undefined;
   readonly sourceUrl?: string | undefined;
+}
+
+/** True when `s` is a usable http(s) source URL — a non-URL string (e.g. "see catalog") is not a
+ * source (§7), so it must not qualify an option as sourced. */
+export function isSourceUrl(s: string | undefined): s is string {
+  if (s === undefined || s === "") return false;
+  try {
+    const u = new URL(s);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+/** A material → its suggestions: a context entry always, plus a line item when there's an active
+ * estimate. The single shape both searched and hand-added materials share. */
+function materialSuggestions(m: MaterialFields, activeEstimateId: string | null): ProposedSuggestion[] {
+  const out: ProposedSuggestion[] = [materialContextSuggestion(m)];
+  if (activeEstimateId) out.push(materialLineSuggestion(m, activeEstimateId));
+  return out;
 }
 
 /** A `material` context-entry suggestion carrying the material as a fact (with its source). */
@@ -50,29 +72,25 @@ export function materialLineSuggestion(m: MaterialFields, estimateId: string): P
 }
 
 /**
- * Suggestions for one **searched** option: a line item when there's an active estimate (so the
- * comparison is a profit-per-hour comparison), otherwise a single context entry. An option with
- * no `sourceUrl` yields nothing — no unsourced price is ever proposed (§7).
+ * Suggestions for one **searched** option: the shared material shape (context entry carrying the
+ * source, plus a line item when there's an active estimate). An option without a valid source URL
+ * yields nothing — no unsourced price is ever proposed (§7).
  */
 export function searchOptionSuggestions(
   option: MaterialOption,
   activeEstimateId: string | null,
 ): ProposedSuggestion[] {
-  if (option.sourceUrl === undefined || option.sourceUrl === "") return [];
-  return activeEstimateId
-    ? [materialLineSuggestion(option, activeEstimateId)]
-    : [materialContextSuggestion(option)];
+  if (!isSourceUrl(option.sourceUrl)) return [];
+  return materialSuggestions(option, activeEstimateId);
 }
 
 /**
- * Suggestions for a **hand-added** material: always a context entry, plus a line item when there
- * is an active estimate. No model, no source required — the user is the source.
+ * Suggestions for a **hand-added** material: the same shared shape. No model, no source required
+ * — the user is the source.
  */
 export function manualMaterialSuggestions(
   material: ManualMaterial,
   activeEstimateId: string | null,
 ): ProposedSuggestion[] {
-  const suggestions: ProposedSuggestion[] = [materialContextSuggestion(material)];
-  if (activeEstimateId) suggestions.push(materialLineSuggestion(material, activeEstimateId));
-  return suggestions;
+  return materialSuggestions(material, activeEstimateId);
 }

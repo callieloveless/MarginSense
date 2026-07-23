@@ -93,28 +93,23 @@ export function createAnthropicModelPort(): ModelPort {
         messages[messages.length - 1] = { role: last.role, content: blocks };
       }
 
-      // One call; loop only to resume a server-tool `pause_turn` (web search iteration cap).
-      let response = await client.messages.create({
+      // Shared request params (identical across the initial call and every pause_turn resume) —
+      // spread with the current `messages` so the two calls can never silently diverge.
+      const baseParams = {
         model,
         max_tokens: request.maxTokens ?? AI_DEFAULTS.maxTokens,
-        thinking: { type: "adaptive" },
+        thinking: { type: "adaptive" } as const,
         output_config: { effort: request.effort ?? AI_DEFAULTS.effort },
         ...(request.system ? { system: request.system } : {}),
         ...(tools.length > 0 ? { tools } : {}),
-        messages,
-      });
+      };
+
+      // One call; loop only to resume a server-tool `pause_turn` (web search iteration cap).
+      let response = await client.messages.create({ ...baseParams, messages });
       let guard = 0;
       while (response.stop_reason === "pause_turn" && guard++ < 5) {
         messages.push({ role: "assistant", content: response.content });
-        response = await client.messages.create({
-          model,
-          max_tokens: request.maxTokens ?? AI_DEFAULTS.maxTokens,
-          thinking: { type: "adaptive" },
-          output_config: { effort: request.effort ?? AI_DEFAULTS.effort },
-          ...(request.system ? { system: request.system } : {}),
-          ...(tools.length > 0 ? { tools } : {}),
-          messages,
-        });
+        response = await client.messages.create({ ...baseParams, messages });
       }
 
       // Extract text, the result-tool call, and citations from the final content.
@@ -136,12 +131,14 @@ export function createAnthropicModelPort(): ModelPort {
         }
       }
 
-      const result = request.resultSchema ? request.resultSchema.parse(rawResult) : undefined;
+      // Check for the missing result BEFORE parsing — otherwise `parse(undefined)` throws a raw
+      // ZodError first and this clear, actionable message never surfaces.
       if (request.resultSchema && rawResult === undefined) {
         throw new Error(
           `The model did not return a "${RESULT_TOOL_NAME}" structured result (stop_reason: ${response.stop_reason}).`,
         );
       }
+      const result = request.resultSchema ? request.resultSchema.parse(rawResult) : undefined;
 
       return {
         text: outputBlocks.map((b) => b.text).join(""),
