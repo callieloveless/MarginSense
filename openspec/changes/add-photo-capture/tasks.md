@@ -1,51 +1,51 @@
 ## 1. Stage A — the photo domain module (pure, no framework/DB)
 
-- [ ] 1.1 Create `src/photos/photos.ts`: accepted content types (`image/jpeg`, `image/png`,
+- [x] 1.1 Create `src/photos/photos.ts`: accepted content types (`image/jpeg`, `image/png`,
       `image/webp`), `MAX_UPLOAD_BYTES`, `MAX_LONG_EDGE_PX` (1568) and `THUMB_LONG_EDGE_PX`
       (400) as named constants — one home, no magic numbers scattered in UI or actions.
-- [ ] 1.2 Add pure `photoObjectKey(businessId, projectId, photoId)` and
+- [x] 1.2 Add pure `photoObjectKey(businessId, projectId, photoId)` and
       `photoThumbKey(...)` deriving `"{business}/{project}/{photo}.jpg"` — the only place a key
       is built, so the tenant prefix can never come from input.
-- [ ] 1.3 Add `validateUpload({ contentType, byteSize })` returning a typed ok/error result with
+- [x] 1.3 Add `validateUpload({ contentType, byteSize })` returning a typed ok/error result with
       plain-language messages, plus `scaledDimensions(w, h, longEdge)` for the client resizer.
-- [ ] 1.4 Export from `src/photos/index.ts`; keep the module free of Next/Drizzle/Supabase
+- [x] 1.4 Export from `src/photos/index.ts`; keep the module free of Next/Drizzle/Supabase
       imports (schema **types only** if needed) so it stays unit-testable in isolation.
-- [ ] 1.5 Unit-test `src/photos/photos.test.ts`: key derivation (including that a caller-supplied
+- [x] 1.5 Unit-test `src/photos/photos.test.ts`: key derivation (including that a caller-supplied
       key or business id is ignored), accepted/rejected content types, the size cap boundary, and
       `scaledDimensions` (landscape, portrait, square, already-small = unchanged).
 
 ## 2. Stage A — persistence: table, migration, RLS
 
-- [ ] 2.1 Add `projectPhotos` to `src/db/schema.ts`: non-null `business_id` + `project_id`,
+- [x] 2.1 Add `projectPhotos` to `src/db/schema.ts`: non-null `business_id` + `project_id`,
       `storage_key`, `thumb_key`, `content_type`, `byte_size`, `width`, `height`, nullable
       `caption`, `uploaded_by` (users), timestamps; export `ProjectPhotoRow` /
       `NewProjectPhotoRow`.
-- [ ] 2.2 `npm run db:generate` → migration `0007_*`; **hand-append the RLS block** mirroring
+- [x] 2.2 `npm run db:generate` → migration `0007_*`; **hand-append the RLS block** mirroring
       `0000`: enable RLS, a per-business `FOR ALL` policy keyed on
       `public.current_business_id()` (USING + WITH CHECK), and `GRANT … TO authenticated`.
-- [ ] 2.3 Hand-append the storage block to `0007`: idempotent private-bucket insert and a
+- [x] 2.3 Hand-append the storage block to `0007`: idempotent private-bucket insert and a
       `storage.objects` policy restricting the bucket to
       `(storage.foldername(name))[1] = public.current_business_id()::text`, with a comment
       noting the dashboard fallback if the migration role cannot create it.
-- [ ] 2.4 Add `PhotoBackend` (rows: `listByProject`, `getById`, `insert`, `updateCaption`,
+- [x] 2.4 Add `PhotoBackend` (rows: `listByProject`, `getById`, `insert`, `updateCaption`,
       `deleteById`) and `PhotoStorageBackend` (objects: `putObject`, `signedUrl`,
       `deleteObject`) to `src/db/tenant.ts` — every method taking `businessId` — as optional
       entries on `TenantBackends` with private `#photos` / `#photoStorage` getters that throw
       when unwired.
-- [ ] 2.5 Add the `TenantDb` methods that always pass the bound business id: `listPhotos`,
+- [x] 2.5 Add the `TenantDb` methods that always pass the bound business id: `listPhotos`,
       `getPhoto`, `addPhoto`, `setPhotoCaption`, `deletePhoto`, `signedPhotoUrls` — each
       deriving the storage key from `src/photos/` rather than accepting one.
-- [ ] 2.6 Add `createMemoryPhotoBackend` + `createMemoryPhotoStorageBackend` in `tenant.ts` over
+- [x] 2.6 Add `createMemoryPhotoBackend` + `createMemoryPhotoStorageBackend` in `tenant.ts` over
       shared cross-tenant arrays/maps (mirroring the other memory backends) so isolation tests
       have something to prove against.
-- [ ] 2.7 Add the Drizzle `PhotoBackend` impl in `src/db/drizzle-backend.ts` running inside
+- [x] 2.7 Add the Drizzle `PhotoBackend` impl in `src/db/drizzle-backend.ts` running inside
       `withAuthenticatedTx` so RLS applies.
-- [ ] 2.8 Add `src/db/photo-storage.ts`: the Supabase Storage impl over the **session-scoped SSR
+- [x] 2.8 Add `src/db/photo-storage.ts`: the Supabase Storage impl over the **session-scoped SSR
       client** (never the service-role key) + `resolvePhotoStorage()` returning
       `configured | unconfigured`, mirroring `resolveModelPort()`; add the bucket env var to
       `.env.example`.
-- [ ] 2.9 Wire both backends in `src/db/session.ts`, leaving storage unwired when unconfigured.
-- [ ] 2.10 Tenant-isolation tests in `src/db/photos.test.ts`: business A cannot list, read, sign,
+- [x] 2.9 Wire both backends in `src/db/session.ts`, leaving storage unwired when unconfigured.
+- [x] 2.10 Tenant-isolation tests in `src/db/photos.test.ts`: business A cannot list, read, sign,
       caption, or delete business B's photo; `business_id` and the storage key prefix are stamped
       from the handle even when input supplies them; deleting removes both objects.
 

@@ -50,6 +50,13 @@
       "when": 1784842509842,
       "tag": "0006_lyrical_catseye",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1784847892024,
+      "tag": "0007_burly_quicksilver",
+      "breakpoints": true
     }
   ]
 }

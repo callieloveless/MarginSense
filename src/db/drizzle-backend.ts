@@ -14,6 +14,7 @@ import {
   estimates,
   lineItems,
   overheadItems,
+  projectPhotos,
   projects,
   suggestions,
   toolRuns,
@@ -25,6 +26,7 @@ import type {
   ContextBackend,
   EstimateBackend,
   EstimatePatch,
+  PhotoBackend,
   ProjectBackend,
   SettingsBackend,
   ToolRunsBackend,
@@ -411,6 +413,67 @@ export function createDrizzleToolRunsBackend(db: Db, authUserId: string): ToolRu
           .where(and(eq(toolRuns.id, id), eq(toolRuns.businessId, businessId)))
           .returning();
         return updated[0] ?? null;
+      });
+    },
+  };
+}
+
+/**
+ * The production {@link PhotoBackend} (add-photo-capture): rows only — the bytes live in
+ * Supabase Storage behind `PhotoStorageBackend`. Like the others it runs inside
+ * `withAuthenticatedTx`, so the app-layer `business_id` predicate and the table's RLS policy
+ * both apply. `uploaded_by_auth_id` is stamped from the identity this backend is bound to,
+ * which is why the port's insert type omits it — a caller cannot claim to be someone else.
+ */
+export function createDrizzlePhotoBackend(db: Db, authUserId: string): PhotoBackend {
+  return {
+    listByProject(businessId: BusinessId, projectId: string) {
+      return withAuthenticatedTx(db, authUserId, (tx) =>
+        tx
+          .select()
+          .from(projectPhotos)
+          .where(
+            and(eq(projectPhotos.projectId, projectId), eq(projectPhotos.businessId, businessId)),
+          )
+          .orderBy(desc(projectPhotos.createdAt)),
+      );
+    },
+    getById(businessId: BusinessId, id: string) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const found = await tx
+          .select()
+          .from(projectPhotos)
+          .where(and(eq(projectPhotos.id, id), eq(projectPhotos.businessId, businessId)))
+          .limit(1);
+        return found[0] ?? null;
+      });
+    },
+    insert(row) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const inserted = await tx
+          .insert(projectPhotos)
+          .values({ ...row, uploadedByAuthId: authUserId })
+          .returning();
+        return inserted[0]!;
+      });
+    },
+    updateCaption(businessId: BusinessId, id: string, caption: string | null) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const updated = await tx
+          .update(projectPhotos)
+          .set({ caption, updatedAt: new Date() })
+          .where(and(eq(projectPhotos.id, id), eq(projectPhotos.businessId, businessId)))
+          .returning();
+        return updated[0] ?? null;
+      });
+    },
+    deleteById(businessId: BusinessId, id: string) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const deleted = await tx
+          .delete(projectPhotos)
+          .where(and(eq(projectPhotos.id, id), eq(projectPhotos.businessId, businessId)))
+          .returning();
+        return deleted[0] ?? null;
       });
     },
   };

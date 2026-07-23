@@ -16,10 +16,12 @@ import { businessIdForAuthUser } from "./rls";
 import {
   createDrizzleContextBackend,
   createDrizzleEstimateBackend,
+  createDrizzlePhotoBackend,
   createDrizzleProjectBackend,
   createDrizzleSettingsBackend,
   createDrizzleToolRunsBackend,
 } from "./drizzle-backend";
+import { resolvePhotoStorage } from "./photo-storage";
 import { resolveBusinessId, type AuthSession } from "./auth";
 import { createTenantDb, type BusinessId, type TenantDb } from "./tenant";
 
@@ -82,11 +84,17 @@ export async function getServerSession(): Promise<ServerSession> {
  */
 export function tenantDbForSession(authUserId: string, businessId: BusinessId): TenantDb {
   const db = getDb();
+  // Object storage is optional: when Supabase Storage isn't configured the handle simply has no
+  // photo-storage backend and `tenantDb.hasPhotoStorage` is false, so the job surface renders a
+  // "connect storage" state instead of throwing (add-photo-capture).
+  const storage = resolvePhotoStorage();
   return createTenantDb(businessId, {
     projects: createDrizzleProjectBackend(db, authUserId),
     settings: createDrizzleSettingsBackend(db, authUserId),
     estimates: createDrizzleEstimateBackend(db, authUserId),
     context: createDrizzleContextBackend(db, authUserId),
     toolRuns: createDrizzleToolRunsBackend(db, authUserId),
+    photos: createDrizzlePhotoBackend(db, authUserId),
+    ...(storage.status === "configured" ? { photoStorage: storage.backend } : {}),
   });
 }

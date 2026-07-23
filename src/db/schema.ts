@@ -342,6 +342,39 @@ export const toolRuns = pgTable("tool_runs", {
   completedAt: timestamp("completed_at", { withTimezone: true }),
 });
 
+/**
+ * A job photo (add-photo-capture). The **row** is the record; the **bytes** live in a private
+ * storage bucket under a `business_id/project_id/…` key (`src/photos/`), so a photo is isolated
+ * twice: this table's RLS policy, and a `storage.objects` policy on the same first key segment.
+ * `storage_key` is unique — one object, one row. Dimensions and byte size are of what was
+ * actually stored (the client downscales and re-encodes, which also strips EXIF/GPS — §7), not
+ * of the original on the phone. `uploaded_by_auth_id` is stamped by the backend from the
+ * signed-in identity, never accepted from input.
+ */
+export const projectPhotos = pgTable("project_photos", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id")
+    .notNull()
+    .references(() => businesses.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  /** Object key of the full-size image, derived by `src/photos/photoObjectKey`. */
+  storageKey: text("storage_key").notNull().unique(),
+  /** Object key of the thumbnail produced in the same client-side pass. */
+  thumbKey: text("thumb_key").notNull(),
+  contentType: text("content_type").notNull(),
+  byteSize: integer("byte_size").notNull(),
+  width: integer("width").notNull(),
+  height: integer("height").notNull(),
+  /** The owner's short note on the photo ("joist under the tub"); null until set. */
+  caption: text("caption"),
+  /** The Supabase Auth identity that uploaded it (matches `users.auth_id`); null if unknown. */
+  uploadedByAuthId: uuid("uploaded_by_auth_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type BusinessRow = typeof businesses.$inferSelect;
 export type NewBusinessRow = typeof businesses.$inferInsert;
 export type UserRow = typeof users.$inferSelect;
@@ -364,6 +397,8 @@ export type SuggestionRow = typeof suggestions.$inferSelect;
 export type NewSuggestionRow = typeof suggestions.$inferInsert;
 export type ToolRunRow = typeof toolRuns.$inferSelect;
 export type NewToolRunRow = typeof toolRuns.$inferInsert;
+export type ProjectPhotoRow = typeof projectPhotos.$inferSelect;
+export type NewProjectPhotoRow = typeof projectPhotos.$inferInsert;
 
 /** Valid context-entry kinds, for boundary validation. */
 export const CONTEXT_ENTRY_KINDS = [

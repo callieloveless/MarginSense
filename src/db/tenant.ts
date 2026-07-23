@@ -14,6 +14,12 @@
  * own bound `businessId` — never one from input.
  */
 
+import {
+  keyBelongsToBusiness,
+  photoObjectKey,
+  photoThumbKey,
+  SIGNED_URL_TTL_SECONDS,
+} from "../photos";
 import type {
   BusinessSettingsRow,
   ContextEntryKindName,
@@ -28,10 +34,12 @@ import type {
   NewEstimateRow,
   NewLineItemRow,
   NewOverheadItemRow,
+  NewProjectPhotoRow,
   NewProjectRow,
   NewSuggestionRow,
   NewToolRunRow,
   OverheadItemRow,
+  ProjectPhotoRow,
   ProjectRow,
   ProjectStatus,
   SuggestionRow,
@@ -278,6 +286,56 @@ export interface ToolRunsBackend {
   ): Promise<ToolRunRow | null>;
 }
 
+/** What a caller supplies to store a photo (add-photo-capture). Notably absent: `business_id`,
+ * the storage keys, and the uploader — all stamped downstream, never accepted from input. The
+ * bytes are what the client already downscaled and re-encoded (EXIF/GPS stripped, §7). */
+export interface PhotoUploadInput {
+  projectId: string;
+  contentType: string;
+  bytes: Uint8Array;
+  thumbBytes: Uint8Array;
+  width: number;
+  height: number;
+  caption?: string | null | undefined;
+}
+
+/**
+ * The photo-row port `TenantDb` talks to (add-photo-capture). Like the others, every method
+ * takes `businessId` explicitly and only `TenantDb` calls it, always with its own bound id.
+ * `insert` receives a row whose keys were derived from `src/photos/`; the real backend also
+ * stamps the signed-in identity as `uploaded_by_auth_id` — which is why the port's row type
+ * omits it, so no caller can claim to be someone else.
+ */
+export interface PhotoBackend {
+  listByProject(businessId: BusinessId, projectId: string): Promise<ProjectPhotoRow[]>;
+  getById(businessId: BusinessId, id: string): Promise<ProjectPhotoRow | null>;
+  insert(row: Omit<NewProjectPhotoRow, "uploadedByAuthId">): Promise<ProjectPhotoRow>;
+  updateCaption(
+    businessId: BusinessId,
+    id: string,
+    caption: string | null,
+  ): Promise<ProjectPhotoRow | null>;
+  /** Delete scoped to the business; returns the deleted row (null if it isn't ours). */
+  deleteById(businessId: BusinessId, id: string): Promise<ProjectPhotoRow | null>;
+}
+
+/**
+ * The object port `TenantDb` talks to — the bytes, which live outside Postgres and therefore
+ * outside RLS. Every method takes `businessId` so the implementation can **refuse a key outside
+ * that business's prefix** before touching storage; the `storage.objects` policy in migration
+ * `0007` enforces the same rule in the database.
+ */
+export interface PhotoStorageBackend {
+  putObject(
+    businessId: BusinessId,
+    input: { key: string; contentType: string; bytes: Uint8Array },
+  ): Promise<void>;
+  /** A short-lived signed URL, or null when the key isn't this business's / doesn't exist. */
+  signedUrl(businessId: BusinessId, key: string, expiresInSeconds: number): Promise<string | null>;
+  /** Delete objects by key; keys outside the business's prefix are ignored. Idempotent. */
+  deleteObjects(businessId: BusinessId, keys: readonly string[]): Promise<void>;
+}
+
 /** Backends a {@link TenantDb} composes. All but `projects` are optional so tests wire just
  * what they exercise; feature code (via `tenantDbForSession`) supplies all. */
 export interface TenantBackends {
@@ -286,6 +344,9 @@ export interface TenantBackends {
   estimates?: EstimateBackend | undefined;
   context?: ContextBackend | undefined;
   toolRuns?: ToolRunsBackend | undefined;
+  photos?: PhotoBackend | undefined;
+  /** Absent when object storage is unconfigured — the surface renders "connect storage". */
+  photoStorage?: PhotoStorageBackend | undefined;
 }
 
 /**
@@ -300,6 +361,8 @@ export class TenantDb {
   readonly #estimates: EstimateBackend | undefined;
   readonly #context: ContextBackend | undefined;
   readonly #toolRuns: ToolRunsBackend | undefined;
+  readonly #photos: PhotoBackend | undefined;
+  readonly #photoStorage: PhotoStorageBackend | undefined;
 
   /** @internal — use {@link createTenantDb}, which requires a business id. */
   constructor(businessId: BusinessId, backends: TenantBackends) {
@@ -312,6 +375,8 @@ export class TenantDb {
     this.#estimates = backends.estimates;
     this.#context = backends.context;
     this.#toolRuns = backends.toolRuns;
+    this.#photos = backends.photos;
+    this.#photoStorage = backends.photoStorage;
   }
 
   /** The settings backend, or a clear error if this handle wasn't wired with one. */
@@ -344,6 +409,28 @@ export class TenantDb {
       throw new Error("TenantDb has no tool-runs backend configured.");
     }
     return this.#toolRuns;
+  }
+
+  /** The photo-row backend, or a clear error if this handle wasn't wired with one. */
+  get #photoBackend(): PhotoBackend {
+    if (!this.#photos) {
+      throw new Error("TenantDb has no photos backend configured.");
+    }
+    return this.#photos;
+  }
+
+  /** The photo-object backend, or a clear error when object storage is unconfigured. Callers
+   * that can degrade should check {@link hasPhotoStorage} first and render "connect storage". */
+  get #photoStorageBackend(): PhotoStorageBackend {
+    if (!this.#photoStorage) {
+      throw new Error("TenantDb has no photo storage configured.");
+    }
+    return this.#photoStorage;
+  }
+
+  /** Whether object storage is wired — the surface renders a "connect storage" state when not. */
+  get hasPhotoStorage(): boolean {
+    return this.#photoStorage !== undefined;
   }
 
   /** List this business's projects. Another tenant's rows can never appear here. */
@@ -594,6 +681,90 @@ export class TenantDb {
       outputTokens: input.outputTokens ?? 0,
       latencyMs: input.latencyMs ?? 0,
     });
+  }
+
+  // --- Job photos (constitution §4, §7; add-photo-capture) -------------------------
+
+  /** This project's photos, scoped to this business. Another tenant's can never appear. */
+  listPhotos(projectId: string): Promise<ProjectPhotoRow[]> {
+    return this.#photoBackend.listByProject(this.businessId, projectId);
+  }
+
+  /** One photo by id, scoped to this business. Null if it isn't ours. */
+  getPhoto(id: string): Promise<ProjectPhotoRow | null> {
+    return this.#photoBackend.getById(this.businessId, id);
+  }
+
+  /**
+   * Store a photo: derive its keys from this handle's business (never from input), write the
+   * full-size object and its thumbnail, then insert the row. If the row insert fails, the
+   * objects just written are deleted before the error propagates — so a failed upload leaves no
+   * row **and** no stray bytes (design §5). The id is generated here so the key and the row
+   * agree.
+   */
+  async addPhoto(input: PhotoUploadInput): Promise<ProjectPhotoRow> {
+    const storage = this.#photoStorageBackend;
+    const photoId = crypto.randomUUID();
+    const storageKey = photoObjectKey(this.businessId, input.projectId, photoId, input.contentType);
+    const thumbKey = photoThumbKey(this.businessId, input.projectId, photoId, input.contentType);
+
+    await storage.putObject(this.businessId, {
+      key: storageKey,
+      contentType: input.contentType,
+      bytes: input.bytes,
+    });
+    try {
+      await storage.putObject(this.businessId, {
+        key: thumbKey,
+        contentType: input.contentType,
+        bytes: input.thumbBytes,
+      });
+      return await this.#photoBackend.insert({
+        id: photoId,
+        businessId: this.businessId,
+        projectId: input.projectId,
+        storageKey,
+        thumbKey,
+        contentType: input.contentType,
+        byteSize: input.bytes.byteLength,
+        width: input.width,
+        height: input.height,
+        caption: input.caption ?? null,
+      });
+    } catch (err) {
+      // Best-effort cleanup; never let it mask the real failure.
+      await storage.deleteObjects(this.businessId, [storageKey, thumbKey]).catch(() => {});
+      throw err;
+    }
+  }
+
+  /** Set (or clear) a photo's caption, scoped to this business. Null if it isn't ours. */
+  setPhotoCaption(id: string, caption: string | null): Promise<ProjectPhotoRow | null> {
+    return this.#photoBackend.updateCaption(this.businessId, id, caption);
+  }
+
+  /**
+   * Delete a photo: its objects first, then its row. That order converges — if the row delete
+   * fails the user can retry (object deletion is idempotent), whereas deleting the row first
+   * would strand bytes nothing points at. Null if the photo isn't ours (a no-op).
+   */
+  async deletePhoto(id: string): Promise<ProjectPhotoRow | null> {
+    const photo = await this.#photoBackend.getById(this.businessId, id);
+    if (!photo) return null;
+    await this.#photoStorageBackend.deleteObjects(this.businessId, [
+      photo.storageKey,
+      photo.thumbKey,
+    ]);
+    return this.#photoBackend.deleteById(this.businessId, id);
+  }
+
+  /**
+   * A short-lived signed URL for one of this business's photo objects (constitution §7 — a
+   * photo is never served from a public URL). Null when the key isn't ours or doesn't exist.
+   */
+  signedPhotoUrl(key: string, expiresInSeconds = SIGNED_URL_TTL_SECONDS): Promise<string | null> {
+    if (!keyBelongsToBusiness(this.businessId, key)) return Promise.resolve(null);
+    return this.#photoStorageBackend.signedUrl(this.businessId, key, expiresInSeconds);
   }
 
   /** Accept a suggestion — the ONLY path that commits its proposed change (server-side, one
@@ -1000,6 +1171,91 @@ export function createMemoryToolRunsBackend(seed: ToolRunRow[] = []): ToolRunsBa
       row.latencyMs = patch.latencyMs;
       row.completedAt = now;
       return row;
+    },
+  };
+}
+
+/**
+ * An in-memory {@link PhotoBackend} over a shared array holding *every* tenant's photo rows —
+ * the condition RLS defends against. A handle bound to A can never read, caption, or delete B's
+ * photos here, which is what the isolation tests assert.
+ */
+export function createMemoryPhotoBackend(seed: ProjectPhotoRow[] = []): PhotoBackend {
+  const rows: ProjectPhotoRow[] = [...seed];
+  let seq = seed.length;
+  const now = new Date(0);
+
+  return {
+    async listByProject(businessId, projectId) {
+      return rows.filter((r) => r.businessId === businessId && r.projectId === projectId);
+    },
+    async getById(businessId, id) {
+      return rows.find((r) => r.id === id && r.businessId === businessId) ?? null;
+    },
+    async insert(row) {
+      const stored: ProjectPhotoRow = {
+        id: row.id ?? `mem-photo-${++seq}`,
+        businessId: row.businessId,
+        projectId: row.projectId,
+        storageKey: row.storageKey,
+        thumbKey: row.thumbKey,
+        contentType: row.contentType,
+        byteSize: row.byteSize,
+        width: row.width,
+        height: row.height,
+        caption: row.caption ?? null,
+        // The real backend stamps the signed-in identity; the memory one has no session.
+        uploadedByAuthId: null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      rows.push(stored);
+      return stored;
+    },
+    async updateCaption(businessId, id, caption) {
+      const row = rows.find((r) => r.id === id && r.businessId === businessId);
+      if (!row) return null;
+      row.caption = caption;
+      return row;
+    },
+    async deleteById(businessId, id) {
+      const i = rows.findIndex((r) => r.id === id && r.businessId === businessId);
+      if (i < 0) return null;
+      return rows.splice(i, 1)[0]!;
+    },
+  };
+}
+
+/**
+ * An in-memory {@link PhotoStorageBackend} over one map holding *every* tenant's objects —
+ * the condition the `storage.objects` policy defends against. It refuses any key outside the
+ * calling business's prefix, exactly as the real impl and the DB policy do, so the isolation
+ * tests can prove cross-tenant object access is impossible without a live bucket.
+ */
+export function createMemoryPhotoStorageBackend(): PhotoStorageBackend & {
+  /** Test helper: the keys currently stored (any tenant). */
+  keys(): string[];
+} {
+  const objects = new Map<string, { contentType: string; bytes: Uint8Array }>();
+
+  return {
+    async putObject(businessId, input) {
+      if (!keyBelongsToBusiness(businessId, input.key)) {
+        throw new Error("Refusing to write an object outside this business's prefix.");
+      }
+      objects.set(input.key, { contentType: input.contentType, bytes: input.bytes });
+    },
+    async signedUrl(businessId, key) {
+      if (!keyBelongsToBusiness(businessId, key)) return null;
+      return objects.has(key) ? `memory://${key}` : null;
+    },
+    async deleteObjects(businessId, keys) {
+      for (const key of keys) {
+        if (keyBelongsToBusiness(businessId, key)) objects.delete(key);
+      }
+    },
+    keys() {
+      return [...objects.keys()];
     },
   };
 }
