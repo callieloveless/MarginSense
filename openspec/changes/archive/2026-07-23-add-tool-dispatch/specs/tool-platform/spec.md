@@ -15,12 +15,12 @@ proposed change is traceable to the run — and cost — that produced it.
 - **WHEN** a tool run has started but not yet completed
 - **THEN** its `tool_run` record exists with a running (non-terminal) status and can be read
 
-#### Scenario: A successful run is finalized and linked
+#### Scenario: A successful run is logged and linked
 - **WHEN** a tool run completes successfully and emits a suggestion and a message
 - **THEN** its `tool_run` is finalized with status `ok`, token usage, latency, and source, and
   the suggestion and message reference that `tool_run`
 
-#### Scenario: A failed run is finalized as error
+#### Scenario: A failed run is still logged
 - **WHEN** a tool's `run` throws, its output fails validation, or its emissions fail to persist
 - **THEN** the `tool_run` is finalized with status `error` and whatever usage and latency
   accrued, and it is never left showing `ok`
