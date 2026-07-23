@@ -1,52 +1,34 @@
-# Design — Material Finder (first real tool) + structured-result AI port
+# Design — Material Finder (first real tool)
 
 ## Context
 
 Material Finder is the first tool that leaves the mock behind in spirit: it web-searches for
-materials, prices, and suppliers and proposes them into the job. Building it forces the shape
-decisions the platform deferred — how the model returns **structured data**, how **citations**
-travel, and how a tool proposes a line at the **active estimate**. It is scoped so #8–#10 copy
-its patterns rather than re-invent them. Live model calls remain **key-gated and deferred**;
-acceptance runs on a mock that returns canned structured materials + citations.
+materials, prices, and suppliers and proposes them into the job. It builds on
+**`add-structured-result-port` (#7a)** — the port capability to return typed data + citations
+in one call — so this change is the tool, its two modes, its comparable options, localization,
+and manual add. It is scoped so #8–#10 copy its patterns. Live model calls remain **key-gated
+and deferred**; acceptance runs on #7a's mock returning canned structured materials + citations.
 
 ## Goals / Non-Goals
 
 **Goals**
-- A `src/ai/` capability to return a **validated, typed result** from a model call, working
-  **together with** server-side web search and citations.
-- The Material Finder tool: query → sourced materials → `material` context-entry +
-  `estimate_line_item` suggestions + a cited conversation post.
+- The Material Finder tool: query-or-whole-estimate search → **comparable, sourced options** →
+  `material` / `estimate_line_item` suggestions + a cited conversation post.
+- **Localization** via the business service area; **manual add** with no model.
 - The **per-tool input UI** pattern; the **citation-as-data** rule; the snapshot exposing the
   **active estimate id** so a tool can target a line at it (lighting up P2's preview).
-- The real `createAnthropicModelPort` written (SDK installed), exercised only behind the key.
 
 **Non-Goals**
-- No live calls in acceptance; no vision/photo/auto-trigger; no `document` target; no new math.
+- No port work (that's #7a); no live calls in acceptance; no vision/photo/auto-trigger; no
+  `document` target; no exclusive pick-one affordance; no inferred quantities; no new math.
 
 ## Decisions
 
-### Structured result via a strict result-tool — NOT `output_config.format`
-The Anthropic API rejects `output_config.format` (JSON schema output) **together with
-citations** (400). Material Finder needs both: typed materials *and* sourced prices. So the
-port's structured-result mechanism is a **strict "result tool"** the model is made to call:
-the request declares a `resultSchema` (Zod), the port turns it into a strict client tool (e.g.
-`record_materials`) alongside the `web_search_20260209` server tool, the model searches then
-calls the result tool with the typed list, and the port validates that tool call's input
-against `resultSchema` and returns it as `response.result`. This composes cleanly with web
-search and with citations (which arrive as `web_search_tool_result` blocks and as each
-material's `sourceUrl`). *Alternative rejected:* `output_config.format` — simpler, but can't
-carry citations, so a sourced price list is impossible in one call.
-
-Port surface (extends #6's `ModelPort`, additive):
-- `ModelRequest.resultSchema?: ZodType<T>` — when present, the model must return a value of
-  this shape via the result tool.
-- `ModelResponse.result?: T` — the validated structured value (undefined when no `resultSchema`).
-- `citations` (already on the response from #6) carry the web-search sources.
-
-The **mock** returns a canned `result` (a few materials, each with a `sourceUrl`) + citations,
-deterministically, ignoring the network. The **real impl** (`createAnthropicModelPort`,
-`@anthropic-ai/sdk`) wires `web_search_20260209` + the strict result tool + `citations`;
-it is constructed only when `ANTHROPIC_API_KEY` is set (resolver unchanged from #6).
+### The structured result comes from #7a
+Material Finder passes a `resultSchema` (the material/option shape) and declares
+`web_search_20260209` on the call; #7a's port returns the validated result + citations. This
+change defines the **schema** (`{ need, options: [{ name, priceCents, unit, supplier?, sourceUrl
+}] }[]`), not the mechanism. Everything below is tool logic over that typed result.
 
 ### The snapshot exposes the active estimate id (so a tool can target a line)
 A tool proposes an `estimate_line_item` suggestion against a specific estimate

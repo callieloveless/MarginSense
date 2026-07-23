@@ -1,18 +1,12 @@
 # Tasks — add-material-finder
 
-## 1. Structured-result AI port (`src/ai/`)
+> **Prerequisite:** `add-structured-result-port` (#7a) — the model port's `resultSchema` /
+> `result` + real Anthropic impl. #7b consumes it; it adds no port work.
 
-- [ ] 1.1 Extend `ModelRequest` with an optional `resultSchema` (Zod) and `ModelResponse` with an
-      optional validated `result`; keep `citations`. Document: obtained via a strict result-tool
-      (not `output_config.format`), so it composes with web search + citations.
-- [ ] 1.2 Mock port: when `resultSchema` is given, return a canned schema-valid `result` (a few
-      needs, each with 2–3 options carrying a `sourceUrl`) + citations, deterministic and offline.
-- [ ] 1.3 Real `createAnthropicModelPort` (`@anthropic-ai/sdk`, installed): wire
-      `web_search_20260209` + a strict result-tool from `resultSchema` + citations; validate the
-      tool-call input against `resultSchema`. Server-only, import-guarded; only behind the key.
-      (Consult the `claude-api` skill before writing this.)
-- [ ] 1.4 Unit tests: mock returns a schema-valid `result` + citations; request carries
-      `resultSchema`; no live call.
+## 1. Material Finder result schema
+
+- [ ] 1.1 Define the port `resultSchema` for a search: `{ need, options: [{ name, priceCents,
+      unit, supplier?, sourceUrl (required) }] }[]`, plus the tool's `inputSchema`/`outputSchema`.
 
 ## 2. Snapshot active estimate id + service area on settings
 

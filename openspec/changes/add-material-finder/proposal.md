@@ -7,23 +7,19 @@ preview (P2) are all in place, but **no real tool exists** — the reference too
 wire. Material Finder is the first tool that does the job the product exists for: it
 **web-searches materials, prices, and suppliers** and proposes them as material **line items**
 and **context entries**, posting findings **with citations** — never a price it can't source
-(§7). It also **locks the shape decisions we deferred**: how the `src/ai/` port returns
-**structured data** (typed materials, not parsed prose), how **citations** travel as data, and
-the **per-tool input UI** #8–#10 copy. And because it emits `estimate_line_item` suggestions, it
-is what finally makes P2's **profit preview render in the app** — you see a proposed material
-move the job's red/yellow/green before you accept.
+(§7). It is the first consumer of **`add-structured-result-port` (#7a)** (typed data + citations
+from the model), and it locks the remaining patterns #8–#10 copy: **citations as data** and the
+**per-tool input UI**. And because it emits `estimate_line_item` suggestions, it is what finally
+makes P2's **profit preview render in the app** — you see a proposed material move the job's
+red/yellow/green before you accept.
 
 ## What Changes
 
-- **`src/ai/` gains a structured-result capability, compatible with web search + citations.**
-  A model call can now return a **validated structured result** (a Zod-typed value), obtained
-  via a **strict "result tool"** the model must call — deliberately *not* `output_config.format`,
-  which the API rejects alongside citations. So a single call can run **server-side web search**
-  (`web_search_20260209`), cite its sources, *and* hand back a typed material list where each
-  material carries its own `sourceUrl`. The mock returns canned structured materials + citations
-  (offline, deterministic); the **real Anthropic implementation is written** here
-  (`createAnthropicModelPort`, `@anthropic-ai/sdk`) but its live calls stay **key-gated and
-  deferred** — acceptance runs on the mock.
+- **Uses the structured-result port from #7a.** Material Finder calls the model with a
+  `resultSchema` and `web_search_20260209` (both delivered by `add-structured-result-port`) to
+  get a **validated material list with citations** in one call — each material carrying its own
+  `sourceUrl`. This change adds no port work; it is #7a's first consumer, tested against the
+  mock (live calls stay key-gated/deferred).
 - **The Material Finder tool** (`src/tools/material-finder/`) with the full initial feature set:
   - **Two search modes** — a **free-text query** (one material need) and **"find everything for
     this estimate"** (derives the needs from the active estimate's scope + lines and searches
@@ -64,28 +60,29 @@ move the job's red/yellow/green before you accept.
   per-tool input surface.
 
 ### Modified Capabilities
-- `tool-platform` — the AI model port gains a **structured-result** capability (a validated,
-  Zod-typed result via a strict result-tool, compatible with server-side web search and
-  citations), and its real Anthropic implementation is wired behind `ANTHROPIC_API_KEY`. Contract,
-  runner, dispatch, dedup, and tool-run requirements are unchanged.
 - `project-context` — the read-only project snapshot gains the **active estimate's id** so a
   tool can target a line-item suggestion at it. Accept/dismiss and isolation are unchanged.
 - `onboarding` — business settings gain an **editable service area** (optional input), edited in
   Settings and read by tools to localize. The financial capture model is unchanged.
 
+> Depends on **`add-structured-result-port` (#7a)** for the model port's structured-result
+> capability (typed data + citations) and its real Anthropic implementation — #7b adds no port
+> work of its own.
+
 ## Impact
 
-- **New code:** `src/tools/material-finder/` (the tool, its I/O schemas, both search modes);
-  `src/ai/` structured-result extension (request `resultSchema`, response `result`) with mock +
-  real impls; the real `createAnthropicModelPort` (web search + result tool + citations) behind
-  the key; `ProjectSnapshot.activeEstimateId`; migration `0006` adding `business_settings.
-  service_area` + a Settings field to edit it; a Material Finder UI surface (query + mode toggle
-  + manual-add form) under `app/(app)/projects/[id]/tools/`; unit tests (options mapped to
-  sourced suggestions; mock returns typed results + citations; manual add with no model; dedup
-  across repeat searches; snapshot carries the active estimate id).
-- **New dependency:** `@anthropic-ai/sdk` (installed now; used only inside the real port impl).
+- **New code:** `src/tools/material-finder/` (the tool, its I/O + result schemas, both search
+  modes); `ProjectSnapshot.activeEstimateId`; migration `0006` adding `business_settings.
+  service_area` + a Settings field to edit it; a manual-add server action (no model); a
+  Material Finder UI surface (query + mode toggle + location + manual-add form) under
+  `app/(app)/projects/[id]/tools/`; unit tests (options mapped to sourced suggestions via the
+  mock port; manual add with no model; dedup across repeat searches; snapshot carries the active
+  estimate id).
+- **No new dependency** (the `@anthropic-ai/sdk` install lives in #7a).
 - **Migration `0006`** — additive: `business_settings.service_area` (nullable text); no RLS
   change (the table's per-business policy already covers it).
+- **Depends on:** `add-structured-result-port` (#7a), `tool-platform` (#6 + P1 dispatch),
+  `project-context` (#5 + P2 preview/card), `estimates` (the line the preview measures against).
 - **Depends on:** `tool-platform` (#6 contract, P1 dispatch/lifecycle), `project-context` (#5
   `material` entries + suggestions; P2 preview + card), `estimates` (the line the preview
   measures against).
