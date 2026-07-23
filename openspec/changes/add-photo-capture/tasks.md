@@ -51,22 +51,22 @@
 
 ## 3. Stage B — the upload path and the event
 
-- [ ] 3.1 Add `app/(app)/projects/[id]/context/photo-actions.ts` with `uploadPhotoAction`:
+- [x] 3.1 Add `app/(app)/projects/[id]/context/photo-actions.ts` with `uploadPhotoAction`:
       resolve the session server-side, re-validate content type + byte size via `src/photos/`,
       generate the photo id, write both objects, insert the row, then add the `photo` context
       entry (`{ storageKey }`) authored by the user — no suggestion, no tool run.
-- [ ] 3.2 Implement the failure path from design §5: if the row or context-entry write fails,
+- [x] 3.2 Implement the failure path from design §5: if the row or context-entry write fails,
       delete the objects already written and return a plain error, so no orphan row or entry
       survives.
-- [ ] 3.3 Emit `photo.uploaded` after a successful upload via the existing
+- [x] 3.3 Emit `photo.uploaded` after a successful upload via the existing
       `src/tools/triggers.ts` seam, with deps over the tenant handle and the resolved model
       port; wrap it so a subscriber failure cannot fail a completed upload. Leave `TRIGGERS`
       empty.
-- [ ] 3.4 Add `setPhotoCaptionAction` and `deletePhotoAction` in the same file, both
+- [x] 3.4 Add `setPhotoCaptionAction` and `deletePhotoAction` in the same file, both
       session-resolved and tenant-scoped, revalidating the job context path.
-- [ ] 3.5 Test the emit contract: `photo.uploaded` with no subscribers runs no tool, records no
+- [x] 3.5 Test the emit contract: `photo.uploaded` with no subscribers runs no tool, records no
       `tool_run`, creates no suggestion, and returns normally.
-- [ ] 3.6 Test the upload action's ordering/rollback against the memory backends: a failing row
+- [x] 3.6 Test the upload action's ordering/rollback against the memory backends: a failing row
       insert leaves no objects, no row, and no context entry.
 
 ## 4. Stage C — the phone-first UI
