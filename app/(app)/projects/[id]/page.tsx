@@ -50,12 +50,20 @@ export default async function ProjectPage({
         <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">{project.scope}</p>
       ) : null}
 
-      <Link
-        href={`/projects/${id}/context`}
-        className="mt-4 inline-flex items-center gap-1 rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium dark:border-neutral-700"
-      >
-        Job context &amp; suggestions →
-      </Link>
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Link
+          href={`/projects/${id}/context`}
+          className="inline-flex items-center gap-1 rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium dark:border-neutral-700"
+        >
+          Job context &amp; suggestions →
+        </Link>
+        <Link
+          href={`/projects/${id}/tools`}
+          className="inline-flex items-center gap-1 rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium dark:border-neutral-700"
+        >
+          Tools →
+        </Link>
+      </div>
 
       <div className="mt-6">
         <h2 className="text-lg font-semibold">Estimates</h2>

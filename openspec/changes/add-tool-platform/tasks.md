@@ -58,22 +58,22 @@
 
 ## 4. UI (phone-first)
 
-- [ ] 4.1 Tools surface under `app/(app)/projects/[id]/tools/`: list the registry, open one;
+- [x] 4.1 Tools surface under `app/(app)/projects/[id]/tools/`: list the registry, open one;
       link to it from the project page
-- [ ] 4.2 Run the reference tool via a server action that calls `runTool` through the session's
+- [x] 4.2 Run the reference tool via a server action that calls `runTool` through the session's
       tenant handle (business resolved server-side; never trust a client `business_id`;
       `source: "user"`); on success revalidate the context view so the suggestion + post appear
-- [ ] 4.3 Phone-first; plain language; any number via the engine (`formatCents`); no color-only
+- [x] 4.3 Phone-first; plain language; any number via the engine (`formatCents`); no color-only
       cues; a "connect AI" state where a live model would be required; render a tool's
       `disclaimer` when present
 
 ## 5. Verification
 
-- [ ] 5.1 `npm run typecheck`, full Vitest suite, and `npm run build` green
-- [ ] 5.2 `src/engine/` and `src/context/` stay framework/DB/SDK-free; only `src/ai/`'s real
+- [x] 5.1 `npm run typecheck`, full Vitest suite, and `npm run build` green
+- [x] 5.2 `src/engine/` and `src/context/` stay framework/DB/SDK-free; only `src/ai/`'s real
       impl imports `@anthropic-ai/sdk`; `src/tools/` depends on the `ModelPort` interface + the
       mock in tests; `src/` relative imports stay extensionless
-- [ ] 5.3 The tool `ctx` exposes no write path; the runner's only outputs are deduped pending
+- [x] 5.3 The tool `ctx` exposes no write path; the runner's only outputs are deduped pending
       suggestions + a conversation post + a linked `tool_run`; a composed/routed `output` cannot
       bypass accept-to-commit (asserted in tests)
 - [x] 5.4 `openspec validate add-tool-platform --strict` passes
