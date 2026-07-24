@@ -112,6 +112,12 @@ buildable and typed now, live calls wait on a key.
       with `tool_choice` auto (forcing it would pre-empt the search). `output_config.format` is
       **incompatible with citations** (400) — that's why we use the result-tool. Everything is
       proven offline via the mock's canned result; only the live wire is deferred.
+- [ ] **#9b Code Finder** (`add-code-finder`): with a key set, prove a real `web_search` returns
+      **sourced local codes** (not a generic model code) + citations, that a Photo Advisor run
+      **composes Code Finder per `safety`/`attention` finding** (a `note` composes nothing) with
+      live token usage on each composed `tool_run`, that **no unsourced code** is proposed, and
+      that the compose fan-out latency is tolerable on a phone (it's synchronous — a background
+      queue is the deferred #11 fix if it isn't).
 - [ ] **#8b Photo Advisor** (`add-photo-advisor`): with a key set and the photo bucket live, run a
       real job photo through vision and confirm — typed findings with **sane severities** (a
       genuinely dangerous defect comes back `safety`, not `note`); **labor minutes that are

@@ -73,10 +73,10 @@
 - [x] 5.1 `npm run typecheck`, `npx vitest run`, and `npm run build` green after each stage (the
       build is the only check that catches Turbopack/App-Router issues; relative imports in `src/`
       stay extensionless).
-- [ ] 5.2 Add the live-AI proof item to `relevant_notes.md` §5: with a key set, prove a real
+- [x] 5.2 Add the live-AI proof item to `relevant_notes.md` §5: with a key set, prove a real
       `web_search` returns sourced local codes + citations, that a Photo Advisor run composes Code
       Finder per finding with live token usage on each `tool_run`, and that no unsourced code is
       proposed.
-- [ ] 5.3 Update `PROGRESS.md`: 9b done; the v1 tool set (#7–#9) complete; #10 Client Estimate Doc
+- [x] 5.3 Update `PROGRESS.md`: 9b done; the v1 tool set (#7–#9) complete; #10 Client Estimate Doc
       next.
-- [ ] 5.4 `openspec validate add-code-finder --strict`, then archive on its own commit.
+- [x] 5.4 `openspec validate add-code-finder --strict`, then archive on its own commit.

@@ -25,7 +25,7 @@
 | 8a | `add-photo-capture` (job photo upload + tenant-scoped storage) | `job-photos` | ✅ **Done** (archived 2026-07-23; live-storage proof deferred) |
 | 8b | `add-photo-advisor` (the vision tool) | `photo-advisor`, `project-context` | ✅ **Done** (archived 2026-07-24; live-AI proof deferred) |
 | 9a | `add-tool-compose` (composition seam, dormant) | `tool-platform` | ✅ **Done** (archived 2026-07-24) |
-| 9b | Code Finder (compose off findings + standalone query) | `code-finder` | ⏳ Planned |
+| 9b | `add-code-finder` (compose off findings + standalone query) | `code-finder`, `project-context` | ✅ **Done** (archived 2026-07-24; live-AI proof deferred) |
 | 10 | Client Estimate Doc | `client-estimate-doc` | ⏳ Planned |
 | 11 | Hardening & launch pass | — | ⏳ Planned |
 | 12 | Tool graph editor (meta) | — | 🌟 North-star (after core tools ship) |
@@ -170,14 +170,19 @@ data (9b's Code Finder needs the service area). Ships **dormant** (`COMPOSE_EDGE
 path is `dispatch` + a no-op — proven with a reference producer/consumer; the three existing tool
 actions route through it with no behavior change.
 
-### 9b. ⏳ Code Finder (compose off findings + standalone query)
+### 9b. ✅ Code Finder (compose off findings + standalone query)
 Surfaces relevant **local** building codes two ways: a **standalone query** (ask a code question →
-web-search local code → propose `code_ref` entries with citations, post a summary), and
-**composed off Photo Advisor findings** — 9a's first edge (`photo-advisor → code-finder`, one run
-per finding), so codes are looked up for a *known* defect rather than a blind photo. Jurisdiction
-comes from `business_settings.service_area` (overridable per query). Adds compliance notes and
-carries the shared licensed-professional disclaimer (§5, §7). `photo.uploaded` stays emitting for a
-future subscriber; the compose edge is the real trigger.
+`web_search` → sourced `code_ref` entries with citations, capped and posted to the one thread), and
+**composed off Photo Advisor findings** — 9a's first live edge (`photo-advisor → code-finder`, one
+run per **`safety`/`attention`** finding, not cosmetic `note`s), so codes are looked up for a
+*known* defect without retyping. Jurisdiction comes from `business_settings.service_area`
+(overridable). Drops any code it can't source (§7), proposes **no line item** (an unpriced permit
+line would understate cost — 8b's trap), and frames each compliance note as the job's **added
+cost/hours** so a codes tool stays on the EPH spine. Shared licensed-professional disclaimer (§5,
+§7). `photo.uploaded` stays emitting for a future subscriber; the compose edge is the real trigger.
+**Open item deferred to live AI** (relevant_notes.md §5): prove real `web_search` returns sourced
+local codes and that composed runs record live token usage. **This completes the v1 tool set
+(#7 Material Finder, #8 Photo Advisor, #9 Code Finder).**
 
 ### 10. ⏳ Client Estimate Doc
 The client-facing document tool — separate from the internal estimate (true costs,
