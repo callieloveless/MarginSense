@@ -17,31 +17,34 @@ the risky, reusable plumbing lands and is proven by itself.
 
 ## What Changes
 
-- **An app-layer compose seam** (`app/_lib/compose.ts`): given a producer tool's completed
-  `output`, it looks up any registered **compose edges**, maps that output into zero or more
-  consumer inputs, and dispatches each consumer through the **single dispatch entry point** with
-  `source: "compose"` at the next step. It is deliberately app-layer, not in the DB-free runner,
+- **One app-layer dispatch entry, `dispatchAndCompose`** (`app/_lib/compose.ts`): it runs a tool
+  through the platform's `dispatch`, and then, on success, fans the tool's `output` out to any
+  registered consumers. **Composition is a property of this one entry, not of any single tool's
+  action** — so every app-layer tool run gets the same behavior and a registered edge fires no
+  matter which tool produced the output. It is deliberately app-layer, not in the DB-free runner,
   because an edge's mapping may need tenant data the runner can't reach (Code Finder needs the
-  business's service area). Every composed run therefore still flows through `dispatch`, so the
-  "one dispatch entry point" invariant holds and every composed emission is a `pending`
-  suggestion.
+  business's service area). Every composed run still flows through `dispatch`, so the "one dispatch
+  entry point" invariant holds and every composed emission is a `pending` suggestion.
 - **A compose-edge registry** (`COMPOSE_EDGES`), **empty for now** — the same dormant-seam pattern
   as `TRIGGERS`. An edge names a producer tool, a consumer tool, and a mapping
   `(producerOutput, ctx) => consumerInput[]` that may read tenant-scoped data through the handle
   `ctx` carries. 9b adds the `photo-advisor → code-finder` edge (one consumer input per finding);
   #12's graph editor will later make this registry user-editable.
-- **The step budget bounds the chain.** A composed run is dispatched at `producerStep + 1`, and
-  `dispatch` already refuses a non-user run at or beyond `MAX_TOOL_STEPS` — so a future edge that
-  loops (A composes B composes A) is stopped by the platform, not by hope. Nothing here raises the
-  budget.
-- **Composition is wired after a producer run, in one place.** The app-layer flow that runs a tool
-  and can have consumers (today: `advisePhoto`, which runs Photo Advisor) calls the compose seam
-  with the run's output and step. With no edge registered this is a no-op; the call site exists so
-  9b is one registry entry, not a rewiring.
-- **Proven with a reference consumer.** Unit tests register a throwaway edge (a producer's output
-  fanned to a reference consumer) and assert the fan-out count, the `compose` source on each run,
-  the step increment, that composed output stays `pending`, and that the step budget refuses a
-  run past `MAX_TOOL_STEPS`. No real tool is added.
+- **The step budget bounds the chain, and the entry owns the arithmetic.** `dispatchAndCompose`
+  dispatched the producer, so it knows the producer's step and dispatches each composed run at
+  `producerStep + 1` — no caller passes a step. `dispatch` already refuses a non-user run at or
+  beyond `MAX_TOOL_STEPS`, so a future edge that loops (A composes B composes A) is stopped by the
+  platform, not by hope. Nothing here raises the budget.
+- **The existing tool actions route through it, with no behavior change.** Material Finder's search
+  action, the reference tool's action, and `advisePhoto` swap their raw `dispatch(...)` call for
+  `dispatchAndCompose(...)`. With `COMPOSE_EDGES` empty the wrapper is `dispatch` plus a no-op, so
+  nothing a user sees changes — but composition is now uniform, and 9b is one registry entry rather
+  than a new call site in the right action.
+- **Proven with a reference producer and consumer.** Unit tests register a throwaway edge and run
+  it through `dispatchAndCompose`, asserting the fan-out count, the `compose` source on each run,
+  the step increment, that composed output stays `pending`, that a producer at the budget ceiling
+  has its composed run refused, and that a failing consumer never breaks the producer. No real tool
+  is added.
 
 ## Capabilities
 
@@ -53,12 +56,15 @@ the risky, reusable plumbing lands and is proven by itself.
 
 ## Impact
 
-- **New code:** `app/_lib/compose.ts` (the seam + the `COMPOSE_EDGES` registry, empty); the
-  compose call after `advisePhoto`; unit tests over the seam with a reference producer/consumer.
+- **New code:** `app/_lib/compose.ts` (`dispatchAndCompose` + the internal fan-out + the
+  `COMPOSE_EDGES` registry, empty); unit tests over it with a reference producer/consumer.
+- **Changed call sites (no behavior change):** the app-layer tool actions — Material Finder's
+  search, the reference tool, and `advisePhoto` — route their `dispatch(...)` through
+  `dispatchAndCompose(...)`. The manual-add path (no model, no dispatch) is untouched.
 - **No new dependency, no migration, no schema change.** `dispatch(source: "compose")` and the
   step budget already exist (P1); this uses them.
 - **Depends on:** `tool-platform` (#6 contract, P1 dispatch + `compose` source + `MAX_TOOL_STEPS`),
-  and the app-layer `advisePhoto` flow (#8b) as the first place a producer run can fan out.
+  and the app-layer tool actions (#7b, #8b) that dispatch a tool run.
 - **Feeds:** 9b Code Finder registers the first edge; #12's tool-graph editor turns the coded
   registry into a drawn one.
 
