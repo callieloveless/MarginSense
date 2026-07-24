@@ -344,6 +344,15 @@ export interface PhotoStorageBackend {
     keys: readonly string[],
     expiresInSeconds: number,
   ): Promise<Map<string, string>>;
+  /**
+   * Read an object's bytes back, for server-side use that a signed URL can't serve — sending a
+   * photo to the model (add-photo-advisor). Null when the key isn't this business's or doesn't
+   * exist; the same prefix refusal as every other method here.
+   */
+  getObject(
+    businessId: BusinessId,
+    key: string,
+  ): Promise<{ bytes: Uint8Array; contentType: string } | null>;
   /** Delete objects by key; keys outside the business's prefix are ignored. Idempotent. */
   deleteObjects(businessId: BusinessId, keys: readonly string[]): Promise<void>;
 }
@@ -788,6 +797,22 @@ export class TenantDb {
     const ours = keys.filter((key) => keyBelongsToBusiness(this.businessId, key));
     if (ours.length === 0) return Promise.resolve(new Map());
     return this.#photoStorageBackend.signedUrls(this.businessId, ours, expiresInSeconds);
+  }
+
+  /**
+   * Read one of this business's photos — its row plus the stored bytes — for server-side use a
+   * signed URL can't serve: handing the image to a tool as validated input (add-photo-advisor).
+   * Null if the photo isn't ours or its object is missing. The tool never gets this handle; the
+   * action calls it and passes the bytes in.
+   */
+  async readPhoto(
+    id: string,
+  ): Promise<{ photo: ProjectPhotoRow; bytes: Uint8Array; contentType: string } | null> {
+    const photo = await this.#photoBackend.getById(this.businessId, id);
+    if (!photo) return null;
+    const object = await this.#photoStorageBackend.getObject(this.businessId, photo.storageKey);
+    if (!object) return null;
+    return { photo, bytes: object.bytes, contentType: object.contentType };
   }
 
   /**
@@ -1291,6 +1316,10 @@ export function createMemoryPhotoStorageBackend(): PhotoStorageBackend & {
         }
       }
       return signed;
+    },
+    async getObject(businessId, key) {
+      if (!keyBelongsToBusiness(businessId, key)) return null;
+      return objects.get(key) ?? null;
     },
     async deleteObjects(businessId, keys) {
       for (const key of keys) {

@@ -2,7 +2,12 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getServerSession, tenantDbForSession } from "@/src/db/session";
 import { formatCents } from "@/src/engine";
-import { authorFromRow, authorLabel } from "@/src/context";
+import {
+  authorFromRow,
+  authorLabel,
+  FINDING_SEVERITY_LABEL,
+  findingSeverityOf,
+} from "@/src/context";
 import type { ContextEntryKindName } from "@/src/db/schema";
 import { loadJobProfit, previewForSuggestion } from "@/app/_lib/job-profit";
 import { SuggestionCard } from "@/app/_components/suggestion-card";
@@ -172,8 +177,12 @@ function describeEntry(kind: ContextEntryKindName, payload: unknown): string {
   const p = (payload ?? {}) as Record<string, unknown>;
   const s = (v: unknown) => (v == null ? "" : String(v));
   switch (kind) {
-    case "finding":
-      return s(p.summary);
+    case "finding": {
+      // Severity in words (never colour alone, §6); `note` adds nothing worth saying.
+      const severity = findingSeverityOf(p);
+      const prefix = severity === "note" ? "" : `${FINDING_SEVERITY_LABEL[severity]}: `;
+      return `${prefix}${s(p.summary)}`;
+    }
     case "material": {
       const price = typeof p.priceCents === "number" ? ` — ${formatCents(p.priceCents)}/${s(p.unit)}` : "";
       return `${s(p.name)}${price}`;

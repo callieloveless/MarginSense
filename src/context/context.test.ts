@@ -10,10 +10,58 @@ import {
   authorFromRow,
   authorToRow,
   buildProjectSnapshot,
+  findingSeverityOf,
   nextStatus,
   parseContextPayload,
   suggestionEffect,
 } from "./context";
+
+describe("finding severity", () => {
+  it("accepts each of the three severities", () => {
+    for (const severity of ["safety", "attention", "note"] as const) {
+      const result = parseContextPayload("finding", { summary: "Cracked joist", severity });
+      expect(result.ok).toBe(true);
+      if (result.ok) expect((result.value as { severity: string }).severity).toBe(severity);
+    }
+  });
+
+  it("rejects a severity outside the set", () => {
+    expect(parseContextPayload("finding", { summary: "Cracked joist", severity: "urgent" }).ok).toBe(
+      false,
+    );
+  });
+
+  it("reads a finding written before severity existed as `note`", () => {
+    // Back-compat: entries and pending suggestions predating add-photo-advisor must keep
+    // parsing, or an accept path would break on data already in the database.
+    const result = parseContextPayload("finding", { summary: "Old finding" });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect((result.value as { severity: string }).severity).toBe("note");
+  });
+
+  it("keeps the photo reference when present, and is fine without one", () => {
+    const withPhoto = parseContextPayload("finding", {
+      summary: "Rot at the sill",
+      severity: "safety",
+      photoStorageKey: "biz-a/p-1/photo-1.jpg",
+    });
+    expect(withPhoto.ok).toBe(true);
+    if (withPhoto.ok) {
+      expect((withPhoto.value as { photoStorageKey?: string }).photoStorageKey).toBe(
+        "biz-a/p-1/photo-1.jpg",
+      );
+    }
+    expect(parseContextPayload("finding", { summary: "No photo", severity: "note" }).ok).toBe(true);
+  });
+
+  it("reads a severity defensively for display", () => {
+    expect(findingSeverityOf({ severity: "safety" })).toBe("safety");
+    expect(findingSeverityOf({ severity: "bogus" })).toBe("note");
+    expect(findingSeverityOf({})).toBe("note");
+    expect(findingSeverityOf(null)).toBe("note");
+    expect(findingSeverityOf(undefined)).toBe("note");
+  });
+});
 
 describe("author round-trip", () => {
   it("maps user and tool authors to and from row columns", () => {
@@ -69,7 +117,9 @@ describe("suggestionEffect", () => {
     expect(result.effect).toEqual({
       kind: "commit_context_entry",
       entryKind: "finding",
-      payload: { summary: "Water damage under sink" },
+      // A proposal written before severity existed still commits — it reads as `note`
+      // (add-photo-advisor back-compat), rather than failing validation in the accept path.
+      payload: { summary: "Water damage under sink", severity: "note" },
     });
   });
 

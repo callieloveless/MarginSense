@@ -95,6 +95,19 @@ export function createSupabasePhotoStorage(url: string, anonKey: string): PhotoS
       return signed;
     },
 
+    async getObject(businessId: BusinessId, key: string) {
+      if (!keyBelongsToBusiness(businessId, key)) return null;
+      const supabase = await storageClient();
+      const { data, error } = await supabase.storage.from(PHOTO_BUCKET).download(key);
+      // A missing object or a policy refusal reads as null, not a throw — the caller reports
+      // "that photo couldn't be read" rather than failing the request.
+      if (error || !data) return null;
+      return {
+        bytes: new Uint8Array(await data.arrayBuffer()),
+        contentType: data.type || "application/octet-stream",
+      };
+    },
+
     async deleteObjects(businessId: BusinessId, keys) {
       const ours = keys.filter((key) => keyBelongsToBusiness(businessId, key));
       if (ours.length === 0) return;

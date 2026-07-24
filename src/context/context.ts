@@ -65,10 +65,30 @@ export function authorFromRow(author: "user" | "tool", authorTool: string | null
 
 // --- Typed context-entry payloads --------------------------------------------------
 
+/**
+ * How serious a `finding` is (add-photo-advisor). "Is this a safety problem?" is the question
+ * that decides whether a contractor finishes the quote or walks away from the job, so it is
+ * typed data rather than a convention inside the summary text — prose can't be filtered,
+ * highlighted, or rolled up later. Always displayed **with words**, never colour alone (§6).
+ */
+export const FINDING_SEVERITIES = ["safety", "attention", "note"] as const;
+export type FindingSeverity = (typeof FINDING_SEVERITIES)[number];
+
+/** The default severity for a finding that doesn't state one — including every finding written
+ * before severity existed, which must keep reading rather than failing validation. */
+export const DEFAULT_FINDING_SEVERITY: FindingSeverity = "note";
+
 /** One Zod schema per entry kind (constitution §4.1). Payloads are validated in and out —
  * the JSON column never carries `any`. */
 export const contextPayloadSchemas = {
-  finding: z.object({ summary: z.string().min(1), detail: z.string().optional() }),
+  finding: z.object({
+    summary: z.string().min(1),
+    detail: z.string().optional(),
+    /** Missing → `note` (back-compat for pre-severity entries); an unknown value is rejected. */
+    severity: z.enum(FINDING_SEVERITIES).default(DEFAULT_FINDING_SEVERITY),
+    /** The photo this diagnosis came from, when one produced it (add-photo-advisor). */
+    photoStorageKey: z.string().min(1).optional(),
+  }),
   material: z.object({
     name: z.string().min(1),
     priceCents: z.number().int().nonnegative(),
@@ -94,6 +114,25 @@ export function parseContextPayload(kind: ContextEntryKindName, payload: unknown
   const result = contextPayloadSchemas[kind].safeParse(payload);
   return result.success ? { ok: true, value: result.data } : { ok: false, error: `Invalid ${kind} payload.` };
 }
+
+/**
+ * Read a finding's severity out of a stored (or proposed) payload for display, defensively over
+ * the JSON blob: anything unrecognised — including a payload written before severity existed —
+ * reads as `note` rather than throwing in a render path.
+ */
+export function findingSeverityOf(payload: unknown): FindingSeverity {
+  const value = (payload as { severity?: unknown } | null)?.severity;
+  return FINDING_SEVERITIES.includes(value as FindingSeverity)
+    ? (value as FindingSeverity)
+    : DEFAULT_FINDING_SEVERITY;
+}
+
+/** The words shown next to a severity. Colour never carries the meaning alone (§6). */
+export const FINDING_SEVERITY_LABEL: Record<FindingSeverity, string> = {
+  safety: "Safety issue",
+  attention: "Needs attention",
+  note: "Note",
+};
 
 // --- Suggestion payloads + the accept/dismiss state machine ------------------------
 

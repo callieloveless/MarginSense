@@ -7,6 +7,11 @@
  */
 
 import { formatCents } from "@/src/engine";
+import {
+  FINDING_SEVERITY_LABEL,
+  findingSeverityOf,
+  type FindingSeverity,
+} from "@/src/context";
 import type { SuggestionRow } from "@/src/db/schema";
 import type { LineItemPreview, PreviewSide } from "@/app/_lib/suggestion-preview";
 import { SignalBadge, SignalUnknown } from "./signal-badge";
@@ -33,6 +38,29 @@ function describe(suggestion: SuggestionRow): string {
     default:
       return `Pin ${kind}: ${String(inner.label ?? "")}${inner.value ? ` — ${String(inner.value)}` : ""}`.trim();
   }
+}
+
+/** The severity of a proposed `finding`, or null when the suggestion isn't one. Read from the
+ * payload — like everything else on this card, with no branch on which tool produced it. */
+function findingSeverity(suggestion: SuggestionRow): FindingSeverity | null {
+  if (suggestion.target !== "context_entry") return null;
+  const p = (suggestion.payload ?? {}) as Record<string, unknown>;
+  return p.kind === "finding" ? findingSeverityOf(p.payload) : null;
+}
+
+/** A finding's severity, always as **words**; colour only reinforces them (constitution §6). */
+function SeverityBadge({ severity }: { severity: FindingSeverity }) {
+  const tone =
+    severity === "safety"
+      ? "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200"
+      : severity === "attention"
+        ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200"
+        : "bg-neutral-100 text-neutral-700 dark:bg-neutral-800 dark:text-neutral-300";
+  return (
+    <span className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium ${tone}`}>
+      {FINDING_SEVERITY_LABEL[severity]}
+    </span>
+  );
 }
 
 /** The profit-per-hour figure + signal for one side of the preview. */
@@ -83,8 +111,14 @@ export function SuggestionCard({
   dismiss: () => void | Promise<void>;
 }) {
   const isLineItem = suggestion.target === "estimate_line_item";
+  const severity = findingSeverity(suggestion);
   return (
     <li className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
+      {severity ? (
+        <div className="mb-1">
+          <SeverityBadge severity={severity} />
+        </div>
+      ) : null}
       <p className="text-sm">{describe(suggestion)}</p>
 
       {preview ? (

@@ -99,6 +99,37 @@ describe("job photos — storage and identity", () => {
     expect(await a.signedPhotoUrls([])).toEqual(new Map());
     expect(await a.signedPhotoUrls(["biz-b/p-b/x.jpg"])).toEqual(new Map());
   });
+
+  it("reads its own photo's bytes back for server-side use", async () => {
+    const { a } = sharedTenants();
+    const photo = await upload(a, "p-a", "sill plate");
+
+    const read = await a.readPhoto(photo.id);
+
+    expect(read?.photo.id).toBe(photo.id);
+    expect(read?.contentType).toBe("image/jpeg");
+    expect(read?.bytes.byteLength).toBe(64);
+  });
+
+  it("cannot read another business's photo bytes", async () => {
+    const { a, b, storage } = sharedTenants();
+    const theirs = await upload(b, "p-b");
+
+    // Neither by photo id (the row isn't ours)...
+    expect(await a.readPhoto(theirs.id)).toBeNull();
+    // ...nor by reaching for the object directly with their key.
+    expect(await storage.getObject(BUSINESS_A, theirs.storageKey)).toBeNull();
+    // B can still read its own.
+    expect(await storage.getObject(BUSINESS_B, theirs.storageKey)).not.toBeNull();
+  });
+
+  it("returns null when the row exists but its object is gone", async () => {
+    const { a, storage } = sharedTenants();
+    const photo = await upload(a, "p-a");
+    await storage.deleteObjects(BUSINESS_A, [photo.storageKey]);
+
+    expect(await a.readPhoto(photo.id)).toBeNull();
+  });
 });
 
 describe("tenant isolation — job photos", () => {

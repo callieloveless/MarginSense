@@ -1,24 +1,24 @@
 ## 1. Stage A — shared disclaimer, finding severity, and reading a stored photo
 
-- [ ] 1.1 Add `src/tools/disclaimer.ts`: one exported `PHYSICAL_WORK_DISCLAIMER` constant
+- [x] 1.1 Add `src/tools/disclaimer.ts`: one exported `PHYSICAL_WORK_DISCLAIMER` constant
       (licensed-professional, non-authoritative — constitution §5, §7) with a comment naming its
       consumers (Photo Advisor now, Code Finder next); export it from `src/tools/index.ts`.
-- [ ] 1.2 Extend the `finding` payload in `src/context/context.ts`: a required `severity`
+- [x] 1.2 Extend the `finding` payload in `src/context/context.ts`: a required `severity`
       (`safety` | `attention` | `note`) and an optional `photoStorageKey` (additive JSON, no
       migration). Keep the module framework/DB-free.
-- [ ] 1.3 Decide and document the back-compat rule for `finding` payloads written before this
+- [x] 1.3 Decide and document the back-compat rule for `finding` payloads written before this
       change (default to `note` on read rather than failing validation), so existing entries and
       any pending suggestion still parse.
-- [ ] 1.4 Unit-test the payload change: each severity validates, an unknown severity is rejected,
+- [x] 1.4 Unit-test the payload change: each severity validates, an unknown severity is rejected,
       the photo reference is optional, a pre-existing payload without severity still reads, and
       an accepted finding keeps both fields.
-- [ ] 1.5 Render severity as **text paired with colour** (never colour alone) in
+- [x] 1.5 Render severity as **text paired with colour** (never colour alone) in
       `app/_components/suggestion-card.tsx` and the job context list — driven by the payload, with
       no branch on which tool produced the suggestion.
-- [ ] 1.6 Add `getObject(businessId, key)` to `PhotoStorageBackend` (`src/db/tenant.ts`): the same
+- [x] 1.6 Add `getObject(businessId, key)` to `PhotoStorageBackend` (`src/db/tenant.ts`): the same
       prefix refusal as its siblings, returning bytes + content type or null. Memory impl in
       `tenant.ts`, Supabase impl in `photo-storage.ts` (`download`), and `TenantDb.readPhoto`.
-- [ ] 1.7 Extend `src/db/photos.test.ts`: business A cannot read business B's object bytes, a key
+- [x] 1.7 Extend `src/db/photos.test.ts`: business A cannot read business B's object bytes, a key
       outside the caller's prefix returns null, and a stored photo round-trips.
 
 ## 2. Stage B — the tool
