@@ -8,6 +8,9 @@
 - [ ] 1.3 Add `photoStorageKey` to Photo Advisor's `outputSchema` and populate it from the run's
       input in `photo-advisor.ts` (the one photo every finding in the run shares). Update the
       Photo Advisor tests that assert on `output`.
+- [ ] 1.4 Tighten Photo Advisor's system prompt: anything with a permit, code, or inspection angle
+      is marked at least `attention` (never `note`), so severity is a reliable proxy for "worth a
+      code lookup." Add/adjust a test asserting a permit-implicating finding isn't `note`.
 
 ## 2. Stage B — the Code Finder tool
 
@@ -18,30 +21,36 @@
 - [ ] 2.2 Add `src/tools/code-finder/suggestions.ts`: a code → a `code_ref` context-entry
       suggestion carrying code, citation, jurisdiction, `sourceUrl`, `complianceNote`, and the
       `photoStorageKey` from the input when present. Reuse the `isSourceUrl` rule — a code with no
-      real source URL yields nothing (§7).
-- [ ] 2.3 Add `src/tools/code-finder/code-finder.ts`: the system prompt (find LOCAL code, cite the
-      source, state permit/inspection consequences, never present as authoritative), the port call
+      real source URL yields nothing (§7). Cap the proposals to the few most relevant via one named
+      constant (`MAX_CODE_RESULTS`).
+- [ ] 2.3 Add `src/tools/code-finder/code-finder.ts`: the system prompt (find LOCAL code, return
+      the most important requirements not a survey, cite the source, state permit/inspection
+      consequences **as cost and crew-hour impact**, never present as authoritative), the port call
       with `WEB_SEARCH_TOOL` + `resultSchema`, the mapping, and a conversation `message` that
-      summarizes the codes with their sources and compliance notes and carries
-      `disclaimer: PHYSICAL_WORK_DISCLAIMER`. Localize the search from `input.location`.
+      frames each compliance note as what it adds to the job's cost/hours (and points at Material
+      Finder to price it) and carries `disclaimer: PHYSICAL_WORK_DISCLAIMER`. Localize from
+      `input.location`. **Propose no line item** for a permit/inspection.
 - [ ] 2.4 Handle the empty/no-jurisdiction cases: no sourced code → a post that says none was
       found; no location → search without a local bias and say the jurisdiction wasn't narrowed.
 - [ ] 2.5 Register the tool in `src/tools/registry.ts` and export it from `src/tools/index.ts`.
 - [ ] 2.6 Unit-test against the mock port with a canned code result: sourced codes become `pending`
       `code_ref` suggestions carrying source + compliance note; an unsourced code is dropped; the
-      `photoStorageKey` rides through when set; every run's message carries the disclaimer; the
-      tool receives no handle it could write with.
+      result set is capped at `MAX_CODE_RESULTS`; **no `estimate_line_item` is ever proposed**; the
+      post frames compliance as cost/hour impact; the `photoStorageKey` rides through when set;
+      every run's message carries the disclaimer; the tool receives no handle it could write with.
 
 ## 3. Stage C — light up the compose edge
 
 - [ ] 3.1 Register `COMPOSE_EDGES["photo-advisor"] = [{ consumer: "code-finder", map }]` in
       `app/_lib/compose.ts`; the mapper reads `tenantDb.getSettings()?.serviceArea` once and
-      returns one Code Finder input per finding — query from the finding summary + its materials,
-      `location` from the service area, `photoStorageKey` from the output.
+      returns one Code Finder input **per `safety`/`attention` finding** (skipping `note`s) — query
+      from the finding summary + its materials, `location` from the service area, `photoStorageKey`
+      from the output.
 - [ ] 3.2 Integration-test the edge through `dispatchAndCompose` against the memory backends + mock
-      port: a Photo Advisor run with N findings composes N Code Finder runs (source `compose`),
-      each proposing `pending` `code_ref` suggestions that carry the photo key; a composed-run
-      failure leaves Photo Advisor's own suggestions intact (9a's isolation, now with a real edge).
+      port: a Photo Advisor run with M code-relevant findings + K `note`s composes exactly M Code
+      Finder runs (source `compose`), each proposing `pending` `code_ref` suggestions that carry
+      the photo key; the `note`s compose nothing; a composed-run failure leaves Photo Advisor's own
+      suggestions intact (9a's isolation, now with a real edge).
 - [ ] 3.3 Confirm the standalone path is unaffected and dedup still holds (a re-run doesn't stack
       duplicate `code_ref` suggestions).
 
