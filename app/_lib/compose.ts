@@ -23,9 +23,13 @@
  */
 
 import {
+  codeFinderTool,
   dispatch,
   MAX_TOOL_STEPS,
+  photoAdvisorTool,
+  type CodeFinderInput,
   type DispatchRequest,
+  type PhotoAdvisorOutput,
   type ToolRunOutcome,
 } from "@/src/tools";
 import { type ModelPort } from "@/src/ai";
@@ -52,11 +56,40 @@ export interface ComposeEdge {
 }
 
 /**
- * Producer tool name → its outgoing edges. **Empty for now** — the seam exists before a consumer
- * does, exactly like `TRIGGERS`. 9b adds `COMPOSE_EDGES["photo-advisor"] = [{ consumer:
- * "code-finder", map: … }]`.
+ * When Photo Advisor diagnoses a photo, look up the local code for the problems worth acting on
+ * (add-code-finder). One Code Finder run per **code-relevant** finding — `safety` or `attention`,
+ * not a cosmetic `note` — because composition is synchronous (it blocks the photo result and adds
+ * a card to the queue), so a lookup for "minor surface mould" would spend a web search and a
+ * phone-screen row on nothing. The jurisdiction is resolved once here in the app layer, which is
+ * why the seam is app-layer at all (the runner can't read settings).
  */
-export const COMPOSE_EDGES: Record<string, readonly ComposeEdge[]> = {};
+const photoAdvisorToCodeFinder: ComposeEdge = {
+  consumer: codeFinderTool.name,
+  async map(producerOutput, ctx) {
+    const output = producerOutput as PhotoAdvisorOutput;
+    const relevant = output.findings.filter((f) => f.severity === "safety" || f.severity === "attention");
+    if (relevant.length === 0) return [];
+
+    const serviceArea = (await ctx.tenantDb.getSettings())?.serviceArea ?? undefined;
+
+    return relevant.map((finding): CodeFinderInput => {
+      const materials = finding.materials && finding.materials.length > 0 ? ` Materials: ${finding.materials.join(", ")}.` : "";
+      return {
+        query: `Building code for: ${finding.summary}.${materials}`,
+        ...(serviceArea ? { location: serviceArea } : {}),
+        photoStorageKey: output.photoStorageKey,
+      };
+    });
+  },
+};
+
+/**
+ * Producer tool name → its outgoing edges. Photo Advisor fans out to Code Finder; other tools have
+ * no consumers yet. #12's graph editor will make this registry user-editable.
+ */
+export const COMPOSE_EDGES: Record<string, readonly ComposeEdge[]> = {
+  [photoAdvisorTool.name]: [photoAdvisorToCodeFinder],
+};
 
 /** What the caller supplies once, per run: the tenant handle and the model port the tool (and any
  * composed consumer) should use. */

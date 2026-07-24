@@ -15,8 +15,10 @@ export interface MockModelOptions {
   /** Override the reported usage. Defaults to a deterministic char-based estimate. */
   readonly usage?: Usage;
   /** A canned structured result. When the request carries a `resultSchema`, it is validated
-   * through that schema (so a test fails loudly if the canned shape drifts). */
-  readonly result?: unknown;
+   * through that schema (so a test fails loudly if the canned shape drifts). May be a function of
+   * the request, so one mock can serve a chain of runs whose schemas differ (e.g. a Photo Advisor
+   * run that composes a Code Finder run — each wants a different result shape). */
+  readonly result?: unknown | ((request: ModelRequest) => unknown);
   /** Canned citations to return (as a web-search call would). */
   readonly citations?: readonly Citation[];
 }
@@ -58,10 +60,14 @@ export function createMockModelPort(options: MockModelOptions = {}): ModelPort {
         outputTokens: estimateTokens(text),
       };
       // `result` is present only when a `resultSchema` was requested (matching the contract);
-      // the canned value is validated through the schema so a drifted shape fails loudly.
-      const result = request.resultSchema
-        ? request.resultSchema.parse(options.result)
-        : undefined;
+      // the canned value is validated through the schema so a drifted shape fails loudly. When
+      // `result` is a function, it is resolved against this request first (so one mock can serve a
+      // chain of runs with different schemas).
+      const rawResult =
+        typeof options.result === "function"
+          ? (options.result as (r: ModelRequest) => unknown)(request)
+          : options.result;
+      const result = request.resultSchema ? request.resultSchema.parse(rawResult) : undefined;
       const response: ModelResponse = {
         text,
         content: [{ type: "text", text }],

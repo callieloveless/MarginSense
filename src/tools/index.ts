@@ -22,6 +22,14 @@ export {
   type VisionResult,
 } from "./photo-advisor";
 export {
+  codeFinderTool,
+  MAX_CODE_RESULTS,
+  type CodeFinderInput,
+  type CodeFinderOutput,
+  type CodeResult,
+  type CodeResultItem,
+} from "./code-finder";
+export {
   materialFinderTool,
   manualMaterialSchema,
   manualMaterialSuggestions,

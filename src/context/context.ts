@@ -100,6 +100,14 @@ export const contextPayloadSchemas = {
     code: z.string().min(1),
     citation: z.string().min(1),
     jurisdiction: z.string().optional(),
+    /** Where the code was found — required for a searched code (§7: never an unsourced citation),
+     * optional on the payload so a hand-entered code_ref stays valid (add-code-finder). */
+    sourceUrl: z.string().optional(),
+    /** Plain-language consequence — a permit, an inspection, a licensed trade — surfaced as the
+     * job's added cost/hours, not just a citation (add-code-finder). */
+    complianceNote: z.string().optional(),
+    /** The photo a composed code lookup came from, so a code traces to the diagnosis behind it. */
+    photoStorageKey: z.string().min(1).optional(),
   }),
   photo: z.object({ storageKey: z.string().min(1), annotations: z.array(z.string()).optional() }),
   fact: z.object({ label: z.string().min(1), value: z.string().min(1) }),

@@ -10,6 +10,7 @@ import { acceptSuggestionAction, dismissSuggestionAction } from "../context/acti
 import { RunReferenceForm } from "./run-form";
 import { MaterialFinderForm } from "./material-finder-form";
 import { PhotoAdvisorForm, type AdvisorPhoto } from "./photo-advisor-form";
+import { CodeFinderForm } from "./code-finder-form";
 
 /**
  * The project-page Tools surface (constitution §5) — where a job's AI tools open. Tools read
@@ -99,6 +100,19 @@ export default async function ProjectToolsPage({
                   photos={advisorPhotos}
                   aiConfigured={aiConfigured}
                   storageReady={storageReady}
+                />
+              </>
+            ) : tool.name === "code-finder" ? (
+              <>
+                <p className="mt-1 text-sm text-neutral-500">
+                  Ask about local building code, or let it run automatically when Photo Advisor
+                  flags something — it pins the relevant codes with their permit and inspection
+                  impact on the job.
+                </p>
+                <CodeFinderForm
+                  projectId={projectId}
+                  serviceArea={serviceArea}
+                  aiConfigured={aiConfigured}
                 />
               </>
             ) : tool.name === "material-finder" ? (

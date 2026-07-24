@@ -8,7 +8,7 @@
  * was tested and the actions were not.
  */
 
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createMemoryContextBackend,
   createMemoryEstimateBackend,
@@ -21,12 +21,26 @@ import {
   type TenantDb,
 } from "@/src/db/tenant";
 import { createMockModelPort, type ModelRequest } from "@/src/ai";
-import { type VisionResult } from "@/src/tools";
+import { photoAdvisorTool, type VisionResult } from "@/src/tools";
 import { advisePhoto } from "./photo-advise";
+import { COMPOSE_EDGES, type ComposeEdge } from "./compose";
 import { storePhotoForProject } from "./photo-upload";
 
 const BUSINESS = "biz-a";
 const PROJECT = "p-1";
+
+// These tests exercise advisePhoto in isolation. The live `photo-advisor → code-finder` edge
+// (add-code-finder) is exercised by its own integration test; here it would spawn composed runs
+// that add tool_runs and console noise unrelated to what each test asserts, so it is unwired for
+// the duration and restored after.
+let savedEdges: readonly ComposeEdge[] | undefined;
+beforeEach(() => {
+  savedEdges = COMPOSE_EDGES[photoAdvisorTool.name];
+  delete COMPOSE_EDGES[photoAdvisorTool.name];
+});
+afterEach(() => {
+  if (savedEdges !== undefined) COMPOSE_EDGES[photoAdvisorTool.name] = savedEdges;
+});
 
 const vision: VisionResult = {
   findings: [

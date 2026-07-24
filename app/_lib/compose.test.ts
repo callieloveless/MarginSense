@@ -235,10 +235,11 @@ describe("dispatchAndCompose — dormant by default", () => {
     expect(runs[0]!.toolName).toBe("test-producer");
   });
 
-  it("the real registry ships empty", () => {
-    // Guards against a stray edge being committed before 9b.
-    expect(Object.keys(COMPOSE_EDGES)).toHaveLength(0);
-    // And the reference/real tools resolve (sanity that routing didn't break the registry).
+  it("registers the photo-advisor → code-finder edge (add-code-finder), and nothing else", () => {
+    // The one live edge; a stray extra would be caught here.
+    expect(Object.keys(COMPOSE_EDGES)).toEqual(["photo-advisor"]);
+    expect(COMPOSE_EDGES["photo-advisor"]!.map((e) => e.consumer)).toEqual(["code-finder"]);
+    // Sanity that routing didn't break the registry.
     expect(getTool("material-finder")).not.toBeNull();
   });
 });

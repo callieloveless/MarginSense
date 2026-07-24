@@ -131,6 +131,13 @@ describe("Photo Advisor — repair labor", () => {
     expect(out.output.proposedLineItems).toBe(false);
     expect(out.message?.body).toMatch(/no active estimate/i);
   });
+
+  it("carries the run's photo key on its output, for a downstream code lookup", async () => {
+    const out = await run({ activeEstimateId: "est-1" });
+    // Every finding in the run shares this photo; Code Finder (9b) reads it off the output to
+    // trace a composed code_ref back to the picture.
+    expect(out.output.photoStorageKey).toBe(STORAGE_KEY);
+  });
 });
 
 describe("Photo Advisor — implausible estimates", () => {

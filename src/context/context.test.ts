@@ -105,6 +105,38 @@ describe("nextStatus — the state machine", () => {
   });
 });
 
+describe("code_ref payload", () => {
+  it("accepts a minimal code reference (code + citation)", () => {
+    const result = parseContextPayload("code_ref", {
+      code: "IRC R806.2",
+      citation: "Net free ventilating area shall not be less than 1/150 of the area.",
+    });
+    expect(result.ok).toBe(true);
+  });
+
+  it("carries an optional source, compliance note, and photo when present", () => {
+    const result = parseContextPayload("code_ref", {
+      code: "IRC R806.2",
+      citation: "Attic ventilation requirement.",
+      jurisdiction: "Travis County, TX",
+      sourceUrl: "https://codes.iccsafe.org/content/IRC2021/chapter-8",
+      complianceNote: "Adding soffit vents likely needs a permit and a final inspection.",
+      photoStorageKey: "biz-a/p-1/photo-9.jpg",
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const v = result.value as Record<string, unknown>;
+      expect(v.sourceUrl).toContain("iccsafe.org");
+      expect(v.complianceNote).toMatch(/permit/);
+      expect(v.photoStorageKey).toBe("biz-a/p-1/photo-9.jpg");
+    }
+  });
+
+  it("still requires code and citation", () => {
+    expect(parseContextPayload("code_ref", { code: "IRC R806.2" }).ok).toBe(false);
+  });
+});
+
 describe("suggestionEffect", () => {
   it("derives a context-entry commit from a valid proposal", () => {
     const result = suggestionEffect({

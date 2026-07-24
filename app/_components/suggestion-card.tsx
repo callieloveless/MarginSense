@@ -40,6 +40,27 @@ function describe(suggestion: SuggestionRow): string {
   }
 }
 
+/** A proposed `code_ref`'s displayable detail (citation, compliance consequence, source), or null
+ * when the suggestion isn't one. Read from the payload — no branch on the producing tool. */
+interface CodeRefDetail {
+  citation: string;
+  complianceNote: string | null;
+  sourceUrl: string | null;
+}
+function codeRefDetail(suggestion: SuggestionRow): CodeRefDetail | null {
+  if (suggestion.target !== "context_entry") return null;
+  const p = (suggestion.payload ?? {}) as Record<string, unknown>;
+  if (p.kind !== "code_ref") return null;
+  const inner = (p.payload ?? {}) as Record<string, unknown>;
+  const url = typeof inner.sourceUrl === "string" ? inner.sourceUrl : null;
+  return {
+    citation: String(inner.citation ?? ""),
+    complianceNote: typeof inner.complianceNote === "string" ? inner.complianceNote : null,
+    // Only render a real http(s) link (defensive over the JSON blob).
+    sourceUrl: url && /^https?:\/\//.test(url) ? url : null,
+  };
+}
+
 /** The severity of a proposed `finding`, or null when the suggestion isn't one. Read from the
  * payload — like everything else on this card, with no branch on which tool produced it. */
 function findingSeverity(suggestion: SuggestionRow): FindingSeverity | null {
@@ -112,6 +133,7 @@ export function SuggestionCard({
 }) {
   const isLineItem = suggestion.target === "estimate_line_item";
   const severity = findingSeverity(suggestion);
+  const code = codeRefDetail(suggestion);
   return (
     <li className="rounded-lg border border-neutral-200 p-3 dark:border-neutral-800">
       {severity ? (
@@ -120,6 +142,21 @@ export function SuggestionCard({
         </div>
       ) : null}
       <p className="text-sm">{describe(suggestion)}</p>
+
+      {code ? (
+        <div className="mt-1 space-y-1 text-xs text-neutral-600 dark:text-neutral-400">
+          <p>{code.citation}</p>
+          {/* The consequence framed as cost/time — why a code matters to the job (§3.5). */}
+          {code.complianceNote ? (
+            <p className="text-amber-800 dark:text-amber-300">Impact: {code.complianceNote}</p>
+          ) : null}
+          {code.sourceUrl ? (
+            <a href={code.sourceUrl} target="_blank" rel="noreferrer" className="inline-block underline">
+              Source
+            </a>
+          ) : null}
+        </div>
+      ) : null}
 
       {preview ? (
         <ProfitImpact preview={preview} />

@@ -36,7 +36,9 @@ import {
 const SYSTEM = [
   "You are Photo Advisor for a trade contractor. Look at the job photo and report what you can",
   "actually see: the condition, the likely cause, and how serious it is. Mark anything",
-  "structural, electrical, or otherwise dangerous as severity `safety`.",
+  "structural, electrical, or otherwise dangerous as severity `safety`. Mark anything that likely",
+  "needs a permit, a code check, an inspection, or a licensed trade as at least `attention` — never",
+  "`note` — so it gets a code lookup; reserve `note` for cosmetic observations with no code angle.",
   "For each repair, estimate the LABOR TIME in minutes for one experienced person — that",
   "estimate is the number the contractor's profit-per-hour depends on, so be realistic rather",
   "than optimistic. Name the materials a repair needs in plain words.",
@@ -157,6 +159,7 @@ export const photoAdvisorTool: Tool<PhotoAdvisorInput, PhotoAdvisorOutput> = {
       labor: result.labor,
       flaggedLabor: flagged,
       proposedLineItems: activeEstimateId !== null && result.labor.length > 0,
+      photoStorageKey: ctx.input.storageKey,
     };
 
     return {

@@ -71,5 +71,9 @@ export const outputSchema = z.object({
   flaggedLabor: z.array(z.string()),
   /** Whether candidate work could be proposed at all (false with no active estimate). */
   proposedLineItems: z.boolean(),
+  /** The storage key of the photo this run was about — every finding shares it. Carried on the
+   * output so a downstream tool (Code Finder, composed off findings) can trace a result back to
+   * the picture, since the raw findings don't carry it (add-code-finder). */
+  photoStorageKey: z.string().min(1),
 });
 export type PhotoAdvisorOutput = z.infer<typeof outputSchema>;
