@@ -109,6 +109,15 @@ buildable and typed now, live calls wait on a key.
       with `tool_choice` auto (forcing it would pre-empt the search). `output_config.format` is
       **incompatible with citations** (400) — that's why we use the result-tool. Everything is
       proven offline via the mock's canned result; only the live wire is deferred.
+- [ ] **#8b Photo Advisor** (`add-photo-advisor`): with a key set and the photo bucket live, run a
+      real job photo through vision and confirm — typed findings with **sane severities** (a
+      genuinely dangerous defect comes back `safety`, not `note`); **labor minutes that are
+      plausible** for the repair, since those minutes are the EPH denominator and the one
+      quantitative claim the model makes about the business; **no price anywhere** in any
+      suggestion (the result schema has no cost field, but confirm the model doesn't smuggle one
+      into a description); the licensed-professional disclaimer on the post; and `tool_run` token
+      usage recorded against a live vision call (vision costs more per run than text — watch the
+      first few).
 - [ ] **#7b Material Finder** (`add-material-finder`): after applying `0006` and setting the key,
       set a service area in Settings → search both modes → comparable **sourced** options appear
       in place with profit-per-hour previews → accept one → the signal header moves; and hand-add

@@ -68,11 +68,11 @@
 
 ## 4. Verification and close-out
 
-- [ ] 4.1 `npm run typecheck`, `npx vitest run`, and `npm run build` green after each stage (the
+- [x] 4.1 `npm run typecheck`, `npx vitest run`, and `npm run build` green after each stage (the
       build is the only check that catches Turbopack/App-Router issues; relative imports in
       `src/` stay extensionless).
-- [ ] 4.2 Add the live-AI proof item to `relevant_notes.md` §5: with a key set, run a real photo
+- [x] 4.2 Add the live-AI proof item to `relevant_notes.md` §5: with a key set, run a real photo
       through vision and confirm typed findings with sane severities, labor minutes that survive
       unchanged, no priced material anywhere, and `tool_run` token usage against a live call.
-- [ ] 4.3 Update `PROGRESS.md`: 8b done, #9 next.
-- [ ] 4.4 `openspec validate add-photo-advisor --strict`, then archive on its own commit.
+- [x] 4.3 Update `PROGRESS.md`: 8b done, #9 next.
+- [x] 4.4 `openspec validate add-photo-advisor --strict`, then archive on its own commit.

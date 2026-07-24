@@ -6,7 +6,7 @@
 > stands on ground that already exists. Specs are the source of truth
 > ([`openspec/`](./openspec/)); this file is the at-a-glance view.
 
-**Last updated:** 2026-07-23
+**Last updated:** 2026-07-24
 
 ---
 
@@ -23,7 +23,7 @@
 | 7a | `add-structured-result-port` (port typed result + citations, real Anthropic impl) | `tool-platform` | ✅ **Done** (archived 2026-07-23; live-AI proof deferred) |
 | 7b | `add-material-finder` (the first real tool) | `material-finder`, `project-context`, `onboarding` | ✅ **Done** (archived 2026-07-23; live-AI + live-infra proof deferred) |
 | 8a | `add-photo-capture` (job photo upload + tenant-scoped storage) | `job-photos` | ✅ **Done** (archived 2026-07-23; live-storage proof deferred) |
-| 8b | Photo Advisor (the vision tool) | `photo-advisor` | ⏳ Planned |
+| 8b | `add-photo-advisor` (the vision tool) | `photo-advisor`, `project-context` | ✅ **Done** (archived 2026-07-24; live-AI proof deferred) |
 | 9 | Code Finder (auto-trigger on `photo.uploaded`) | `code-finder` | ⏳ Planned |
 | 10 | Client Estimate Doc | `client-estimate-doc` | ⏳ Planned |
 | 11 | Hardening & launch pass | — | ⏳ Planned |
@@ -146,13 +146,19 @@ trigger seam (`TRIGGERS` still empty, so a no-op today) — #9 subscribes Code F
 entry. **Open items are deferred to live infra** (relevant_notes.md §1, §2b): create the
 private bucket, apply `0007`, and prove object isolation + signed-URL expiry end to end.
 
-### 8b. ⏳ Photo Advisor (the vision tool)
-The tool on top of 8a: one photo per run, its bytes passed in as tool **input** (tools get no
-storage handle) to the model port's existing `images`, proposing `finding` entries + candidate
-**labor and material** line items as `pending` suggestions — so P2's profit preview shows what
-the work would do to the job's profit per hour before you accept. Carries the
-licensed-professional / non-authoritative disclaimer via `message.disclaimer` **and** as a
-standing notice on the tool panel (constitution §5, §7).
+### 8b. ✅ Photo Advisor (the vision tool)
+The tool on top of 8a: **one photo per run** — taken right there or chosen from the job — its
+bytes passed in as tool **input** (tools get no storage handle) to the model port's existing
+`images`, with #7a's structured result. It proposes `finding` entries carrying a **severity**
+(`safety` / `attention` / `note`) and the photo behind them, plus **labor** line items whose
+minutes flow into P2's preview, so you see what a repair does to the job's profit per hour before
+accepting. It **never prices anything**: the result schema has no cost field, materials are named
+in the finding, and the post hands pricing to Material Finder — an uncosted material line would
+roll up as zero and quietly overstate the job's profit. An implausibly large estimate is proposed
+*and* flagged, never dropped. Carries the shared licensed-professional disclaimer
+(`src/tools/disclaimer.ts`) via `message.disclaimer` **and** as a standing panel notice (§5, §7).
+**The only open item is deferred to live AI** (relevant_notes.md §5): prove a real vision call
+returns sane severities, plausible minutes, and no smuggled price.
 
 ### 9. ⏳ Code Finder (auto-trigger)
 Surfaces relevant **local** building codes — the first **auto-trigger**: the `photo.uploaded`
