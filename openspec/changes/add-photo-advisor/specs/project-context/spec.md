@@ -1,52 +1,36 @@
 ## MODIFIED Requirements
 
-### Requirement: Suggestions queue with accept and dismiss
-The system SHALL hold proposed changes as `suggestions` with status `pending`, `accepted`, or
-`dismissed`. A suggestion SHALL name its target (a context entry to commit, or an estimate line
-item to add) and its payload. Accepting a suggestion SHALL be the ONLY path that commits the
-proposed context entry or estimate change; a dismissed suggestion SHALL be remembered so the
-same proposal does not reappear. No suggestion SHALL be applied automatically. A suggestion
-SHALL be presented from its target and payload alone — never from the identity of the tool that
-produced it — so that a pending `estimate_line_item` suggestion SHALL show the profit impact of
-accepting it: the estimate's Effective-Profit-per-Hour and its red/yellow/green signal as they
-are now and as they would be if the line were added. When a proposed line's **cost is not yet
-known** — a material a tool identified but could not price — the preview SHALL NOT show a profit
-delta computed as though the line were free; it SHALL show the line's labor-hour impact together
-with a plain note that the cost is not yet known.
+### Requirement: Typed context entries per project
+Each project SHALL have a shared context holding typed, structured entries — `finding`,
+`material`, `code_ref`, `photo`, and `fact` (constitution §4.1) — where every entry carries a
+non-null `business_id`, its project, a typed payload for its kind, and an author (the user or,
+later, a named tool). Entries SHALL be read and added only through tenant-scoped helpers.
 
-#### Scenario: Accept commits the change
-- **WHEN** a user accepts a pending suggestion that proposes a material line item
-- **THEN** the line item is added to the target estimate and the suggestion becomes `accepted`
+A `finding` SHALL additionally carry a **severity** — `safety`, `attention`, or `note` — so the
+job's memory records how serious a diagnosis is without a reader having to interpret its prose,
+and it MAY name the photo it was derived from. Wherever a severity is displayed it SHALL be
+paired with text and never conveyed by colour alone (constitution §6, phone-first accessibility).
 
-#### Scenario: Dismiss is remembered
-- **WHEN** a user dismisses a pending suggestion
-- **THEN** the suggestion becomes `dismissed`, nothing is committed, and it is not surfaced
-  again as pending
+#### Scenario: Add a material entry
+- **WHEN** a material is recorded for a project with a name, price, unit, supplier, and source
+  URL
+- **THEN** it persists as a `material` context entry on that project with its typed payload
+  and its author
 
-#### Scenario: Nothing auto-applies
-- **WHEN** a suggestion is created
-- **THEN** it is `pending` and no context entry or estimate changes until the user accepts it
+#### Scenario: Entry kinds are constrained
+- **WHEN** a context entry is written with a kind outside `finding | material | code_ref |
+  photo | fact`
+- **THEN** the write is rejected at the validation boundary
 
-#### Scenario: A line-item suggestion previews its profit impact
-- **WHEN** a pending `estimate_line_item` suggestion is shown for a project with an active
-  estimate
-- **THEN** it shows the current EPH and signal and the EPH and signal the estimate would have
-  with the proposed line added, and that previewed EPH equals the EPH the estimate has after the
-  suggestion is accepted
+#### Scenario: A finding records its severity
+- **WHEN** a `finding` entry is recorded
+- **THEN** it carries one of `safety`, `attention`, or `note`, and a payload with a severity
+  outside that set is rejected at the validation boundary
 
-#### Scenario: The preview degrades gracefully with no active estimate
-- **WHEN** a line-item suggestion is shown for a project with no active estimate (or no billable
-  capacity set)
-- **THEN** the proposed change is shown without a profit delta and with a plain note, never a
-  broken or fabricated number
+#### Scenario: A finding may name its photo
+- **WHEN** a finding was derived from a job photo
+- **THEN** the entry may carry that photo's reference, and an entry without one is still valid
 
-#### Scenario: An unpriced line shows its hours, not a free-line profit delta
-- **WHEN** a pending `estimate_line_item` suggestion carries no cost (an identified but unpriced
-  material)
-- **THEN** it is shown with a plain "not yet priced" note and any labor-hour impact, and NOT with
-  a profit-per-hour delta that treats the missing cost as zero
-
-#### Scenario: Presentation does not depend on the tool
-- **WHEN** two different tools each produce a suggestion with the same target and payload
-- **THEN** the two suggestions are presented identically, driven by target and payload, with no
-  branch on which tool produced them
+#### Scenario: Severity is never colour alone
+- **WHEN** a finding's severity is shown to the user
+- **THEN** it is labelled in words, with any colour serving only as reinforcement

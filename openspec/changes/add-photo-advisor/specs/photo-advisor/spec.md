@@ -1,12 +1,11 @@
 ## ADDED Requirements
 
 ### Requirement: Photo Advisor reads one job photo and proposes what it finds
-The system SHALL provide a Photo Advisor tool that takes **one** of the job's stored photos and
-an optional question, sends the image to the model, and proposes what it finds into the job: a
-diagnosis as `finding` context entries and the work it implies as candidate estimate line items.
-It SHALL post a summary of what it saw to the single project conversation. The tool SHALL
-receive the image through its validated input and SHALL NOT be given a storage or database
-handle.
+The system SHALL provide a Photo Advisor tool that takes **one** job photo and an optional
+question, sends the image to the model, and proposes what it finds into the job as `finding`
+context entries. It SHALL post a summary of what it saw to the single project conversation. The
+tool SHALL receive the image through its validated input and SHALL NOT be given a storage or
+database handle.
 
 #### Scenario: A photo produces findings
 - **WHEN** the user runs Photo Advisor on a job photo
@@ -22,13 +21,32 @@ handle.
 - **THEN** the image reaches it as validated input resolved by the caller, and the tool has no
   method that could read another photo, another project, or any stored row
 
-### Requirement: Candidate work is proposed as line items that preview their profit impact
-When the project has an active estimate, Photo Advisor SHALL propose the work a finding implies
-as `estimate_line_item` suggestions targeting that estimate — **labor** lines carrying estimated
-labor minutes, and **material** lines carrying a description and quantity — so the user sees what
-accepting the work does to the job's profit per hour before committing to it. When the project
-has no active estimate, it SHALL propose findings only and SHALL say plainly that candidate work
-needs an estimate, rather than proposing a line item with no estimate to land in.
+### Requirement: A photo can be taken or chosen from the Photo Advisor surface
+The Photo Advisor surface SHALL let the user both **capture a new photo and run on it in one
+step** — the photo joining the job through the same storage path as any other — and **choose a
+photo already on the job**. Running SHALL NOT require navigating to another screen first.
+
+#### Scenario: Capture and run in one step
+- **WHEN** the user takes a photo from the Photo Advisor surface and runs
+- **THEN** the photo is stored against the job exactly as an upload would be, and the run happens
+  on it without a separate upload step
+
+#### Scenario: Run on a photo already on the job
+- **WHEN** the job already has photos and the user opens Photo Advisor
+- **THEN** the user can select one of them and run on it
+
+#### Scenario: A job with no photos yet
+- **WHEN** the job has no photos and the user opens Photo Advisor
+- **THEN** the surface offers to take one, rather than presenting an empty picker
+
+### Requirement: Repair labor is proposed as line items that preview their profit impact
+When the project has an active estimate, Photo Advisor SHALL propose the repair labor a finding
+implies as `estimate_line_item` suggestions targeting that estimate, each carrying its estimated
+labor minutes, so the user sees what accepting the work does to the job's profit per hour before
+committing to it. The line's cost SHALL be derived by the engine from the business's own burdened
+labor rate — never supplied by the model. When the project has no active estimate, Photo Advisor
+SHALL propose findings only and SHALL say plainly that candidate work needs an estimate, rather
+than proposing a line item with no estimate to land in.
 
 #### Scenario: Labor work previews its profit impact
 - **WHEN** Photo Advisor proposes repair labor for a project with an active estimate
@@ -36,34 +54,65 @@ needs an estimate, rather than proposing a line item with no estimate to land in
   labor minutes, and its effect on the estimate's profit per hour and red/yellow/green signal is
   shown before the user accepts
 
+#### Scenario: The model never supplies a labor cost
+- **WHEN** a labor candidate is proposed
+- **THEN** it carries minutes only, and its cost is computed by the engine from the business's
+  burdened labor rate
+
 #### Scenario: No active estimate
 - **WHEN** Photo Advisor runs on a project with no active estimate
 - **THEN** its findings are still proposed, no line-item suggestion is created, and the
   conversation post says the candidate work needs an estimate to be added to
 
-### Requirement: Photo Advisor never invents a price
-Photo Advisor SHALL NOT attach a price to anything it proposes: it does not search the web, so a
-material candidate SHALL be proposed **unpriced** — its description and quantity only
-(constitution §7 — the app never fabricates a price it cannot source). Its conversation post
-SHALL point the user at the tool that can price it.
+### Requirement: An implausible labor estimate is surfaced and flagged, never dropped silently
+When a proposed labor candidate exceeds a plausibility bound, Photo Advisor SHALL still propose
+it with its actual estimated minutes, and its conversation post SHALL say that the estimate looks
+high. It SHALL NOT silently discard the candidate or quietly reduce its minutes.
 
-#### Scenario: A material candidate carries no price
-- **WHEN** Photo Advisor proposes a material the repair needs
-- **THEN** the suggestion carries the material's description and quantity with no unit cost, and
-  no fabricated or estimated price reaches the job
+#### Scenario: An oversized estimate is proposed with a warning
+- **WHEN** the model returns a labor candidate beyond the plausibility bound
+- **THEN** the candidate is still proposed with the minutes the model gave, and the conversation
+  post states that the estimate looks high and should be checked
+
+#### Scenario: Minutes are never silently altered
+- **WHEN** any labor candidate is proposed
+- **THEN** the minutes on the suggestion are the minutes the model returned, neither capped nor
+  rounded away without saying so
+
+### Requirement: Photo Advisor names materials but never prices them
+Photo Advisor SHALL NOT propose material line items and SHALL NOT attach a price to anything: it
+does not search the web, so a price it produced would be fabricated (constitution §7), and a
+zero-cost line accepted into an estimate would overstate that job's profit. The materials a
+repair needs SHALL instead be named in the finding, and the conversation post SHALL hand pricing
+to the tool that can source it.
+
+#### Scenario: No material line item is ever proposed
+- **WHEN** Photo Advisor identifies materials a repair needs
+- **THEN** no `estimate_line_item` suggestion for a material is created, and no zero-cost or
+  fabricated-cost line can enter the estimate
+
+#### Scenario: Materials are named in the finding
+- **WHEN** a repair needs materials
+- **THEN** the finding states what is needed, in the job's shared context
 
 #### Scenario: The post hands pricing off
-- **WHEN** Photo Advisor proposes one or more unpriced materials
-- **THEN** its conversation post says the materials still need pricing and names Material Finder
+- **WHEN** Photo Advisor names one or more materials
+- **THEN** its conversation post says they still need pricing and names Material Finder
 
-### Requirement: Findings are traceable to the photo that produced them
-Each `finding` Photo Advisor proposes SHALL carry a reference to the photo it was derived from,
-so a diagnosis in the job's shared memory can always be traced back to the picture behind it.
+### Requirement: Findings carry a severity and the photo that produced them
+Each `finding` Photo Advisor proposes SHALL carry a severity — `safety`, `attention`, or `note` —
+and a reference to the photo it was derived from, so the job's shared memory records how serious
+a diagnosis is and which picture it came from.
 
-#### Scenario: A finding names its photo
+#### Scenario: A finding names its photo and its severity
 - **WHEN** Photo Advisor proposes a finding from a photo
-- **THEN** the proposed entry carries that photo's reference, and it survives into the committed
-  context entry when the user accepts
+- **THEN** the proposed entry carries that photo's reference and one of the three severities, and
+  both survive into the committed context entry when the user accepts
+
+#### Scenario: A safety finding is distinguishable
+- **WHEN** a finding concerns a safety problem
+- **THEN** it carries severity `safety`, so it is distinguishable from a cosmetic note without
+  reading the prose
 
 ### Requirement: Physical-work advice carries the licensed-professional disclaimer
 Every Photo Advisor result SHALL carry the licensed-professional, non-authoritative disclaimer
@@ -94,11 +143,11 @@ plain "connect AI" state and the run SHALL be unavailable, rather than failing w
   throws
 
 ### Requirement: Nothing Photo Advisor produces is committed until the user accepts
-Everything Photo Advisor proposes — findings and candidate line items alike — SHALL be a
-`pending` suggestion; no estimate or context change SHALL occur until the user accepts it, and
-the run SHALL be recorded as a `tool_run` linked to what it produced.
+Everything Photo Advisor proposes — findings and candidate labor alike — SHALL be a `pending`
+suggestion; no estimate or context change SHALL occur until the user accepts it, and the run
+SHALL be recorded as a `tool_run` linked to what it produced.
 
 #### Scenario: Proposals stay pending
-- **WHEN** Photo Advisor proposes findings and line items
+- **WHEN** Photo Advisor proposes findings and labor lines
 - **THEN** they are `pending`, nothing in the estimate or context changes until the user accepts,
   and a `tool_run` records the run and is referenced by the suggestions and the post
