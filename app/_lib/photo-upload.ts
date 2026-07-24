@@ -12,8 +12,11 @@
  * rejects writes" are indistinguishable from the outside.
  */
 
+import { emit } from "@/src/tools";
+import { resolveModelPort } from "@/src/ai";
 import { type TenantDb } from "@/src/db/tenant";
 import { type ContextEntryRow, type ProjectPhotoRow } from "@/src/db/schema";
+import { dispatchDeps } from "./tool-runner";
 
 /** What the caller has already validated: real image bytes of known dimensions. */
 export interface StorePhotoInput {
@@ -32,6 +35,35 @@ export type StorePhotoResult =
 
 /** The message shown for any storage-side failure — plain, phone-first, non-technical. */
 const FAILED = "That photo couldn't be saved. Check your signal and try again.";
+
+/**
+ * Emit `photo.uploaded` for a stored photo. **This lives inside the shared commit on purpose**:
+ * every path that puts a photo on a job — the Job-context uploader and Photo Advisor's
+ * capture-and-run — must fire the event, or #9's Code Finder would quietly run for some of a
+ * job's photos and not others. Keeping the emit next to the write is what makes that impossible
+ * to get wrong by adding a third entry point later.
+ *
+ * With `TRIGGERS` empty this dispatches nothing (the tool-platform spec: an event with no
+ * subscribers is a no-op). Deps carry the **resolved** model port so a subscriber added in #9
+ * reaches a live model rather than the mock. Failures are logged and swallowed: the photo is
+ * already stored, and an auto-trigger must never turn a successful upload into an error.
+ */
+async function emitPhotoUploaded(
+  tenantDb: TenantDb,
+  input: { projectId: string; photoId: string; storageKey: string },
+): Promise<void> {
+  try {
+    const resolution = resolveModelPort();
+    const deps =
+      resolution.status === "configured"
+        ? dispatchDeps(tenantDb, resolution.port)
+        : dispatchDeps(tenantDb);
+    await emit("photo.uploaded", { projectId: input.projectId, input }, deps);
+  } catch (err) {
+    // Never re-thrown (see the doc comment) — but never invisible either.
+    console.error(`[photos] photo.uploaded subscribers failed for photo ${input.photoId}:`, err);
+  }
+}
 
 /**
  * Store the photo and record it in the job's one memory. Returns a typed failure rather than
@@ -72,6 +104,13 @@ export async function storePhotoForProject(
     });
     return { ok: false, error: FAILED };
   }
+
+  // Every stored photo announces itself, whichever surface stored it.
+  await emitPhotoUploaded(tenantDb, {
+    projectId: input.projectId,
+    photoId: photo.id,
+    storageKey: photo.storageKey,
+  });
 
   return { ok: true, photo };
 }

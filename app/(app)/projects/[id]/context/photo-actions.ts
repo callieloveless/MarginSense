@@ -2,11 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getServerSession, tenantDbForSession } from "@/src/db/session";
-import { type TenantDb } from "@/src/db/tenant";
 import { SIGNED_URL_TTL_SECONDS_ON_DEMAND, validateUpload } from "@/src/photos";
-import { emit } from "@/src/tools";
-import { resolveModelPort } from "@/src/ai";
-import { dispatchDeps } from "@/app/_lib/tool-runner";
 import { deletePhotoForProject, storePhotoForProject } from "@/app/_lib/photo-upload";
 
 /**
@@ -16,9 +12,9 @@ import { deletePhotoForProject, storePhotoForProject } from "@/app/_lib/photo-up
  * plus a `photo` context entry authored by the user. Nothing here creates a suggestion, calls a
  * model, or records a `tool_run`; the vision tool is 8b.
  *
- * A successful upload emits `photo.uploaded` through the platform's dormant trigger seam, so #9
- * can subscribe Code Finder with a registry entry instead of a rewiring — and the emit is
- * wrapped so a future subscriber's failure can never fail an upload that already succeeded.
+ * A successful upload emits `photo.uploaded` — but that lives in `photo-upload.ts`, inside the
+ * shared commit, so EVERY surface that stores a photo fires it (Photo Advisor's capture-and-run
+ * included) rather than only the one that remembered to.
  */
 
 export type PhotoActionResult = { ok: true; message: string } | { ok: false; error: string };
@@ -35,30 +31,6 @@ function intField(formData: FormData, name: string): number | null {
   if (typeof raw !== "string") return null;
   const n = Number(raw);
   return Number.isInteger(n) && n > 0 ? n : null;
-}
-
-/**
- * Emit `photo.uploaded` for a stored photo. With `TRIGGERS` empty this dispatches nothing (the
- * tool-platform spec: an event with no subscribers is a no-op); the deps are built with the
- * **resolved** model port so a subscriber added in #9 reaches a live model rather than the mock.
- * Failures are swallowed: the photo is already stored, and an auto-trigger is never allowed to
- * turn a successful upload into an error.
- */
-async function emitPhotoUploaded(
-  tenantDb: TenantDb,
-  input: { projectId: string; photoId: string; storageKey: string },
-): Promise<void> {
-  try {
-    const resolution = resolveModelPort();
-    const deps =
-      resolution.status === "configured"
-        ? dispatchDeps(tenantDb, resolution.port)
-        : dispatchDeps(tenantDb);
-    await emit("photo.uploaded", { projectId: input.projectId, input }, deps);
-  } catch (err) {
-    // Never re-thrown (see the doc comment) — but never invisible either.
-    console.error(`[photos] photo.uploaded subscribers failed for photo ${input.photoId}:`, err);
-  }
 }
 
 /**
@@ -119,12 +91,6 @@ export async function uploadPhotoAction(
     caption,
   });
   if (!stored.ok) return { ok: false, error: stored.error };
-
-  await emitPhotoUploaded(tenantDb, {
-    projectId,
-    photoId: stored.photo.id,
-    storageKey: stored.photo.storageKey,
-  });
 
   revalidate(projectId);
   return { ok: true, message: "Photo added to this job." };

@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { MAX_UPLOAD_BYTES } from "@/src/photos";
-import { inputClassName } from "@/app/_components/fields";
+import { fileInputClassName, inputClassName } from "@/app/_components/fields";
 import { ImagePrepError, photoFormData, prepareImage } from "@/app/_lib/prepare-image";
 import { uploadPhotoAction, type PhotoActionResult } from "./photo-actions";
 
@@ -73,7 +73,7 @@ export function PhotoUploader({ projectId }: { projectId: string }) {
           name="file"
           accept="image/*"
           onChange={(e) => setFileName(e.currentTarget.files?.[0]?.name ?? "")}
-          className={`${inputClassName} file:mr-3 file:rounded file:border-0 file:bg-neutral-900 file:px-3 file:py-1 file:text-white dark:file:bg-white dark:file:text-neutral-900`}
+          className={fileInputClassName}
         />
       </label>
       <input

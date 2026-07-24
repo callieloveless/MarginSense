@@ -18,6 +18,10 @@ import type { ReactNode } from "react";
 export const inputClassName =
   "w-full min-w-0 rounded-md border border-neutral-300 px-3 py-2 text-base dark:border-neutral-700 dark:bg-neutral-900";
 
+/** The photo-picker input: {@link inputClassName} plus the file-button styling. Shared by every
+ * surface that takes a job photo (the job-context uploader and Photo Advisor's capture). */
+export const fileInputClassName = `${inputClassName} file:mr-3 file:rounded file:border-0 file:bg-neutral-900 file:px-3 file:py-1 file:text-white dark:file:bg-white dark:file:text-neutral-900`;
+
 export function Label({ htmlFor, children }: { htmlFor?: string; children: ReactNode }) {
   return (
     <label htmlFor={htmlFor} className="block text-sm font-medium">

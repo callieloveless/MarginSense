@@ -11,8 +11,10 @@ import {
   createMemoryPhotoBackend,
   createMemoryPhotoStorageBackend,
   createMemoryProjectBackend,
+  createMemoryToolRunsBackend,
   createTenantDb,
 } from "@/src/db/tenant";
+import { TRIGGERS } from "@/src/tools";
 import { deletePhotoForProject, storePhotoForProject } from "./photo-upload";
 
 const BUSINESS = "biz-a";
@@ -37,6 +39,7 @@ function wire(overrides: { failEntry?: boolean } = {}) {
     projects: createMemoryProjectBackend(),
     photos,
     photoStorage: storage,
+    toolRuns: createMemoryToolRunsBackend(),
     context: overrides.failEntry
       ? {
           ...context,
@@ -110,6 +113,56 @@ describe("storePhotoForProject", () => {
     expect(await tenantDb.listContextEntries(PROJECT)).toHaveLength(0);
     expect(logged).toHaveBeenCalled();
     logged.mockRestore();
+  });
+});
+
+describe("storePhotoForProject — the photo.uploaded event", () => {
+  /** Run `body` with a tool subscribed to `photo.uploaded`, then restore the registry. */
+  async function withSubscriber(toolName: string, body: () => Promise<void>): Promise<void> {
+    const original = TRIGGERS["photo.uploaded"];
+    (TRIGGERS as Record<string, readonly string[]>)["photo.uploaded"] = [toolName];
+    try {
+      await body();
+    } finally {
+      if (original === undefined) {
+        delete (TRIGGERS as Record<string, readonly string[]>)["photo.uploaded"];
+      } else {
+        (TRIGGERS as Record<string, readonly string[]>)["photo.uploaded"] = original;
+      }
+    }
+  }
+
+  it("emits from the shared commit, so EVERY surface that stores a photo fires it", async () => {
+    // The regression this guards: the emit used to live in one action, so a photo taken through
+    // Photo Advisor was invisible to the event #9's Code Finder subscribes to.
+    const { tenantDb } = wire();
+    const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await withSubscriber("no-such-tool", async () => {
+      const result = await storePhotoForProject(tenantDb, input);
+      // A broken subscriber can never fail a photo that is already stored.
+      expect(result.ok).toBe(true);
+    });
+
+    // Dispatch rejected the unregistered name — which is the proof the event actually reached
+    // dispatch rather than being skipped, and that the failure was logged, not swallowed.
+    expect(logged).toHaveBeenCalledWith(
+      expect.stringContaining("photo.uploaded subscribers failed"),
+      expect.any(Error),
+    );
+    expect(await tenantDb.listPhotos(PROJECT)).toHaveLength(1);
+    logged.mockRestore();
+  });
+
+  it("succeeds with no subscribers at all (today's dormant registry)", async () => {
+    const { tenantDb } = wire();
+    expect(TRIGGERS["photo.uploaded"]).toBeUndefined();
+
+    const result = await storePhotoForProject(tenantDb, input);
+
+    expect(result.ok).toBe(true);
+    expect(await tenantDb.listToolRuns(PROJECT)).toHaveLength(0);
+    expect(await tenantDb.listPendingSuggestions(PROJECT)).toHaveLength(0);
   });
 });
 

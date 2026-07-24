@@ -64,18 +64,23 @@ const SYSTEM = [
   "source URL it came from. Record your answer with the result tool.",
 ].join(" ");
 
-/** Group the found needs into a human summary with source links + a verify note. */
+/**
+ * Group the found needs into a human summary with source links + a verify note.
+ *
+ * **Plain text, no markdown**: the conversation renders a message body verbatim, so `**bold**`
+ * would show its asterisks to the user.
+ */
 function summarize(needs: readonly MaterialNeed[]): string {
   if (needs.length === 0) return "No sourced materials were found. Try a more specific search, or add one by hand.";
   const blocks = needs.map((n) => {
     const sourced = n.options.filter((o) => isSourceUrl(o.sourceUrl));
-    if (sourced.length === 0) return `**${n.need}**: no sourced options found.`;
+    if (sourced.length === 0) return `${n.need}: no sourced options found.`;
     const lines = sourced.map((o) => {
       const price = `$${(o.priceCents / 100).toFixed(2)}/${o.unit}`;
       const who = o.supplier ? ` — ${o.supplier}` : "";
       return `  - ${o.name}: ${price}${who} (${o.sourceUrl})`;
     });
-    return `**${n.need}**\n${lines.join("\n")}`;
+    return `${n.need}\n${lines.join("\n")}`;
   });
   return [
     "Material Finder found these options:",

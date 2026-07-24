@@ -812,7 +812,11 @@ export class TenantDb {
     if (!photo) return null;
     const object = await this.#photoStorageBackend.getObject(this.businessId, photo.storageKey);
     if (!object) return null;
-    return { photo, bytes: object.bytes, contentType: object.contentType };
+    // The ROW's content type is authoritative: it was validated against the accepted image types
+    // at upload. What storage reports can be empty or a generic octet-stream depending on how the
+    // object was written, and this value goes on to a vision API that only accepts real image
+    // media types — so the stored one wins, and the object's is only a fallback.
+    return { photo, bytes: object.bytes, contentType: photo.contentType || object.contentType };
   }
 
   /**

@@ -62,8 +62,13 @@ function buildPrompt(input: PhotoAdvisorInput, hasActiveEstimate: boolean): stri
   return lines.join("\n");
 }
 
-/** The conversation post: what was seen, what the work looks like, what still needs pricing, and
- * any estimate large enough to be worth a second look. */
+/**
+ * The conversation post: what was seen, what the work looks like, what still needs pricing, and
+ * any estimate large enough to be worth a second look.
+ *
+ * **Plain text, no markdown.** The conversation renders a message body verbatim, so `**bold**`
+ * would show its asterisks — on the safety marker, of all places. The words carry the emphasis.
+ */
 function summarize(
   result: VisionResult,
   opts: { hasActiveEstimate: boolean; flagged: readonly string[] },
@@ -78,7 +83,12 @@ function summarize(
     blocks.push(
       "",
       ...result.findings.map((f) => {
-        const mark = f.severity === "safety" ? "**Safety issue** — " : f.severity === "attention" ? "**Needs attention** — " : "";
+        const mark =
+          f.severity === "safety"
+            ? "SAFETY ISSUE — "
+            : f.severity === "attention"
+              ? "Needs attention — "
+              : "";
         return `- ${mark}${f.summary}`;
       }),
     );
@@ -106,7 +116,7 @@ function summarize(
   if (materials.length > 0) {
     blocks.push(
       "",
-      `Materials this needs: ${materials.join(", ")}. Photo Advisor can't price them — run **Material Finder** to get current, sourced prices and add them to the estimate.`,
+      `Materials this needs: ${materials.join(", ")}. Photo Advisor can't price them — run Material Finder to get current, sourced prices and add them to the estimate.`,
     );
   }
 

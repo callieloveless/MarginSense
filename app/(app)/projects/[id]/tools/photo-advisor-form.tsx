@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { MAX_UPLOAD_BYTES } from "@/src/photos";
 import { PHYSICAL_WORK_DISCLAIMER } from "@/src/tools";
-import { inputClassName } from "@/app/_components/fields";
+import { fileInputClassName, inputClassName } from "@/app/_components/fields";
 import { ImagePrepError, photoFormData, prepareImage } from "@/app/_lib/prepare-image";
 import {
   capturePhotoAndAdviseAction,
@@ -38,8 +38,16 @@ export function PhotoAdvisorForm({
   aiConfigured: boolean;
   storageReady: boolean;
 }) {
-  const [mode, setMode] = useState<"take" | "choose">(photos.length > 0 ? "choose" : "take");
-  const [selected, setSelected] = useState<string | null>(photos[0]?.id ?? null);
+  // Both of these are DERIVED from the current photo list rather than frozen at mount: a capture
+  // adds a photo and the server component re-renders with a longer list, so state seeded once
+  // would leave the picker with nothing selected the moment it finally has something to pick.
+  const [pickedMode, setPickedMode] = useState<"take" | "choose" | null>(null);
+  const [picked, setPicked] = useState<string | null>(null);
+  const mode: "take" | "choose" =
+    photos.length === 0 ? "take" : (pickedMode ?? "choose");
+  const selected =
+    picked !== null && photos.some((p) => p.id === picked) ? picked : (photos[0]?.id ?? null);
+
   const [state, setState] = useState<AdvisorActionResult | null>(null);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -62,6 +70,21 @@ export function PhotoAdvisorForm({
         </Notice>
       </>
     );
+  }
+
+  /** Arrow keys move the selection between photos and focus follows it — how a radio group is
+   * expected to behave, and the reason the tiles use a roving tabindex. */
+  function onPickerKeyDown(event: React.KeyboardEvent<HTMLDivElement>): void {
+    const step = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 0;
+    if (step === 0 || photos.length === 0) return;
+    event.preventDefault();
+    const current = photos.findIndex((p) => p.id === selected);
+    const next = photos[(current + step + photos.length) % photos.length];
+    if (!next) return;
+    setPicked(next.id);
+    event.currentTarget
+      .querySelector<HTMLButtonElement>(`[data-photo-id="${next.id}"]`)
+      ?.focus();
   }
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>): Promise<void> {
@@ -113,12 +136,12 @@ export function PhotoAdvisorForm({
       <Disclaimer />
 
       <div className="flex gap-2" role="group" aria-label="Which photo to look at">
-        <ModeButton active={mode === "take"} onClick={() => setMode("take")}>
+        <ModeButton active={mode === "take"} onClick={() => setPickedMode("take")}>
           Take a photo
         </ModeButton>
         <ModeButton
           active={mode === "choose"}
-          onClick={() => setMode("choose")}
+          onClick={() => setPickedMode("choose")}
           disabled={photos.length === 0}
         >
           {photos.length === 0 ? "No photos yet" : "Use a job photo"}
@@ -134,45 +157,55 @@ export function PhotoAdvisorForm({
               type="file"
               name="file"
               accept="image/*"
-              className={`${inputClassName} file:mr-3 file:rounded file:border-0 file:bg-neutral-900 file:px-3 file:py-1 file:text-white dark:file:bg-white dark:file:text-neutral-900`}
+              className={fileInputClassName}
             />
           </label>
         ) : (
-          <ul className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="Job photos">
+          // The radios are DIRECT children of the group: an intervening <li> would break the
+          // ownership ARIA requires, so a screen reader would announce plain buttons with no
+          // "2 of 5, selected". Arrow keys move between photos with a roving tabindex, as a
+          // radio group is expected to behave.
+          <div
+            className="grid grid-cols-3 gap-2"
+            role="radiogroup"
+            aria-label="Job photos"
+            onKeyDown={onPickerKeyDown}
+          >
             {photos.map((photo) => (
-              <li key={photo.id}>
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={selected === photo.id}
-                  onClick={() => setSelected(photo.id)}
-                  className={`block w-full overflow-hidden rounded-md border-2 ${
-                    selected === photo.id
-                      ? "border-neutral-900 dark:border-white"
-                      : "border-transparent"
-                  }`}
-                >
-                  {photo.thumbUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element -- signed URLs are
-                    // short-lived and per-request; next/image would cache and re-request them.
-                    <img
-                      src={photo.thumbUrl}
-                      alt={photo.caption ?? "Job photo"}
-                      className="aspect-square w-full object-cover"
-                    />
-                  ) : (
-                    <span className="flex aspect-square w-full items-center justify-center bg-neutral-100 p-1 text-center text-[10px] text-neutral-500 dark:bg-neutral-900">
-                      Unavailable
-                    </span>
-                  )}
-                  {/* Selection is never colour alone: the chosen photo says so in words. */}
-                  <span className="block truncate px-1 py-0.5 text-left text-[11px] text-neutral-500">
-                    {selected === photo.id ? "✓ Selected" : (photo.caption ?? "Photo")}
+              <button
+                key={photo.id}
+                type="button"
+                role="radio"
+                aria-checked={selected === photo.id}
+                tabIndex={selected === photo.id ? 0 : -1}
+                data-photo-id={photo.id}
+                onClick={() => setPicked(photo.id)}
+                className={`block w-full overflow-hidden rounded-md border-2 ${
+                  selected === photo.id
+                    ? "border-neutral-900 dark:border-white"
+                    : "border-transparent"
+                }`}
+              >
+                {photo.thumbUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- signed URLs are
+                  // short-lived and per-request; next/image would cache and re-request them.
+                  <img
+                    src={photo.thumbUrl}
+                    alt={photo.caption ?? "Job photo"}
+                    className="aspect-square w-full object-cover"
+                  />
+                ) : (
+                  <span className="flex aspect-square w-full items-center justify-center bg-neutral-100 p-1 text-center text-[10px] text-neutral-500 dark:bg-neutral-900">
+                    Unavailable
                   </span>
-                </button>
-              </li>
+                )}
+                {/* Selection is never colour alone: the chosen photo says so in words. */}
+                <span className="block truncate px-1 py-0.5 text-left text-[11px] text-neutral-500">
+                  {selected === photo.id ? "✓ Selected" : (photo.caption ?? "Photo")}
+                </span>
+              </button>
             ))}
-          </ul>
+          </div>
         )}
 
         <input
