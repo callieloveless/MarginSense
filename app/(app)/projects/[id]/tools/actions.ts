@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { getServerSession, tenantDbForSession } from "@/src/db/session";
-import { dispatch, getTool } from "@/src/tools";
-import { dispatchDeps } from "@/app/_lib/tool-runner";
+import { getTool } from "@/src/tools";
+import { dispatchAndCompose } from "@/app/_lib/compose";
 
 export type RunToolResult = { ok: true; message: string } | { ok: false; error: string };
 
@@ -51,9 +51,11 @@ export async function runToolAction(
   }
 
   try {
-    const outcome = await dispatch(
+    // The app-layer compose entry (the reference tool runs on the mock port — no `port`). No
+    // consumer is registered for it, so this is a plain dispatch.
+    const outcome = await dispatchAndCompose(
       { toolName: tool.name, projectId, input, source: "user" },
-      dispatchDeps(tenantDb),
+      { tenantDb },
     );
     revalidatePath(`/projects/${projectId}/context`);
     revalidatePath(`/projects/${projectId}/tools`);

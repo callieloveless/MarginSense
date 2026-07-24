@@ -10,10 +10,10 @@
  * and can only answer with `pending` suggestions.
  */
 
-import { dispatch, photoAdvisorTool } from "@/src/tools";
+import { photoAdvisorTool } from "@/src/tools";
 import { type ModelPort } from "@/src/ai";
 import { type TenantDb } from "@/src/db/tenant";
-import { dispatchDeps } from "./tool-runner";
+import { dispatchAndCompose } from "./compose";
 
 export type AdviseResult = { ok: true; message: string } | { ok: false; error: string };
 
@@ -50,7 +50,9 @@ export async function advisePhoto(
 
   const question = (input.question ?? "").trim();
   try {
-    const outcome = await dispatch(
+    // Through dispatchAndCompose: Photo Advisor's output fans out to any registered consumer
+    // (9b wires Code Finder off its findings). With no edge registered this is a plain dispatch.
+    const outcome = await dispatchAndCompose(
       {
         toolName: photoAdvisorTool.name,
         projectId: input.projectId,
@@ -64,7 +66,7 @@ export async function advisePhoto(
         },
         source: "user",
       },
-      dispatchDeps(tenantDb, port),
+      { tenantDb, port },
     );
     return {
       ok: true,

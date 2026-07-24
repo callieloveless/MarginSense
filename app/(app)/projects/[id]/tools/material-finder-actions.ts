@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getServerSession, tenantDbForSession } from "@/src/db/session";
-import { dispatch, suggestionKey } from "@/src/tools";
+import { suggestionKey } from "@/src/tools";
 import {
   manualMaterialSchema,
   manualMaterialSuggestions,
@@ -11,7 +11,7 @@ import {
 } from "@/src/tools";
 import { resolveModelPort } from "@/src/ai";
 import { dollarsToCents } from "@/src/db/validation";
-import { dispatchDeps } from "@/app/_lib/tool-runner";
+import { dispatchAndCompose } from "@/app/_lib/compose";
 import { assembleProjectSnapshot } from "@/app/_lib/project-snapshot";
 
 export type MaterialActionResult = { ok: true; message: string } | { ok: false; error: string };
@@ -53,9 +53,11 @@ export async function runMaterialFinderAction(
   }
 
   try {
-    const outcome = await dispatch(
+    // Through the app-layer compose entry so every tool run shares one dispatch path; Material
+    // Finder has no consumer today, so this is a plain dispatch.
+    const outcome = await dispatchAndCompose(
       { toolName: materialFinderTool.name, projectId, input: parsed.data, source: "user" },
-      dispatchDeps(tenantDb, resolution.port),
+      { tenantDb, port: resolution.port },
     );
     revalidate(projectId);
     const created = outcome.createdSuggestionIds.length;
