@@ -23,26 +23,26 @@
 
 ## 2. Stage B — the tool
 
-- [ ] 2.1 Add `src/tools/photo-advisor/schema.ts`: `inputSchema` (`photoId`, `mediaType`,
+- [x] 2.1 Add `src/tools/photo-advisor/schema.ts`: `inputSchema` (`photoId`, `mediaType`,
       `imageBase64`, optional `caption`, optional `question`), the port `resultSchema`
       (`findings[]` with severity + what materials the repair needs, `labor[]` with description +
       minutes — and **no cost field anywhere**), and `outputSchema` (what was actually proposed).
-- [ ] 2.2 Add `src/tools/photo-advisor/suggestions.ts`: the one place a result becomes proposals —
+- [x] 2.2 Add `src/tools/photo-advisor/suggestions.ts`: the one place a result becomes proposals —
       a finding → a `finding` context-entry suggestion carrying severity and the photo reference;
       a labor candidate → an `estimate_line_item` (category `labor`, its minutes) when there is an
       active estimate. **No material line item is ever built here.**
-- [ ] 2.3 Add `IMPLAUSIBLE_LABOR_MINUTES` as one named constant; a candidate beyond it is still
+- [x] 2.3 Add `IMPLAUSIBLE_LABOR_MINUTES` as one named constant; a candidate beyond it is still
       proposed with its real minutes and is collected for the post's warning (design §3) — never
       dropped, never silently capped.
-- [ ] 2.4 Add `src/tools/photo-advisor/photo-advisor.ts`: the system prompt (diagnose, estimate
+- [x] 2.4 Add `src/tools/photo-advisor/photo-advisor.ts`: the system prompt (diagnose, estimate
       repair time, name materials, **never price anything**), the port call with `images` +
       `resultSchema`, the mapping, and a conversation `message` that summarizes the findings,
       names the materials and hands pricing to Material Finder, flags any implausible estimate,
       and carries `disclaimer: PHYSICAL_WORK_DISCLAIMER`.
-- [ ] 2.5 Handle the no-active-estimate path: findings only, no line-item suggestions, and a post
+- [x] 2.5 Handle the no-active-estimate path: findings only, no line-item suggestions, and a post
       that says candidate work needs an estimate to be added to.
-- [ ] 2.6 Register the tool in `src/tools/registry.ts` and export it from `src/tools/index.ts`.
-- [ ] 2.7 Unit-test against the mock port with a canned vision result: findings carry severity and
+- [x] 2.6 Register the tool in `src/tools/registry.ts` and export it from `src/tools/index.ts`.
+- [x] 2.7 Unit-test against the mock port with a canned vision result: findings carry severity and
       the photo reference; labor lines carry the model's minutes unchanged; **no material line is
       ever proposed** and no payload carries a cost; an over-range estimate is proposed *and*
       flagged in the post; no active estimate → findings only; every run's message carries the

@@ -10,7 +10,17 @@ export * from "./contract";
 export * from "./runner";
 export * from "./triggers";
 export * from "./registry";
+export * from "./disclaimer";
 export { referenceTool } from "./reference";
+export {
+  photoAdvisorTool,
+  IMPLAUSIBLE_LABOR_MINUTES,
+  type PhotoAdvisorInput,
+  type PhotoAdvisorOutput,
+  type VisionFinding,
+  type VisionLabor,
+  type VisionResult,
+} from "./photo-advisor";
 export {
   materialFinderTool,
   manualMaterialSchema,
