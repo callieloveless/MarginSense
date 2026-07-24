@@ -50,21 +50,21 @@
 
 ## 3. Stage C — the panel and its action
 
-- [ ] 3.1 Add the Photo Advisor server action under `app/(app)/projects/[id]/tools/`: resolve the
+- [x] 3.1 Add the Photo Advisor server action under `app/(app)/projects/[id]/tools/`: resolve the
       session, read the chosen photo's bytes tenant-scoped, dispatch through the runner with the
       resolved live port, revalidate. Never trust a client `business_id`.
-- [ ] 3.2 Add a capture-and-run path: reuse 8a's client-side prepare (downscale, EXIF strip,
+- [x] 3.2 Add a capture-and-run path: reuse 8a's client-side prepare (downscale, EXIF strip,
       thumbnail) and upload path so the photo joins the job normally, then run on it in the same
       step — no separate upload screen.
-- [ ] 3.3 Add the Photo Advisor panel (client component, mirroring `material-finder-form.tsx`):
+- [x] 3.3 Add the Photo Advisor panel (client component, mirroring `material-finder-form.tsx`):
       take a photo *or* choose one of the job's (batch-signed thumbnails from 8a), an optional
       question, and a run button; results land in the existing "Waiting on you" list.
-- [ ] 3.4 Render `PHYSICAL_WORK_DISCLAIMER` as a standing notice on the panel, above the run
+- [x] 3.4 Render `PHYSICAL_WORK_DISCLAIMER` as a standing notice on the panel, above the run
       control — visible before any run.
-- [ ] 3.5 Render the "connect AI" state when `resolveModelPort()` is unconfigured, the "connect
+- [x] 3.5 Render the "connect AI" state when `resolveModelPort()` is unconfigured, the "connect
       storage" state when photo storage isn't wired, and an offer to take one when the job has no
       photos yet (never an empty picker).
-- [ ] 3.6 Check the panel at phone width first; colour always paired with text.
+- [x] 3.6 Check the panel at phone width first; colour always paired with text.
 
 ## 4. Verification and close-out
 

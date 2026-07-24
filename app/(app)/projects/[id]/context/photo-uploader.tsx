@@ -1,31 +1,16 @@
 "use client";
 
 import { useRef, useState } from "react";
-import {
-  JPEG_QUALITY,
-  MAX_LONG_EDGE_PX,
-  MAX_UPLOAD_BYTES,
-  STORED_CONTENT_TYPE,
-  THUMB_LONG_EDGE_PX,
-  scaledDimensions,
-} from "@/src/photos";
+import { MAX_UPLOAD_BYTES } from "@/src/photos";
 import { inputClassName } from "@/app/_components/fields";
+import { ImagePrepError, photoFormData, prepareImage } from "@/app/_lib/prepare-image";
 import { uploadPhotoAction, type PhotoActionResult } from "./photo-actions";
 
 /**
  * The job-photo uploader (add-photo-capture) — phone-first: take a photo on site, add a note,
- * upload. Everything expensive happens **on the device**, before a byte leaves it:
- *
- * - the image is drawn into a canvas and scaled so its long edge is at most
- *   {@link MAX_LONG_EDGE_PX} (the model's effective vision resolution, so 8b gains nothing from
- *   more) — small enough to send on one bar of signal;
- * - it is re-encoded as JPEG, which **discards EXIF — including the GPS coordinates of a
- *   client's home** (constitution §7). The privacy win is a property of re-encoding, not of a
- *   metadata-stripping library that could be skipped;
- * - a {@link THUMB_LONG_EDGE_PX} thumbnail comes out of the same pass, so the gallery never
- *   downloads full-size images.
- *
- * The server re-validates type and size regardless — a client can always lie.
+ * upload. The downscale, EXIF strip, and thumbnail all happen on the device via the shared
+ * `prepare-image` helper (which Photo Advisor's capture-and-run uses too); the server
+ * re-validates type and size regardless, because a client can always lie.
  */
 export function PhotoUploader({ projectId }: { projectId: string }) {
   const formRef = useRef<HTMLFormElement>(null);
@@ -53,11 +38,7 @@ export function PhotoUploader({ projectId }: { projectId: string }) {
         return;
       }
 
-      const body = new FormData();
-      body.set("photo", prepared.full, "photo.jpg");
-      body.set("thumb", prepared.thumb, "thumb.jpg");
-      body.set("width", String(prepared.width));
-      body.set("height", String(prepared.height));
+      const body = photoFormData(prepared);
       if (typeof caption === "string") body.set("caption", caption);
 
       const result = await uploadPhotoAction(projectId, body);
@@ -121,61 +102,4 @@ export function PhotoUploader({ projectId }: { projectId: string }) {
       ) : null}
     </form>
   );
-}
-
-/** A prepared image can fail for reasons worth explaining (HEIC, corrupt file). */
-class ImagePrepError extends Error {}
-
-interface PreparedImage {
-  full: Blob;
-  thumb: Blob;
-  width: number;
-  height: number;
-}
-
-/** Decode `file` into a bitmap, or explain why we can't (iOS HEIC is the common case). */
-async function decode(file: File): Promise<ImageBitmap> {
-  try {
-    return await createImageBitmap(file);
-  } catch {
-    throw new ImagePrepError(
-      "That image format isn't supported — try again with a JPEG or PNG photo.",
-    );
-  }
-}
-
-/** Draw `bitmap` at `size` and encode it as JPEG (the re-encode is what drops EXIF/GPS). */
-async function encodeAt(
-  bitmap: ImageBitmap,
-  size: { width: number; height: number },
-): Promise<Blob> {
-  const canvas = document.createElement("canvas");
-  canvas.width = size.width;
-  canvas.height = size.height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new ImagePrepError("This browser can't prepare photos for upload.");
-  ctx.drawImage(bitmap, 0, 0, size.width, size.height);
-
-  const blob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob(resolve, STORED_CONTENT_TYPE, JPEG_QUALITY),
-  );
-  if (!blob) throw new ImagePrepError("That photo couldn't be prepared. Try taking it again.");
-  return blob;
-}
-
-/** Downscale + re-encode + thumbnail, in one decode. */
-async function prepareImage(file: File): Promise<PreparedImage> {
-  const bitmap = await decode(file);
-  try {
-    const full = scaledDimensions(bitmap.width, bitmap.height, MAX_LONG_EDGE_PX);
-    const thumb = scaledDimensions(bitmap.width, bitmap.height, THUMB_LONG_EDGE_PX);
-    return {
-      full: await encodeAt(bitmap, full),
-      thumb: await encodeAt(bitmap, thumb),
-      width: full.width,
-      height: full.height,
-    };
-  } finally {
-    bitmap.close();
-  }
 }

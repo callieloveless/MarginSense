@@ -9,6 +9,7 @@ import { ProfitHeader } from "@/app/_components/profit-header";
 import { acceptSuggestionAction, dismissSuggestionAction } from "../context/actions";
 import { RunReferenceForm } from "./run-form";
 import { MaterialFinderForm } from "./material-finder-form";
+import { PhotoAdvisorForm, type AdvisorPhoto } from "./photo-advisor-form";
 
 /**
  * The project-page Tools surface (constitution §5) — where a job's AI tools open. Tools read
@@ -40,12 +41,23 @@ export default async function ProjectToolsPage({
 
   const tools = listTools();
   const aiConfigured = resolveModelPort().status === "configured";
-  const [pending, job, settings] = await Promise.all([
+  const storageReady = tenantDb.hasPhotoStorage;
+  const [pending, job, settings, photoRows] = await Promise.all([
     tenantDb.listPendingSuggestions(projectId),
     loadJobProfit(tenantDb, projectId),
     tenantDb.getSettings(),
+    storageReady ? tenantDb.listPhotos(projectId) : Promise.resolve([]),
   ]);
   const serviceArea = settings?.serviceArea ?? "";
+
+  // Thumbnails for Photo Advisor's picker — signed for the whole set in one round trip, and
+  // short-lived (constitution §7); a photo is never served publicly.
+  const thumbUrls = await tenantDb.signedPhotoUrls(photoRows.map((p) => p.thumbKey));
+  const advisorPhotos: AdvisorPhoto[] = photoRows.map((p) => ({
+    id: p.id,
+    caption: p.caption,
+    thumbUrl: thumbUrls.get(p.thumbKey) ?? null,
+  }));
 
   return (
     <Shell projectId={projectId}>
@@ -75,7 +87,21 @@ export default async function ProjectToolsPage({
         {tools.map((tool) => (
           <li key={tool.name} className="rounded-lg border border-neutral-200 p-4 dark:border-neutral-800">
             <h2 className="text-lg font-semibold">{tool.title}</h2>
-            {tool.name === "material-finder" ? (
+            {tool.name === "photo-advisor" ? (
+              <>
+                <p className="mt-1 text-sm text-neutral-500">
+                  Take a job photo or use one you&apos;ve already added, and get a read on what
+                  you&apos;re looking at — plus the repair hours it would take, previewed against
+                  this job&apos;s profit per hour before you accept anything.
+                </p>
+                <PhotoAdvisorForm
+                  projectId={projectId}
+                  photos={advisorPhotos}
+                  aiConfigured={aiConfigured}
+                  storageReady={storageReady}
+                />
+              </>
+            ) : tool.name === "material-finder" ? (
               <>
                 <p className="mt-1 text-sm text-neutral-500">
                   Search the web for materials, prices, and suppliers — or add one by hand.
