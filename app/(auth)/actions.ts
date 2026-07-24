@@ -1,5 +1,6 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getWritableServerClient } from "@/src/db/supabase";
 import { getServerSession } from "@/src/db/session";
@@ -7,7 +8,25 @@ import { createBusinessSchema } from "@/src/db/validation";
 
 export type ActionResult = { ok: true; message?: string } | { ok: false; error: string };
 
-/** Email one-time-code sign-in (constitution §7 managed auth). Sends a login link/code. */
+/**
+ * This deployment's origin, from the request. Derived rather than configured so the same code
+ * works on localhost, a preview URL, and production without a fourth environment variable to
+ * keep in sync — the emailed link has to come back to the origin the user actually started from.
+ */
+async function requestOrigin(): Promise<string> {
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
+  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+  return `${proto}://${host}`;
+}
+
+/**
+ * Email one-time-code sign-in (constitution §7 managed auth). Sends a login link.
+ *
+ * `emailRedirectTo` points at `/auth/callback`, which exchanges the PKCE code for a session —
+ * without it Supabase falls back to the project's Site URL, which lands on a page that cannot
+ * write session cookies, so the link appears to do nothing.
+ */
 export async function signInWithEmailAction(formData: FormData): Promise<ActionResult> {
   const supabase = await getWritableServerClient();
   if (!supabase) return { ok: false, error: "Supabase isn't connected yet." };
@@ -15,7 +34,10 @@ export async function signInWithEmailAction(formData: FormData): Promise<ActionR
   const email = String(formData.get("email") ?? "").trim();
   if (!email) return { ok: false, error: "Enter your email." };
 
-  const { error } = await supabase.auth.signInWithOtp({ email });
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: `${await requestOrigin()}/auth/callback` },
+  });
   if (error) return { ok: false, error: error.message };
   return { ok: true, message: `Check ${email} for your sign-in link.` };
 }

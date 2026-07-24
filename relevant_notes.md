@@ -14,28 +14,31 @@ Work that is **built and tested in code** but can't be *proven* or *run* until a
 Supabase project + secrets exist. Nothing here happens until the database is provisioned.
 
 ### 0. Provision Supabase (the blocker — do first)
-- [ ] Create a Supabase project (Postgres + Auth).
-- [ ] Fill `.env.local` from [`.env.example`](./.env.example): `DATABASE_URL`,
+- [x] Create a Supabase project (Postgres + Auth). *(done 2026-07-24)*
+- [x] Fill `.env.local` from [`.env.example`](./.env.example): `DATABASE_URL`,
       `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`. Until these are set the
       app renders "connect Supabase" skeletons and `getServerSession()` returns
       `unconfigured` — by design.
 
-### 1. Apply migrations (forward-only, `npm run db:migrate`)
-- [ ] `0000_tenant_spine` — `businesses`, `users`, `projects` + RLS + grants.
-- [ ] `0001_brave_spot` — `business_settings`, `overhead_items` + RLS + grants.
-- [ ] `0002_fair_lethal_legion` — `estimates`, `line_items` + RLS + grants + the
+### 1. Apply migrations (forward-only, `npm run db:migrate`) — **ALL APPLIED 2026-07-24**
+All 12 tables exist with RLS enabled, `create_business` + `current_business_id` are installed, the
+private `job-photos` bucket exists, and `0008`'s `storage.objects` policy applied (the migration
+role had the privilege, so the dashboard fallback wasn't needed).
+- [x] `0000_tenant_spine` — `businesses`, `users`, `projects` + RLS + grants.
+- [x] `0001_brave_spot` — `business_settings`, `overhead_items` + RLS + grants.
+- [x] `0002_fair_lethal_legion` — `estimates`, `line_items` + RLS + grants + the
       one-active-version-per-project partial unique index.
-- [ ] `0003_chunky_sumo` — `context_entries`, `conversation_messages`, `suggestions` + RLS +
+- [x] `0003_chunky_sumo` — `context_entries`, `conversation_messages`, `suggestions` + RLS +
       grants.
-- [ ] `0004_careful_scarlet_spider` — `tool_runs` + RLS + grants, and the nullable
+- [x] `0004_careful_scarlet_spider` — `tool_runs` + RLS + grants, and the nullable
       `tool_run_id` columns added to `suggestions` / `conversation_messages` (add-tool-platform).
-- [ ] `0005_*` — `tool_runs.status` made **nullable** (null = running) + `completed_at`
+- [x] `0005_*` — `tool_runs.status` made **nullable** (null = running) + `completed_at`
       (add-tool-dispatch; nullable instead of an enum value to dodge the in-transaction
       `ALTER TYPE … ADD VALUE` footgun).
-- [ ] `0006_lyrical_catseye` — `business_settings.service_area` (nullable text; additive, no
+- [x] `0006_lyrical_catseye` — `business_settings.service_area` (nullable text; additive, no
       RLS change — the table's per-business policy already covers it) (add-material-finder).
-- [ ] `0007_burly_quicksilver` — `project_photos` + RLS + grants (add-photo-capture).
-- [ ] `0008_job_photos_bucket` — the private `job-photos` bucket + the `storage.objects` policy
+- [x] `0007_burly_quicksilver` — `project_photos` + RLS + grants (add-photo-capture).
+- [x] `0008_job_photos_bucket` — the private `job-photos` bucket + the `storage.objects` policy
       keyed on `(storage.foldername(name))[1] = public.current_business_id()::text`. **Its own
       migration on purpose**: `storage` is Supabase-provided, so on a plain Postgres (the
       `test:rls` target) it doesn't exist, and a hosted project may refuse `storage.objects` to
@@ -62,7 +65,7 @@ Photo bytes live in Supabase Storage — **outside Postgres and outside table RL
 guard them (keys derived only by `src/photos/photoObjectKey()` from the tenant handle; every
 `PhotoStorageBackend` method refusing a key outside the caller's prefix; the `storage.objects`
 policy in `0007`). The first two are unit-tested; the third needs a live bucket.
-- [ ] Create the **private** `job-photos` bucket (or apply `0008`) and confirm `public = false`
+- [x] Create the **private** `job-photos` bucket (or apply `0008`) and confirm `public = false` *(done 2026-07-24: bucket exists, `public = false`, policy `job_photos_objects_same_business` present)*
       — the app never mints a public URL. The bucket name is fixed in `src/photos/`
       (`PHOTO_BUCKET`) because the policy names one bucket; don't parameterize it.
 - [ ] Prove business A cannot sign or read an object under business B's prefix, and that a
@@ -136,6 +139,21 @@ buildable and typed now, live calls wait on a key.
   constitution §5 "Composing tools", techstack §4, PROGRESS #10.
 
 ## Gotchas & lessons
+
+- **Sign-in needs `/auth/callback` — and Supabase must allowlist it** *(2026-07-24)*. `@supabase/ssr`
+  uses the **PKCE flow**: `signInWithOtp` stores a code verifier cookie and the emailed link returns
+  with `?code=…`, which is worthless until something calls `exchangeCodeForSession`. Only a **Route
+  Handler** can write the session cookies — a server component can't, and the middleware only
+  refreshes an existing session. The app shipped for three changes with no route handler at all
+  (`app/api/` was empty), so every magic link bounced back to `/sign-in` and the app looked like it
+  had no way in. Fixed by `app/auth/callback/route.ts` + `emailRedirectTo` on the sign-in action.
+  **Manual step that is not in the repo:** the Supabase dashboard (Authentication → URL
+  Configuration) must list the redirect URL — `http://localhost:3000/**` for dev, the deployed
+  origin for production — or Supabase ignores `emailRedirectTo` and falls back to the Site URL.
+- **drizzle-kit does not read `.env.local`** *(2026-07-24)*. Next loads it automatically; the CLI
+  doesn't, so `npm run db:migrate` failed with `url: ''` on a perfectly configured project.
+  `drizzle.config.ts` now parses `.env.local` itself when `DATABASE_URL` isn't already exported (no
+  dotenv dependency for one variable).
 
 - **OpenSpec CLI package** — the CLI is `@fission-ai/openspec` (`npm i -g @fission-ai/openspec`,
   provides the `openspec` bin). The bare `openspec` on npm is a dead 0.0.0 placeholder with
