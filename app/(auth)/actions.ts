@@ -21,25 +21,50 @@ async function requestOrigin(): Promise<string> {
 }
 
 /**
- * Email one-time-code sign-in (constitution §7 managed auth). Sends a login link.
+ * Email sign-in (constitution §7 managed auth). Sends **both** a magic link and a 6-digit code in
+ * the same email.
  *
- * `emailRedirectTo` points at `/auth/callback`, which exchanges the PKCE code for a session —
- * without it Supabase falls back to the project's Site URL, which lands on a page that cannot
- * write session cookies, so the link appears to do nothing.
+ * The code is the reliable path: a clickable link is fragile because some mail providers (Proton,
+ * many corporate scanners) **prefetch** the link, which consumes its one-time token before the
+ * human clicks — the sign-in then fails with "email link is invalid or has expired." A code the
+ * user types is immune to that and to the magic link's same-browser PKCE requirement. The link
+ * still works when it isn't prefetched: `emailRedirectTo` points at `/auth/callback`, which
+ * exchanges it for a session (the emailed link otherwise falls back to the project's Site URL).
+ *
+ * The code only appears in the email if the "Magic Link" template renders `{{ .Token }}` — see the
+ * note in `relevant_notes.md`.
  */
-export async function signInWithEmailAction(formData: FormData): Promise<ActionResult> {
+export async function signInWithEmailAction(email: string): Promise<ActionResult> {
   const supabase = await getWritableServerClient();
   if (!supabase) return { ok: false, error: "Supabase isn't connected yet." };
 
-  const email = String(formData.get("email") ?? "").trim();
-  if (!email) return { ok: false, error: "Enter your email." };
+  const trimmed = email.trim();
+  if (!trimmed) return { ok: false, error: "Enter your email." };
 
   const { error } = await supabase.auth.signInWithOtp({
-    email,
+    email: trimmed,
     options: { emailRedirectTo: `${await requestOrigin()}/auth/callback` },
   });
   if (error) return { ok: false, error: error.message };
-  return { ok: true, message: `Check ${email} for your sign-in link.` };
+  return { ok: true, message: `Sent. Enter the 6-digit code from the email (or tap the link).` };
+}
+
+/**
+ * Verify the 6-digit code from the sign-in email and start the session. This is the prefetch-proof
+ * path (see {@link signInWithEmailAction}); it writes the session cookies (only possible in a
+ * server action) and redirects into the app. `type: "email"` matches an OTP sent by
+ * `signInWithOtp` for an email address.
+ */
+export async function verifyEmailCodeAction(email: string, code: string): Promise<ActionResult> {
+  const supabase = await getWritableServerClient();
+  if (!supabase) return { ok: false, error: "Supabase isn't connected yet." };
+
+  const token = code.replace(/\s/g, "");
+  if (!/^\d{6}$/.test(token)) return { ok: false, error: "Enter the 6-digit code from the email." };
+
+  const { error } = await supabase.auth.verifyOtp({ email: email.trim(), token, type: "email" });
+  if (error) return { ok: false, error: error.message };
+  redirect("/dashboard");
 }
 
 /**

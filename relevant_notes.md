@@ -146,6 +146,17 @@ buildable and typed now, live calls wait on a key.
 
 ## Gotchas & lessons
 
+- **Magic links get prefetched → "email link is invalid or has expired"; use the 6-digit code**
+  *(2026-07-24)*. A clickable magic link carries a one-time token that some mail providers —
+  **Proton**, many corporate scanners — *prefetch* (the scanner opens the link before the human),
+  which consumes the token, so the real click fails with `otp_expired` / "Email link is invalid or
+  has expired." Magic links are also PKCE, so they only work in the browser that requested them.
+  The robust path is `signInWithOtp` → **`verifyOtp({ email, token, type: "email" })`** with the
+  **6-digit code** the user types (`app/(auth)` sign-in is a two-step email→code form). The link
+  still works when not prefetched (`/auth/callback`). **Manual dashboard step:** the code only
+  appears in the email if the **Magic Link** email template (Authentication → Email Templates)
+  renders `{{ .Token }}` — the default template only has `{{ .ConfirmationURL }}`. Add a line like
+  `Your code: {{ .Token }}`. Also confirm the redirect allowlist below.
 - **Sign-in needs `/auth/callback` — and Supabase must allowlist it** *(2026-07-24)*. `@supabase/ssr`
   uses the **PKCE flow**: `signInWithOtp` stores a code verifier cookie and the emailed link returns
   with `?code=…`, which is worthless until something calls `exchangeCodeForSession`. Only a **Route
