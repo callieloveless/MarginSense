@@ -67,6 +67,52 @@ export async function verifyEmailCodeAction(email: string, code: string): Promis
   redirect("/dashboard");
 }
 
+/** Whether the email-free developer sign-in is available. **Only outside production** — a real
+ * deploy never exposes it, so the password path can't become a live sign-in mechanism. Not
+ * exported: a `"use server"` module may only export async functions. The page checks the same
+ * `NODE_ENV` condition directly. */
+function devSignInEnabled(): boolean {
+  return process.env.NODE_ENV !== "production";
+}
+
+/**
+ * Email-free **developer** sign-in (local only) — for when Supabase's built-in SMTP is rate-limited
+ * and you just need to get into the app. Signs in with a password, creating the account on first
+ * use. It sends **no email at all**, so it needs Supabase's "Confirm email" turned OFF
+ * (Authentication → Providers → Email) — otherwise the new account has no session until it's
+ * confirmed by an email that would itself be rate-limited.
+ *
+ * Guarded by {@link devSignInEnabled}: a production build refuses it, so this convenience can never
+ * be a way in on a real deploy.
+ */
+export async function devPasswordSignInAction(email: string, password: string): Promise<ActionResult> {
+  if (!devSignInEnabled()) return { ok: false, error: "Developer sign-in is disabled here." };
+
+  const supabase = await getWritableServerClient();
+  if (!supabase) return { ok: false, error: "Supabase isn't connected yet." };
+
+  const em = email.trim();
+  if (!em || password.length < 6) {
+    return { ok: false, error: "Enter an email and a password of at least 6 characters." };
+  }
+
+  // Existing account → straight in. New account → create it, which returns a session immediately
+  // when email confirmation is off (the whole point of this path).
+  const signIn = await supabase.auth.signInWithPassword({ email: em, password });
+  if (!signIn.error) redirect("/dashboard");
+
+  const signUp = await supabase.auth.signUp({ email: em, password });
+  if (signUp.error) return { ok: false, error: signUp.error.message };
+  if (!signUp.data.session) {
+    return {
+      ok: false,
+      error:
+        "Account created, but email confirmation is ON — turn it OFF in Supabase (Authentication → Providers → Email → Confirm email), then sign in again.",
+    };
+  }
+  redirect("/dashboard");
+}
+
 /**
  * Create the business + user for a freshly signed-in identity — the only businesses/users
  * insert path (constitution §6.3). Runs the `create_business` SECURITY DEFINER function so

@@ -2,7 +2,12 @@
 
 import { useState } from "react";
 import { inputClassName } from "@/app/_components/fields";
-import { signInWithEmailAction, verifyEmailCodeAction, type ActionResult } from "../actions";
+import {
+  devPasswordSignInAction,
+  signInWithEmailAction,
+  verifyEmailCodeAction,
+  type ActionResult,
+} from "../actions";
 
 /**
  * Email sign-in — this is also how new users sign up (the first sign-in creates the account, then
@@ -14,14 +19,31 @@ import { signInWithEmailAction, verifyEmailCodeAction, type ActionResult } from 
  * isn't prefetched (it lands on `/auth/callback`); `initialError` carries a failure from that
  * route so a dead link says why.
  */
-export function SignInForm({ initialError }: { initialError?: string | undefined }) {
+export function SignInForm({
+  initialError,
+  devBypass = false,
+}: {
+  initialError?: string | undefined;
+  /** Local dev only: show the email-free password sign-in (see `devPasswordSignInAction`). */
+  devBypass?: boolean;
+}) {
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
+  const [password, setPassword] = useState("");
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [state, setState] = useState<ActionResult | null>(
     initialError ? { ok: false, error: initialError } : null,
   );
+
+  async function onDevSignIn(event: React.FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    setBusy(true);
+    setState(null);
+    const result = await devPasswordSignInAction(email, password);
+    setState(result); // success redirects; a returned result means it failed
+    setBusy(false);
+  }
 
   async function onSend(event: React.FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -119,6 +141,44 @@ export function SignInForm({ initialError }: { initialError?: string | undefined
         <p className={`text-sm ${state.ok ? "text-green-700 dark:text-green-500" : "text-red-600"}`}>
           {state.ok ? state.message : state.error}
         </p>
+      ) : null}
+
+      {devBypass ? (
+        <div className="mt-4 space-y-2 border-t border-dashed border-neutral-300 pt-4 dark:border-neutral-700">
+          <p className="text-xs font-medium text-neutral-500">
+            Developer sign-in (local only — no email)
+          </p>
+          <form onSubmit={onDevSignIn} className="space-y-2">
+            <input
+              type="email"
+              required
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              className={inputClassName}
+            />
+            <input
+              type="password"
+              required
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="password (6+ chars, created on first use)"
+              className={inputClassName}
+            />
+            <button
+              type="submit"
+              disabled={busy}
+              className="w-full rounded-md border border-neutral-400 px-3 py-2 text-sm font-medium disabled:opacity-50 dark:border-neutral-600"
+            >
+              {busy ? "Signing in…" : "Dev sign-in"}
+            </button>
+          </form>
+          <p className="text-xs text-neutral-400">
+            Needs Supabase &ldquo;Confirm email&rdquo; turned off. Never shown in production.
+          </p>
+        </div>
       ) : null}
     </div>
   );
