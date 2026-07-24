@@ -48,6 +48,6 @@
 
 - [x] 4.1 `npm run typecheck`, `npx vitest run`, and `npm run build` green (relative imports in
       `src/` stay extensionless).
-- [ ] 4.2 Update `PROGRESS.md`: split #9 into 9a (this change — compose seam) and 9b (Code
+- [x] 4.2 Update `PROGRESS.md`: split #9 into 9a (this change — compose seam) and 9b (Code
       Finder), with 9a's status.
-- [ ] 4.3 `openspec validate add-tool-compose --strict`, then archive on its own commit.
+- [x] 4.3 `openspec validate add-tool-compose --strict`, then archive on its own commit.

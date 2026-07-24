@@ -24,7 +24,8 @@
 | 7b | `add-material-finder` (the first real tool) | `material-finder`, `project-context`, `onboarding` | ✅ **Done** (archived 2026-07-23; live-AI + live-infra proof deferred) |
 | 8a | `add-photo-capture` (job photo upload + tenant-scoped storage) | `job-photos` | ✅ **Done** (archived 2026-07-23; live-storage proof deferred) |
 | 8b | `add-photo-advisor` (the vision tool) | `photo-advisor`, `project-context` | ✅ **Done** (archived 2026-07-24; live-AI proof deferred) |
-| 9 | Code Finder (auto-trigger on `photo.uploaded`) | `code-finder` | ⏳ Planned |
+| 9a | `add-tool-compose` (composition seam, dormant) | `tool-platform` | ✅ **Done** (archived 2026-07-24) |
+| 9b | Code Finder (compose off findings + standalone query) | `code-finder` | ⏳ Planned |
 | 10 | Client Estimate Doc | `client-estimate-doc` | ⏳ Planned |
 | 11 | Hardening & launch pass | — | ⏳ Planned |
 | 12 | Tool graph editor (meta) | — | 🌟 North-star (after core tools ship) |
@@ -160,10 +161,23 @@ roll up as zero and quietly overstate the job's profit. An implausibly large est
 **The only open item is deferred to live AI** (relevant_notes.md §5): prove a real vision call
 returns sane severities, plausible minutes, and no smuggled price.
 
-### 9. ⏳ Code Finder (auto-trigger)
-Surfaces relevant **local** building codes — the first **auto-trigger**: the `photo.uploaded`
-event (emitted by #8a) runs Code Finder → still only suggests `code_ref` entries + compliance
-notes. Same disclaimer (constitution §5, §7).
+### 9a. ✅ Tool composition (the seam)
+Implements the composition the tool-platform spec has described since #6: `dispatchAndCompose`
+(`app/_lib/compose.ts`) is the one app-layer way to run a tool — it dispatches the tool, then fans
+its typed `output` out to any registered consumers via `dispatch(source: "compose")`, bounded by
+P1's step budget. **App-layer, not in the DB-free runner**, because an edge's mapper needs tenant
+data (9b's Code Finder needs the service area). Ships **dormant** (`COMPOSE_EDGES` empty) — every
+path is `dispatch` + a no-op — proven with a reference producer/consumer; the three existing tool
+actions route through it with no behavior change.
+
+### 9b. ⏳ Code Finder (compose off findings + standalone query)
+Surfaces relevant **local** building codes two ways: a **standalone query** (ask a code question →
+web-search local code → propose `code_ref` entries with citations, post a summary), and
+**composed off Photo Advisor findings** — 9a's first edge (`photo-advisor → code-finder`, one run
+per finding), so codes are looked up for a *known* defect rather than a blind photo. Jurisdiction
+comes from `business_settings.service_area` (overridable per query). Adds compliance notes and
+carries the shared licensed-professional disclaimer (§5, §7). `photo.uploaded` stays emitting for a
+future subscriber; the compose edge is the real trigger.
 
 ### 10. ⏳ Client Estimate Doc
 The client-facing document tool — separate from the internal estimate (true costs,
