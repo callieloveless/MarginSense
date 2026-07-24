@@ -101,13 +101,23 @@ export async function devPasswordSignInAction(email: string, password: string): 
   const signIn = await supabase.auth.signInWithPassword({ email: em, password });
   if (!signIn.error) redirect("/dashboard");
 
+  // An account created earlier while confirmation was ON is stuck "unconfirmed": flipping the
+  // toggle only affects NEW signups, so this one has to be cleared first.
+  if (/not confirmed/i.test(signIn.error.message)) {
+    return {
+      ok: false,
+      error:
+        "This email exists but was created before email confirmation was turned off. In Supabase → Authentication → Users, delete this user, then try Dev sign-in again.",
+    };
+  }
+
   const signUp = await supabase.auth.signUp({ email: em, password });
   if (signUp.error) return { ok: false, error: signUp.error.message };
   if (!signUp.data.session) {
     return {
       ok: false,
       error:
-        "Account created, but email confirmation is ON — turn it OFF in Supabase (Authentication → Providers → Email → Confirm email), then sign in again.",
+        "Account created, but email confirmation is ON — turn it OFF in Supabase (Authentication → Sign In / Providers → Email → Confirm email), then sign in again.",
     };
   }
   redirect("/dashboard");
