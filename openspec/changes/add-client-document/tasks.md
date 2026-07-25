@@ -50,23 +50,23 @@
 
 ## 3. Stage C — the public read and the client render
 
-- [ ] 3.1 Add `getSharedDocument(token)` in `src/db/` (or a small `src/db/share.ts`): calls the
+- [x] 3.1 Add `getSharedDocument(token)` in `src/db/` (or a small `src/db/share.ts`): calls the
       `get_shared_document` RPC via the **Supabase anon client** (no cookies), returning the
       validated client-safe payload or null. Report `unconfigured` gracefully when Supabase env is
       absent.
-- [ ] 3.2 Add the public `app/share/[token]/page.tsx` (top-level, outside `(app)`): read the token
+- [x] 3.2 Add the public `app/share/[token]/page.tsx` (top-level, outside `(app)`): read the token
       → fetch the payload → render it, or a plain "this document isn't available" when null. Export
       `metadata`/`robots` as `{ index: false, follow: false }` so a leaked link isn't indexed.
-- [ ] 3.3 The render is phone- and print-friendly: business header, client block, scope/intro,
+- [x] 3.3 The render is phone- and print-friendly: business header, client block, scope/intro,
       priced line items, subtotal/tax/total, terms — and **nothing internal**. Read-only (no
       accept/sign/pay controls).
-- [ ] 3.4 Confirm the middleware does not gate `/share` (its matcher guards the app prefixes only),
+- [x] 3.4 Confirm the middleware does not gate `/share` (its matcher guards the app prefixes only),
       the `(app)` session gate never runs for it, and the **root layout does no `getServerSession`**
       (the public page must not trigger a session/tenant lookup).
 
 ## 4. Verification and close-out
 
-- [ ] 4.1 `npm run typecheck`, `npx vitest run`, and `npm run build` green after each stage (the
+- [x] 4.1 `npm run typecheck`, `npx vitest run`, and `npm run build` green after each stage (the
       build catches Turbopack/App-Router issues; relative imports in `src/` stay extensionless).
 - [ ] 4.2 Add the deferred live-infra items to `relevant_notes.md`: apply `0009`, prove the
       `get_shared_document` function returns a shared doc's payload and nothing for a wrong/unshared/
