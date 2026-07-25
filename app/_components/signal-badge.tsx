@@ -1,21 +1,25 @@
 /**
- * The red/yellow/green signal, rendered as a pill that is **never color alone** — the color
- * always carries plain-language text (constitution §3.5, §6). Used on estimates and in the
- * portfolio. "EPH" never appears; the wording is contractor-plain.
+ * The red/yellow/green signal, rendered as a chip that is **never color alone** — the color
+ * always carries plain-language text (constitution §3.5, §6). Colors come from the signal
+ * tokens (globals.css), the single home for the threshold palette. Used on estimates, lines,
+ * and the portfolio. "EPH" never appears; the wording is contractor-plain. A `sm` size gives
+ * the compact chip the dense surfaces (line rows, cards) use.
  */
 
 import type { SignalColor } from "@/src/engine";
 
+type Size = "sm" | "md";
+
 const STYLES: Record<SignalColor, string> = {
-  green: "bg-green-100 text-green-900 dark:bg-green-950 dark:text-green-200",
-  yellow: "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200",
-  red: "bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-200",
+  green: "bg-signal-green-bg text-signal-green-fg",
+  yellow: "bg-signal-amber-bg text-signal-amber-fg",
+  red: "bg-signal-red-bg text-signal-red-fg",
 };
 
 const DOT: Record<SignalColor, string> = {
-  green: "bg-green-600",
-  yellow: "bg-amber-500",
-  red: "bg-red-600",
+  green: "bg-signal-green",
+  yellow: "bg-signal-amber",
+  red: "bg-signal-red",
 };
 
 /** Default plain-language wording per color (overridable via `label`). */
@@ -25,16 +29,22 @@ export const SIGNAL_WORD: Record<SignalColor, string> = {
   red: "Not pulling its weight",
 };
 
+function pad(size: Size): string {
+  return size === "sm" ? "px-2 py-0.5 text-[11px]" : "px-2.5 py-1 text-xs";
+}
+
 export function SignalBadge({
   color,
   label,
+  size = "md",
 }: {
   color: SignalColor;
   label?: string | undefined;
+  size?: Size;
 }) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${STYLES[color]}`}
+      className={`inline-flex items-center gap-1.5 rounded-full font-semibold ${pad(size)} ${STYLES[color]}`}
     >
       <span className={`h-2 w-2 rounded-full ${DOT[color]}`} aria-hidden />
       {label ?? SIGNAL_WORD[color]}
@@ -42,11 +52,19 @@ export function SignalBadge({
   );
 }
 
-/** A neutral pill for a not-applicable signal (no hours / not set up yet). */
-export function SignalUnknown({ label = "Not enough info yet" }: { label?: string }) {
+/** A neutral chip for a not-applicable signal (no hours / not set up yet). */
+export function SignalUnknown({
+  label = "Not enough info yet",
+  size = "md",
+}: {
+  label?: string;
+  size?: Size;
+}) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-medium text-neutral-600 dark:bg-neutral-900 dark:text-neutral-400">
-      <span className="h-2 w-2 rounded-full bg-neutral-400" aria-hidden />
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full bg-signal-none-bg font-semibold text-signal-none-fg ${pad(size)}`}
+    >
+      <span className="h-2 w-2 rounded-full bg-muted" aria-hidden />
       {label}
     </span>
   );

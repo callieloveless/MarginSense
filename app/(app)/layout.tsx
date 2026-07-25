@@ -2,12 +2,14 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { getServerSession } from "@/src/db/session";
+import { NavTabs } from "@/app/_components/nav-tabs";
 
 /**
  * The authenticated shell (constitution §2 outer layer). Resolves the session + tenant
  * server-side and gates access: signed-out → sign-in, signed-in-without-a-business →
- * create-business. Before Supabase is configured it renders an "unconfigured" banner so
- * the phone-first skeleton is still walkable.
+ * create-business. Before Supabase is configured it renders an "unconfigured" notice so the
+ * phone-first skeleton is still walkable. The frame (paper theme, header, bottom tabs) is the
+ * revamp shell; each screen owns its own content.
  */
 export default async function AppLayout({
   children,
@@ -22,35 +24,24 @@ export default async function AppLayout({
   const unconfigured = session.status === "unconfigured";
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-md flex-col">
-      <header className="flex items-center justify-between border-b border-neutral-200 px-4 py-3 dark:border-neutral-800">
-        <Link href="/dashboard" className="text-lg font-semibold">
+    <div className="mx-auto flex min-h-dvh max-w-md flex-col bg-paper text-ink">
+      <header className="flex items-center justify-between border-b border-line px-4 py-3">
+        <Link href="/dashboard" className="text-lg font-semibold text-brand">
           MarginSense
         </Link>
-        <span className="text-xs text-neutral-500">Profit Tracker</span>
+        <span className="text-xs text-muted">Profit Tracker</span>
       </header>
 
       {unconfigured ? (
-        <div className="mx-4 mt-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
-          Supabase isn&apos;t connected yet. Set the values in{" "}
-          <code>.env.local</code> (see <code>.env.example</code>) to enable auth and data.
-          Screens below are skeletons.
+        <div className="mx-4 mt-3 rounded-xl border border-notice-line bg-notice-bg px-3 py-2 text-sm text-notice-fg">
+          Supabase isn&apos;t connected yet. Set the values in <code>.env.local</code> (see{" "}
+          <code>.env.example</code>) to enable auth and data. Screens below are skeletons.
         </div>
       ) : null}
 
       <main className="flex-1 px-4 py-4">{children}</main>
 
-      <nav className="sticky bottom-0 grid grid-cols-3 border-t border-neutral-200 bg-white text-center text-sm dark:border-neutral-800 dark:bg-neutral-950">
-        <Link href="/dashboard" className="py-3">
-          Dashboard
-        </Link>
-        <Link href="/projects" className="py-3">
-          Projects
-        </Link>
-        <Link href="/settings" className="py-3">
-          Settings
-        </Link>
-      </nav>
+      <NavTabs />
     </div>
   );
 }

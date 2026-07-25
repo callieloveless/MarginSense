@@ -1,10 +1,103 @@
 @import "tailwindcss";
 
-/* Phone-first baseline (constitution §1, techstack §6). Design at phone width first. */
+/*
+ * Design tokens (revamp-app-shell). The ONE home for the paper/green theme and the
+ * red/yellow/green signal palette (constitution §3.5, §6 — color always paired with text).
+ * Semantic CSS variables carry light + dark values; `@theme inline` maps them to Tailwind
+ * utilities (bg-paper, text-ink, border-line, bg-signal-green-bg, …) that resolve the var at
+ * use-site, so the utilities adapt to the viewer's colour scheme. Consume signal colours only
+ * through the SignalBadge / SignalUnknown components — never a raw threshold colour on a screen.
+ * For non-threshold infrastructure notices (e.g. "connect Supabase") use the `notice` tokens,
+ * NOT the signal palette, so the red/yellow/green stays 1:1 with the profit signal.
+ */
 :root {
   color-scheme: light dark;
+
+  --paper: #f7f4ef; /* app background — warm paper */
+  --surface: #ffffff; /* cards, sheets, nav */
+  --ink: #1a1614; /* primary text */
+  --ink-soft: #4a423d; /* secondary text */
+  --muted: #6f665f; /* tertiary text, dots — AA (≈5.1:1) on paper/surface */
+  --line: #e8e1d6; /* borders, dividers */
+  --line-soft: #f0ebe2; /* faint dividers */
+  --brand: #14403c; /* brand teal-green */
+  --brand-ink: #ffffff; /* text on brand */
+  --brand-soft: #e3edea; /* brand-tinted fill */
+  --notice-bg: #f3ecdd; /* non-threshold infra notice (NOT a signal colour) */
+  --notice-fg: #6b5836;
+  --notice-line: #e5d8bd;
+
+  --signal-green: #1f8a50; /* dot */
+  --signal-green-bg: #e2f0e6; /* chip fill */
+  --signal-green-fg: #14663f; /* chip text */
+  --signal-amber: #d08a16;
+  --signal-amber-bg: #fbeeda;
+  --signal-amber-fg: #7e4a0e;
+  --signal-red: #c4382b;
+  --signal-red-bg: #fbe7e3;
+  --signal-red-fg: #9c2c22;
+  --signal-none-bg: #efeae1; /* neutral / not-enough-info chip */
+  --signal-none-fg: #6b635b;
 }
 
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #14120f;
+    --surface: #1e1a16;
+    --ink: #f2ece3;
+    --ink-soft: #cfc7bb;
+    --muted: #9a9086;
+    --line: #322c25;
+    --line-soft: #262019;
+    --brand: #6db29e;
+    --brand-ink: #0b1f1c;
+    --brand-soft: #1c2b28;
+    --notice-bg: #241f14;
+    --notice-fg: #d8c9a8;
+    --notice-line: #3a3220;
+
+    --signal-green: #6fd79b;
+    --signal-green-bg: #16281f;
+    --signal-green-fg: #a8e6c2;
+    --signal-amber: #f0c574;
+    --signal-amber-bg: #2a2113;
+    --signal-amber-fg: #f3d9a6;
+    --signal-red: #f09a8e;
+    --signal-red-bg: #2a1512;
+    --signal-red-fg: #f6c0b7;
+    --signal-none-bg: #242019;
+    --signal-none-fg: #a89f94;
+  }
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-brand: var(--brand);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-soft: var(--brand-soft);
+  --color-notice-bg: var(--notice-bg);
+  --color-notice-fg: var(--notice-fg);
+  --color-notice-line: var(--notice-line);
+  --color-signal-green: var(--signal-green);
+  --color-signal-green-bg: var(--signal-green-bg);
+  --color-signal-green-fg: var(--signal-green-fg);
+  --color-signal-amber: var(--signal-amber);
+  --color-signal-amber-bg: var(--signal-amber-bg);
+  --color-signal-amber-fg: var(--signal-amber-fg);
+  --color-signal-red: var(--signal-red);
+  --color-signal-red-bg: var(--signal-red-bg);
+  --color-signal-red-fg: var(--signal-red-fg);
+  --color-signal-none-bg: var(--signal-none-bg);
+  --color-signal-none-fg: var(--signal-none-fg);
+}
+
+/* Phone-first baseline (constitution §1, techstack §6). Design at phone width first. */
 html,
 body {
   max-width: 100%;

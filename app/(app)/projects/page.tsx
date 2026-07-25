@@ -20,9 +20,9 @@ export default async function ProjectsPage() {
 
   return (
     <section>
-      <h1 className="text-xl font-semibold">Projects</h1>
+      <h1 className="text-xl font-semibold">Jobs</h1>
       <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-400">
-        One project per client job — the home for its estimates and shared context.
+        One job per client — the home for its estimates and shared context.
       </p>
 
       <div className="mt-4">
@@ -32,7 +32,7 @@ export default async function ProjectsPage() {
       <ul className="mt-6 divide-y divide-neutral-200 dark:divide-neutral-800">
         {projects.length === 0 ? (
           <li className="py-3 text-sm text-neutral-500">
-            {live ? "No projects yet — add your first job above." : "Connect Supabase to load projects."}
+            {live ? "No jobs yet — add your first job above." : "Connect Supabase to load jobs."}
           </li>
         ) : (
           projects.map((p) => (
