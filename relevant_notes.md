@@ -47,6 +47,14 @@ role had the privilege, so the dashboard fallback wasn't needed).
       **If you see those NOTICEs, the DB half of object isolation is not in place** — run the
       file's statements once from the Supabase SQL editor and confirm with
       `select * from pg_policies where tablename = 'objects';`.
+- [ ] `0009_powerful_fixer` — `documents` + RLS + grants, **and** the `get_shared_document(token)`
+      `SECURITY DEFINER` function (the one deliberate public capability, §5/§7) granted to `anon`.
+      **Not yet applied** (added after the 2026-07-24 batch). After `db:migrate`, prove: a shared
+      document's token returns its payload via the anon client; a wrong / unshared / revoked token
+      returns nothing; re-sharing a revoked doc issues a new token and the old one stays dead; and
+      there is **no authenticated cross-tenant path** to `documents`. The app-layer rules are
+      unit-proven (`documents.test.ts`); the live function + anon `rpc` are the deferred half
+      (add-client-document).
 
 ### 2. Prove Row-Level Security end-to-end
 App-layer tenant isolation is already proven by in-memory tests (`tenant.test.ts`,

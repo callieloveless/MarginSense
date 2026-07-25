@@ -6,7 +6,7 @@
 > stands on ground that already exists. Specs are the source of truth
 > ([`openspec/`](./openspec/)); this file is the at-a-glance view.
 
-**Last updated:** 2026-07-24
+**Last updated:** 2026-07-25
 
 ---
 
@@ -26,7 +26,8 @@
 | 8b | `add-photo-advisor` (the vision tool) | `photo-advisor`, `project-context` | ✅ **Done** (archived 2026-07-24; live-AI proof deferred) |
 | 9a | `add-tool-compose` (composition seam, dormant) | `tool-platform` | ✅ **Done** (archived 2026-07-24) |
 | 9b | `add-code-finder` (compose off findings + standalone query) | `code-finder`, `project-context` | ✅ **Done** (archived 2026-07-24; live-AI proof deferred) |
-| 10 | Client Estimate Doc | `client-estimate-doc` | ⏳ Planned |
+| 10a | `add-client-document` (the doc + revocable share link) | `client-document` | ✅ **Done** (archived 2026-07-25; live-infra proof deferred) |
+| 10b | Client Estimate Doc tool (estimate → doc + AI scope) | `client-estimate-doc` | ⏳ Planned |
 | 11 | Hardening & launch pass | — | ⏳ Planned |
 | 12 | Tool graph editor (meta) | — | 🌟 North-star (after core tools ship) |
 
@@ -184,9 +185,25 @@ cost/hours** so a codes tool stays on the EPH spine. Shared licensed-professiona
 local codes and that composed runs record live token usage. **This completes the v1 tool set
 (#7 Material Finder, #8 Photo Advisor, #9 Code Finder).**
 
-### 10. ⏳ Client Estimate Doc
-The client-facing document tool — separate from the internal estimate (true costs,
-overhead, EPH never leak into it). Generates the polished proposal as a `document`.
+### 10a. ✅ Client document + share link
+The security-sensitive half of the Client Estimate Doc, split out because a document is the FIRST
+thing MarginSense exposes outside the login wall. A `documents` table (RLS, migration `0009`)
+stores a **client-safe payload snapshot** — the `src/document/` schema is `.strict()` and has no
+field for cost/overhead/margin/EPH/signal/labor-minutes, so an internal number is *unrepresentable*
+on a document, and a `.superRefine` makes it add up. A revocable, unguessable **share token** backs
+a public `/share/<token>` page (no login, `noindex`) read through the `get_shared_document`
+`SECURITY DEFINER` function — the one deliberate public capability (§7), returning one payload only
+when shared and not revoked; RLS unchanged for every authenticated path. Re-sharing a revoked doc
+mints a fresh token so a dead link never revives. `DocumentBackend` on the `TenantDb` seam. **No
+tool, no AI, no estimate transform, no owner UI** — all 10b. Open item deferred to live infra
+(relevant_notes.md §1): apply `0009` and prove the token function + cross-tenant isolation.
+
+### 10b. ⏳ Client Estimate Doc tool
+The tool on top of 10a: projects a finished estimate into the client-safe payload (client prices,
+never costs), optionally writes a scope narrative with the model (prompt forbidden from mentioning
+cost/margin/profit — the free-text gap 10a can't close structurally), creates the document, and the
+owner surface to generate / share / revoke. Registered as a Tool (constitution §5); the last of the
+v1 tools.
 
 ### 11. ⏳ Hardening & launch pass
 Money-critical e2e suite (onboarding → estimate → signal → accept suggestion → client

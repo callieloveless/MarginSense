@@ -68,10 +68,10 @@
 
 - [x] 4.1 `npm run typecheck`, `npx vitest run`, and `npm run build` green after each stage (the
       build catches Turbopack/App-Router issues; relative imports in `src/` stay extensionless).
-- [ ] 4.2 Add the deferred live-infra items to `relevant_notes.md`: apply `0009`, prove the
+- [x] 4.2 Add the deferred live-infra items to `relevant_notes.md`: apply `0009`, prove the
       `get_shared_document` function returns a shared doc's payload and nothing for a wrong/unshared/
       revoked token from the anon client, and confirm no authenticated cross-tenant path to
       `documents`.
-- [ ] 4.3 Update `PROGRESS.md`: #10 split into 10a (this change) and 10b (the Client Estimate Doc
+- [x] 4.3 Update `PROGRESS.md`: #10 split into 10a (this change) and 10b (the Client Estimate Doc
       tool), with 10a's status.
-- [ ] 4.4 `openspec validate add-client-document --strict`, then archive on its own commit.
+- [x] 4.4 `openspec validate add-client-document --strict`, then archive on its own commit.
