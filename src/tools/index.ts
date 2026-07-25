@@ -30,6 +30,11 @@ export {
   type CodeResultItem,
 } from "./code-finder";
 export {
+  clientEstimateDocTool,
+  type ClientEstimateDocInput,
+  type ClientEstimateDocOutput,
+} from "./client-estimate-doc";
+export {
   materialFinderTool,
   manualMaterialSchema,
   manualMaterialSuggestions,

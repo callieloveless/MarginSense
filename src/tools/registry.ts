@@ -10,9 +10,16 @@ import { referenceTool } from "./reference";
 import { materialFinderTool } from "./material-finder";
 import { photoAdvisorTool } from "./photo-advisor";
 import { codeFinderTool } from "./code-finder";
+import { clientEstimateDocTool } from "./client-estimate-doc";
 
 /** Every registered tool, in display order. */
-const TOOLS: readonly AnyTool[] = [photoAdvisorTool, materialFinderTool, codeFinderTool, referenceTool];
+const TOOLS: readonly AnyTool[] = [
+  photoAdvisorTool,
+  materialFinderTool,
+  codeFinderTool,
+  clientEstimateDocTool,
+  referenceTool,
+];
 
 /** The registry keyed by tool name. */
 export const toolRegistry: ReadonlyMap<string, AnyTool> = new Map(TOOLS.map((t) => [t.name, t]));

@@ -5,3 +5,4 @@
  */
 
 export * from "./estimate";
+export * from "./client-projection";
