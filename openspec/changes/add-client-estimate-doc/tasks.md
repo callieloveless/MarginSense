@@ -1,19 +1,27 @@
 ## 1. Stage A — the pure estimate → client-document projection
 
 - [ ] 1.1 Add `src/estimate/client-projection.ts`: `projectClientDocument(input)` where `input`
-      carries the business identity, client, title, `preparedOn`, `lines: [{ description,
-      costCents }]`, `totalPriceCents`, optional `taxRateBp`, optional `intro`, optional `terms`.
-- [ ] 1.2 Allocate each line's client price as `round(total × lineCost / Σ lineCost)`, assigning
-      the rounding remainder to the largest line so `Σ line prices === subtotal` exactly; set
-      `subtotal = total`, `tax = round(subtotal × taxRateBp / 10000)` when a rate is given, and
-      `total = subtotal + tax`. Refuse an estimate with zero total cost (nothing to allocate).
-- [ ] 1.3 Build the client-safe payload and validate it through `src/document/parseClientDocument`
+      carries the business identity, client, title, `preparedOn` (a formatted date string the
+      caller stamps), `lines: [{ description, costCents, hasPriceOverride }]`, `totalPriceCents`,
+      optional `taxRateBp`, optional `intro`, optional `terms`.
+- [ ] 1.2 **Drop zero-cost lines**, then allocate each remaining line's client price as
+      `round(total × lineCost / Σ lineCost)`, assigning the rounding remainder to the largest line
+      so `Σ line prices === subtotal` exactly; set `subtotal = total`,
+      `tax = round(subtotal × taxRateBp / 10000)` when a rate is given, and `total = subtotal + tax`.
+- [ ] 1.3 **Refuse** (typed error, no document) when: any line has a per-line price override
+      (`hasPriceOverride`) — proportional allocation would contradict it; the total is zero or
+      there is no cost to allocate; or all lines were dropped. A *total*-price override does not
+      refuse (it's just the total).
+- [ ] 1.4 Build the client-safe payload and validate it through `src/document/parseClientDocument`
       before returning (so a projection bug is caught, not stored); return a typed ok/error.
-- [ ] 1.4 Export from `src/estimate/index.ts`. Keep it engine-only (no framework/DB imports).
-- [ ] 1.5 Unit-test `client-projection.test.ts`: allocation sums exactly to the subtotal for an
+- [ ] 1.5 Export from `src/estimate/index.ts`. Keep it engine-only (no framework/DB imports); no
+      `Date.now()` (the date arrives as `preparedOn`).
+- [ ] 1.6 Unit-test `client-projection.test.ts`: allocation sums exactly to the subtotal for an
       uneven 3-line split; a single line gets the whole total; equal-cost lines split evenly with
-      the remainder handled; tax computes and the total adds up; a client line carries no
-      cost/minutes/quantity; a zero-total-cost estimate is refused.
+      the remainder handled; a zero-cost line is dropped and the rest still sum to the total; tax
+      computes and the total adds up; a client line carries no cost/minutes/quantity; a per-line
+      override is refused; a total-only override still generates; a zero-total / all-dropped
+      estimate is refused.
 
 ## 2. Stage B — the Client Estimate Doc tool
 
@@ -36,9 +44,12 @@
 
 - [ ] 3.1 Add the generate action under `app/(app)/projects/[id]/`: resolve the session, read the
       active estimate + lines + settings + business + project tenant-scoped, compute the total via
-      `computeFromRows`, assemble the tool input (gate `writeNarrative` on `resolveModelPort()`),
-      dispatch through `dispatchAndCompose`, take `output`, and `createDocument` **unshared** via
-      10a's seam. Never trust a client `business_id`.
+      `computeFromRows`, **stamp `preparedOn`** as a readable date formatted for the business at
+      generation time (frozen into the snapshot), assemble the tool input (mark each line's
+      `hasPriceOverride`; gate `writeNarrative` on `resolveModelPort()`), dispatch through
+      `dispatchAndCompose`, take `output`, and `createDocument` **unshared** via 10a's seam. Never
+      trust a client `business_id`. Surface the projection's refusal reasons (unpriceable /
+      per-line override) as a clear message.
 - [ ] 3.2 Add the share / revoke / update-draft actions calling 10a's `shareDocument` /
       `revokeDocument` (and a narrow update for the unshared draft's `intro`/`terms`), all
       session-resolved and tenant-scoped; share returns the `/share/<token>` URL.

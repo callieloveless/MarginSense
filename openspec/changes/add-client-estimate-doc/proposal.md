@@ -16,8 +16,21 @@ see if it pulls its weight, then send the client a proposal that shows only the 
   **allocating the single solved total across the lines proportional to each line's cost**, exact
   to the cent so the document adds up (subtotal = Σ line prices; total = subtotal + tax). Line
   descriptions carry over; **costs, labor minutes, and quantities never do** — a client line is a
-  description and a price. Optional tax comes from the business's `default_tax_rate_bp`. No math is
-  re-implemented; the total and costs come from `src/engine/` and this only distributes and shapes.
+  description and a price. Two v1 rules keep the allocation honest and simple:
+  - **A zero-cost line is dropped** from the document — it would get a $0 share and read to a
+    client as a mistake; it stays on the internal estimate, just not on the proposal.
+  - **A per-line price override refuses generation.** If any line carries an explicit `priceCents`
+    (the reserved per-line override), proportional allocation would contradict the contractor's
+    stated price, so the projection reports "resolve line pricing first" rather than produce a
+    document that disagrees with the estimate. (A *total*-price override is fine — it's just the
+    total to allocate.) Reconciling per-line overrides is a named later change.
+
+  Optional tax comes from the business's `default_tax_rate_bp`. No math is re-implemented; the total
+  and costs come from `src/engine/`, and this only distributes and shapes.
+- **The prepared date is frozen at generation, in the business's locale.** The action stamps
+  `preparedOn` when the document is generated (formatted for the business, a stable readable date)
+  and it is snapshotted like everything else — so the client and the contractor always see the same
+  date, and it never shifts at render time.
 - **The Client Estimate Doc tool** (`src/tools/client-estimate-doc/`) on the platform contract. It
   receives the estimate material as **input** (the action reads it tenant-scoped; the tool holds no
   DB handle), runs the pure projection for the numbers, and returns the finished `ClientDocument`
@@ -73,8 +86,10 @@ see if it pulls its weight, then send the client a proposal that shows only the 
 
 - **No change to 10a's sharing security or the public render.** This change only *produces*
   documents; how they're stored and shown is unchanged.
-- **No per-line margin control or per-category markup.** v1 allocates the single solved margin
-  across lines proportional to cost; differentiated markup (materials vs labor) is a later change.
+- **No per-line margin control, per-category markup, or per-line-override reconciliation.** v1
+  allocates the single solved margin across lines proportional to cost; differentiated markup
+  (materials vs labor) is a later change, and an estimate with explicit per-line prices is refused
+  (with a clear reason) rather than reconciled — also a later change.
 - **No rich document editor.** The owner can edit/remove the scope narrative and terms on an
   unshared draft; full layout/line editing on the document is out of scope (edit the estimate and
   regenerate).

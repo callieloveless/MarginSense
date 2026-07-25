@@ -19,11 +19,12 @@ estimate SHALL be unchanged; the document is a separate artifact.
 
 ### Requirement: Client prices are allocated from the solved total and add up
 The document's line prices SHALL be derived by allocating the estimate's single solved (or
-overridden) total price across the lines **proportional to each line's cost**, rounded to whole
+total-overridden) price across the lines **proportional to each line's cost**, rounded to whole
 cents so the line prices **sum exactly to the subtotal**, and the total SHALL equal the subtotal
-plus any tax. No cost, labor-minute, or quantity figure SHALL appear on a line — a client line is
-a description and a price. Tax, when the business has a tax rate, SHALL be computed from that rate;
-otherwise there is no tax line.
+plus any tax. A line with zero cost SHALL be omitted from the document (it would carry no price).
+No cost, labor-minute, or quantity figure SHALL appear on a line — a client line is a description
+and a price. Tax, when the business has a tax rate, SHALL be computed from that rate; otherwise
+there is no tax line.
 
 #### Scenario: Allocation is exact to the cent
 - **WHEN** the solved total is allocated across several lines whose proportional shares don't land
@@ -31,15 +32,35 @@ otherwise there is no tax line.
 - **THEN** the rounded line prices still sum exactly to the subtotal, and the total equals subtotal
   plus tax
 
+#### Scenario: A zero-cost line is dropped
+- **WHEN** an estimate has a line that contributes no cost
+- **THEN** that line does not appear on the client document, and the remaining lines still sum to
+  the total
+
 #### Scenario: A client line shows no internal figure
 - **WHEN** a labor or material line is projected onto the document
 - **THEN** it carries a description and a price only — never its cost, labor minutes, or quantity
 
+### Requirement: The projection refuses rather than contradict the estimate
+The projection SHALL refuse to generate — reporting a clear reason rather than producing a broken
+or misleading document — when the estimate cannot be priced (the margin can't be solved, or the
+business has no billable capacity set), when it has **no total cost to allocate**, or when any line
+carries an **explicit per-line price override** (which proportional allocation would contradict). A
+total-price override SHALL NOT trigger a refusal; it is simply the total that is allocated.
+
 #### Scenario: An unpriceable estimate is refused
-- **WHEN** the estimate cannot be priced (e.g. the margin can't be solved, or the business has no
-  billable capacity set)
+- **WHEN** the estimate cannot be priced, or has no cost to allocate
 - **THEN** the tool reports that the document can't be generated yet, rather than producing a
   broken or zero-priced document
+
+#### Scenario: A per-line override is refused
+- **WHEN** any line carries an explicit per-line price override
+- **THEN** the tool refuses and reports that line pricing must be resolved first, rather than
+  showing the client a price that contradicts the line's set price
+
+#### Scenario: A total-price override still generates
+- **WHEN** the estimate's total price is overridden (but no line is)
+- **THEN** the document generates, allocating that overridden total across the lines
 
 ### Requirement: The optional scope narrative never states internal figures, and is reviewed
 When AI is configured, the tool MAY write a scope narrative for the document; when it is not, the

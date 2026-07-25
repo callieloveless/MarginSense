@@ -29,22 +29,38 @@ Advisor (bytes via input) and keeps the tool DB-free.
 
 ### 1. A pure projection allocates the solved total across lines, exact to the cent
 `src/estimate/client-projection.ts` (pure, engine-only) takes the computed total price and the
-lines' costs and returns the client-safe payload. Each line's client price is
-`round(total × lineCost / Σ lineCost)`; the **rounding remainder is assigned to the largest line**
-so `Σ line prices === subtotal` exactly — the money-exactness the client document's `.superRefine`
-(10a) will otherwise reject. `subtotal = total`, `tax = round(subtotal × taxRateBp / 10000)` when a
-rate is set, `total = subtotal + tax`. This is the one genuinely money-critical piece and gets the
-engine's exactness treatment: unit tests over uneven splits, a single line, all-equal lines, and a
-zero-total (refused). It re-implements no engine math — the total and per-line costs come from
-`src/engine/`/`src/estimate/`; this only distributes and formats.
+lines' costs and returns the client-safe payload. It **drops zero-cost lines** first (they'd get a
+$0 share that reads as a mistake — they remain on the internal estimate), then each remaining
+line's client price is `round(total × lineCost / Σ lineCost)`; the **rounding remainder is assigned
+to the largest line** so `Σ line prices === subtotal` exactly — the money-exactness the client
+document's `.superRefine` (10a) will otherwise reject. `subtotal = total`,
+`tax = round(subtotal × taxRateBp / 10000)` when a rate is set, `total = subtotal + tax`. This is
+the one genuinely money-critical piece and gets the engine's exactness treatment: unit tests over
+uneven splits, a single line, all-equal lines, a dropped zero-cost line, and a refusal. It
+re-implements no engine math — the total and per-line costs come from `src/engine/`/`src/estimate/`;
+this only distributes and formats.
 
 *Why proportional-to-cost:* the estimate is priced to a single target margin across the whole job,
 so spreading that one margin across the lines by cost is the faithful client view. Differentiated
 markup (materials vs labor) would be a different pricing model, and it's a non-goal.
 
-*Edge — a zero-cost line* (unusual: a $0 line): it gets a $0 client price, and the remainder logic
-still lands the total on the priced lines. An estimate with **zero total cost** can't be allocated
-proportionally, so the projection refuses it (there's nothing to price).
+**Two refusals, not a broken document (v1 scope choices):**
+- A **per-line price override** — any line carrying an explicit `priceCents` — makes the projection
+  refuse ("resolve line pricing first"). Proportional allocation would contradict a price the
+  contractor deliberately set, so rather than silently override their intent (or build a
+  reconciliation path now), v1 stops and says so. A *total*-price override is fine: it's just the
+  total to allocate. Honoring per-line overrides (fix them, allocate the remainder) is a named
+  later change.
+- A **zero total cost** (nothing to allocate proportionally) is refused — there is nothing to
+  price. So is an estimate that is **only zero-cost lines** (all dropped → empty).
+
+### 1a. The prepared date is frozen at generation, in the business's locale
+The pure projection can't call `Date.now()` (the project bans it in pure modules, and a frozen
+document shouldn't recompute a date at render). So the **action** stamps `preparedOn` when it
+generates the document — a readable date (e.g. "July 25, 2026") formatted for the business — and
+passes it into the projection input. It is snapshotted with the rest, so the contractor and the
+client always see the same date and it never shifts. (10a's public render already just displays the
+stored string; this decides who sets it and when.)
 
 ### 2. The tool takes estimate material as input and returns a document as output
 `run(ctx)` input is the assembled material — business identity, client, title, `preparedOn`, the
@@ -60,6 +76,14 @@ estimate tenant-scoped, builds the input, dispatches, takes `output`, and persis
 *Why a tool and not a plain action:* the constitution lists Client Estimate Doc as a v1 Tool, and
 routing it through the registry + dispatch gives it a `tool_run` (observability), a Tools-surface
 presence, and a graph node (#12) for free — with the document as its routable output.
+
+*Why the projection stays in the tool (not the action):* the alternative was to have the action run
+the pure projection and the tool add only the AI narrative. Rejected — it would make the tool run
+*only when AI is configured* and the document be produced by a plain action otherwise, so "the tool
+generates the document" would be true only half the time. Keeping the projection call inside the
+tool means one always-run entry: with a key it also writes the narrative, without one it returns the
+same document sans intro. The pure projection module is the single home for the money math either
+way; this is only about who calls it.
 
 ### 3. Generate → unshared draft → owner review → share: the guard for the free-text gap
 10a made internal *numbers* unrepresentable, but the scope narrative is free text an AI writes, so
