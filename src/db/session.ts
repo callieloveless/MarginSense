@@ -15,6 +15,7 @@ import { getDb } from "./client";
 import { businessIdForAuthUser } from "./rls";
 import {
   createDrizzleContextBackend,
+  createDrizzleDocumentBackend,
   createDrizzleEstimateBackend,
   createDrizzlePhotoBackend,
   createDrizzleProjectBackend,
@@ -94,6 +95,7 @@ export function tenantDbForSession(authUserId: string, businessId: BusinessId): 
     estimates: createDrizzleEstimateBackend(db, authUserId),
     context: createDrizzleContextBackend(db, authUserId),
     toolRuns: createDrizzleToolRunsBackend(db, authUserId),
+    documents: createDrizzleDocumentBackend(db, authUserId),
     photos: createDrizzlePhotoBackend(db, authUserId),
     ...(storage.status === "configured" ? { photoStorage: storage.backend } : {}),
   });

@@ -64,6 +64,13 @@
       "when": 1784850358173,
       "tag": "0008_job_photos_bucket",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1784995968406,
+      "tag": "0009_powerful_fixer",
+      "breakpoints": true
     }
   ]
 }

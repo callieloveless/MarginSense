@@ -20,6 +20,7 @@ import {
   photoThumbKey,
   SIGNED_URL_TTL_SECONDS,
 } from "../photos";
+import { parseClientDocument, type ClientDocument } from "../document";
 import type {
   BusinessSettingsRow,
   ContextEntryKindName,
@@ -34,6 +35,8 @@ import type {
   NewEstimateRow,
   NewLineItemRow,
   NewOverheadItemRow,
+  DocumentRow,
+  NewDocumentRow,
   NewProjectPhotoRow,
   NewProjectRow,
   NewSuggestionRow,
@@ -60,6 +63,14 @@ import {
 
 /** A business id. A branded string would be nicer; kept plain for v1 simplicity. */
 export type BusinessId = string;
+
+/** A high-entropy, URL-safe share token (192 bits) — the sole access credential for a public
+ * client-document link (add-client-document). Not the row id, not guessable, not enumerable. */
+function newShareToken(): string {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return Buffer.from(bytes).toString("base64url");
+}
 
 /** Fields a caller may supply when creating a project. `business_id` is NOT among them. */
 export interface ProjectInput {
@@ -357,6 +368,34 @@ export interface PhotoStorageBackend {
   deleteObjects(businessId: BusinessId, keys: readonly string[]): Promise<void>;
 }
 
+/** What a caller supplies to create a client document (add-client-document). Notably absent:
+ * `business_id` and the share token — both stamped by the handle, never from input. `payload` is
+ * the already-validated client-safe snapshot. */
+export interface DocumentInput {
+  projectId: string;
+  estimateId?: string | null | undefined;
+  title: string;
+  payload: ClientDocument;
+}
+
+/**
+ * The document port `TenantDb` talks to (add-client-document). Every method takes `businessId`
+ * explicitly and only `TenantDb` calls it, always with its own bound id. `insert` receives a row
+ * whose `business_id` and `share_token` were stamped by the handle; `setShared`/`setRevoked` move
+ * the timestamps, and `setShared` also (re)issues a token so the caller can rotate it on a
+ * re-share-after-revoke.
+ */
+export interface DocumentBackend {
+  listByProject(businessId: BusinessId, projectId: string): Promise<DocumentRow[]>;
+  getById(businessId: BusinessId, id: string): Promise<DocumentRow | null>;
+  insert(row: NewDocumentRow): Promise<DocumentRow>;
+  /** Set `shared_at = now`, `revoked_at = null`, and `share_token = token`, scoped to the
+   * business. Null if the document isn't ours. */
+  setShared(businessId: BusinessId, id: string, token: string): Promise<DocumentRow | null>;
+  /** Set `revoked_at = now`, scoped to the business. Null if the document isn't ours. */
+  setRevoked(businessId: BusinessId, id: string): Promise<DocumentRow | null>;
+}
+
 /** Backends a {@link TenantDb} composes. All but `projects` are optional so tests wire just
  * what they exercise; feature code (via `tenantDbForSession`) supplies all. */
 export interface TenantBackends {
@@ -368,6 +407,7 @@ export interface TenantBackends {
   photos?: PhotoBackend | undefined;
   /** Absent when object storage is unconfigured — the surface renders "connect storage". */
   photoStorage?: PhotoStorageBackend | undefined;
+  documents?: DocumentBackend | undefined;
 }
 
 /**
@@ -384,6 +424,7 @@ export class TenantDb {
   readonly #toolRuns: ToolRunsBackend | undefined;
   readonly #photos: PhotoBackend | undefined;
   readonly #photoStorage: PhotoStorageBackend | undefined;
+  readonly #documents: DocumentBackend | undefined;
 
   /** @internal — use {@link createTenantDb}, which requires a business id. */
   constructor(businessId: BusinessId, backends: TenantBackends) {
@@ -391,6 +432,7 @@ export class TenantDb {
       throw new Error("TenantDb requires a business id — no unscoped access.");
     }
     this.businessId = businessId;
+    this.#documents = backends.documents;
     this.#projects = backends.projects;
     this.#settings = backends.settings;
     this.#estimates = backends.estimates;
@@ -406,6 +448,14 @@ export class TenantDb {
       throw new Error("TenantDb has no settings backend configured.");
     }
     return this.#settings;
+  }
+
+  /** The documents backend, or a clear error if this handle wasn't wired with one. */
+  get #documentBackend(): DocumentBackend {
+    if (!this.#documents) {
+      throw new Error("TenantDb has no documents backend configured.");
+    }
+    return this.#documents;
   }
 
   /** The estimate backend, or a clear error if this handle wasn't wired with one. */
@@ -827,6 +877,58 @@ export class TenantDb {
   async signedPhotoUrl(key: string, expiresInSeconds = SIGNED_URL_TTL_SECONDS): Promise<string | null> {
     const signed = await this.signedPhotoUrls([key], expiresInSeconds);
     return signed.get(key) ?? null;
+  }
+
+  // --- Client documents (constitution §5; add-client-document) ---------------------
+
+  /** This project's documents, scoped to this business. */
+  listDocuments(projectId: string): Promise<DocumentRow[]> {
+    return this.#documentBackend.listByProject(this.businessId, projectId);
+  }
+
+  /** One document by id, scoped to this business. Null if it isn't ours. */
+  getDocument(id: string): Promise<DocumentRow | null> {
+    return this.#documentBackend.getById(this.businessId, id);
+  }
+
+  /**
+   * Create a client document from a **validated client-safe payload**. The `business_id` and a
+   * fresh unguessable `share_token` are stamped from the handle, never from input; the payload is
+   * re-validated here (defense in depth — it may have been built anywhere) so a stray internal
+   * field or a document that doesn't add up never reaches storage. Created unshared.
+   */
+  async createDocument(input: DocumentInput): Promise<DocumentRow> {
+    const check = parseClientDocument(input.payload);
+    if (!check.ok) throw new Error(`Refusing to store an invalid client document: ${check.error}`);
+    return this.#documentBackend.insert({
+      businessId: this.businessId,
+      projectId: input.projectId,
+      estimateId: input.estimateId ?? null,
+      title: input.title,
+      payload: check.value,
+      shareToken: newShareToken(),
+      sharedAt: null,
+      revokedAt: null,
+    });
+  }
+
+  /**
+   * Share a document — make its link live. Sets `shared_at` and clears any `revoked_at`, and
+   * **mints a fresh token whenever the document is currently revoked**, so a link the client was
+   * told is dead never revives; a document that was never revoked keeps its stable token. Null if
+   * it isn't ours.
+   */
+  async shareDocument(id: string): Promise<DocumentRow | null> {
+    const doc = await this.#documentBackend.getById(this.businessId, id);
+    if (!doc) return null;
+    // Rotate the token only when re-sharing a revoked doc; otherwise keep the link the client has.
+    const token = doc.revokedAt ? newShareToken() : doc.shareToken;
+    return this.#documentBackend.setShared(this.businessId, id, token);
+  }
+
+  /** Revoke a document — its public link stops resolving. Null if it isn't ours. */
+  revokeDocument(id: string): Promise<DocumentRow | null> {
+    return this.#documentBackend.setRevoked(this.businessId, id);
   }
 
   /** Accept a suggestion — the ONLY path that commits its proposed change (server-side, one
@@ -1332,6 +1434,69 @@ export function createMemoryPhotoStorageBackend(): PhotoStorageBackend & {
     },
     keys() {
       return [...objects.keys()];
+    },
+  };
+}
+
+/**
+ * An in-memory {@link DocumentBackend} over a shared array holding *every* tenant's documents —
+ * the condition RLS defends against. A handle bound to A can never read, share, or revoke B's
+ * documents here (the isolation tests assert this). `getShareable` mirrors the SQL access rule of
+ * the `get_shared_document` function (payload only when shared and not revoked), so the public-read
+ * rule — including the revoke-then-reshare token rotation — is unit-testable without the live DB.
+ */
+export function createMemoryDocumentBackend(seed: DocumentRow[] = []): DocumentBackend & {
+  /** Test mirror of the public token read: the client-safe payload for a shared, non-revoked
+   * token, else null. Tenant-agnostic on purpose — the real function is too. */
+  getShareable(token: string): unknown | null;
+} {
+  const rows: DocumentRow[] = [...seed];
+  let seq = seed.length;
+  const now = new Date(0);
+
+  return {
+    async listByProject(businessId, projectId) {
+      return rows.filter((r) => r.businessId === businessId && r.projectId === projectId);
+    },
+    async getById(businessId, id) {
+      return rows.find((r) => r.id === id && r.businessId === businessId) ?? null;
+    },
+    async insert(row) {
+      const stored: DocumentRow = {
+        id: `mem-doc-${++seq}`,
+        businessId: row.businessId,
+        projectId: row.projectId,
+        estimateId: row.estimateId ?? null,
+        title: row.title,
+        payload: row.payload,
+        shareToken: row.shareToken,
+        sharedAt: row.sharedAt ?? null,
+        revokedAt: row.revokedAt ?? null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      rows.push(stored);
+      return stored;
+    },
+    async setShared(businessId, id, token) {
+      const row = rows.find((r) => r.id === id && r.businessId === businessId);
+      if (!row) return null;
+      row.shareToken = token;
+      row.sharedAt = now;
+      row.revokedAt = null;
+      return row;
+    },
+    async setRevoked(businessId, id) {
+      const row = rows.find((r) => r.id === id && r.businessId === businessId);
+      if (!row) return null;
+      row.revokedAt = now;
+      return row;
+    },
+    getShareable(token) {
+      const row = rows.find(
+        (r) => r.shareToken === token && r.sharedAt !== null && r.revokedAt === null,
+      );
+      return row ? row.payload : null;
     },
   };
 }

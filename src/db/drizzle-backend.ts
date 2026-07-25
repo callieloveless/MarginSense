@@ -11,6 +11,7 @@ import {
   businessSettings,
   contextEntries,
   conversationMessages,
+  documents,
   estimates,
   lineItems,
   overheadItems,
@@ -24,6 +25,7 @@ import { nextStatus, suggestionEffect } from "../context";
 import type {
   BusinessId,
   ContextBackend,
+  DocumentBackend,
   EstimateBackend,
   EstimatePatch,
   PhotoBackend,
@@ -483,6 +485,63 @@ export function createDrizzlePhotoBackend(db: Db, authUserId: string): PhotoBack
           .where(and(eq(projectPhotos.id, id), eq(projectPhotos.businessId, businessId)))
           .returning();
         return deleted[0] ?? null;
+      });
+    },
+  };
+}
+
+/**
+ * The production {@link DocumentBackend} (add-client-document): client documents, inside
+ * `withAuthenticatedTx` so the app-layer `business_id` predicate and the table's RLS policy both
+ * apply. The public token read does NOT go through here — it uses the `get_shared_document`
+ * SECURITY DEFINER function via the anon client (`src/db/share.ts`), the one path that returns a
+ * document without a tenant session.
+ */
+export function createDrizzleDocumentBackend(db: Db, authUserId: string): DocumentBackend {
+  return {
+    listByProject(businessId: BusinessId, projectId: string) {
+      return withAuthenticatedTx(db, authUserId, (tx) =>
+        tx
+          .select()
+          .from(documents)
+          .where(and(eq(documents.projectId, projectId), eq(documents.businessId, businessId)))
+          .orderBy(desc(documents.createdAt)),
+      );
+    },
+    getById(businessId: BusinessId, id: string) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const found = await tx
+          .select()
+          .from(documents)
+          .where(and(eq(documents.id, id), eq(documents.businessId, businessId)))
+          .limit(1);
+        return found[0] ?? null;
+      });
+    },
+    insert(row) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const inserted = await tx.insert(documents).values(row).returning();
+        return inserted[0]!;
+      });
+    },
+    setShared(businessId: BusinessId, id: string, token: string) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const updated = await tx
+          .update(documents)
+          .set({ shareToken: token, sharedAt: new Date(), revokedAt: null, updatedAt: new Date() })
+          .where(and(eq(documents.id, id), eq(documents.businessId, businessId)))
+          .returning();
+        return updated[0] ?? null;
+      });
+    },
+    setRevoked(businessId: BusinessId, id: string) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const updated = await tx
+          .update(documents)
+          .set({ revokedAt: new Date(), updatedAt: new Date() })
+          .where(and(eq(documents.id, id), eq(documents.businessId, businessId)))
+          .returning();
+        return updated[0] ?? null;
       });
     },
   };

@@ -375,6 +375,44 @@ export const projectPhotos = pgTable("project_photos", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * A client-facing document (add-client-document; constitution §5) — the polished proposal a
+ * **client** sees, kept strictly separate from the internal estimate. `payload` is a **client-safe
+ * snapshot** validated by `src/document/` (business identity, client, priced lines, totals, terms)
+ * — it has no cost, overhead, EPH, signal, or labor-minute field, so internal figures cannot leak.
+ * Frozen at creation, so a later estimate edit never changes what a client was already sent.
+ *
+ * `share_token` is an unguessable capability: a client opens `/share/<token>` with no login, read
+ * through the `get_shared_document` SECURITY DEFINER function (migration `0009`) which returns the
+ * payload only when `shared_at` is set and `revoked_at` is null. RLS still isolates every
+ * authenticated path by `business_id`. Re-sharing a revoked document mints a fresh token, so a
+ * revoked link never revives.
+ */
+export const documents = pgTable("documents", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id")
+    .notNull()
+    .references(() => businesses.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  /** The estimate version this was generated from (provenance); the payload is self-contained, so
+   * losing the estimate doesn't change the document. */
+  estimateId: uuid("estimate_id").references(() => estimates.id, { onDelete: "set null" }),
+  title: text("title").notNull(),
+  /** The client-safe snapshot (validated by `src/document/`). Never carries an internal figure. */
+  payload: jsonb("payload").notNull(),
+  /** Unguessable share capability; unique. Minted at creation, re-minted only on re-share after
+   * revoke. */
+  shareToken: text("share_token").notNull().unique(),
+  /** Set when shared; null before first share. */
+  sharedAt: timestamp("shared_at", { withTimezone: true }),
+  /** Set when revoked; the public read requires this to be null. */
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export type BusinessRow = typeof businesses.$inferSelect;
 export type NewBusinessRow = typeof businesses.$inferInsert;
 export type UserRow = typeof users.$inferSelect;
@@ -399,6 +437,8 @@ export type ToolRunRow = typeof toolRuns.$inferSelect;
 export type NewToolRunRow = typeof toolRuns.$inferInsert;
 export type ProjectPhotoRow = typeof projectPhotos.$inferSelect;
 export type NewProjectPhotoRow = typeof projectPhotos.$inferInsert;
+export type DocumentRow = typeof documents.$inferSelect;
+export type NewDocumentRow = typeof documents.$inferInsert;
 
 /** Valid context-entry kinds, for boundary validation. */
 export const CONTEXT_ENTRY_KINDS = [

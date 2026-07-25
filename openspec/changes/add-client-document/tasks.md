@@ -1,48 +1,48 @@
 ## 1. Stage A — the client-safe payload module (pure, no framework/DB)
 
-- [ ] 1.1 Add `src/document/document.ts`: the Zod client-safe payload schema — `businessName`,
+- [x] 1.1 Add `src/document/document.ts`: the Zod client-safe payload schema — `businessName`,
       optional `tradeType`/`serviceArea`/`license`, `clientName`, optional `clientAddress`,
       `title`, `preparedOn`, optional `intro`, `lines: [{ description, priceCents }]`,
       `subtotalCents`, optional `taxCents`, `totalCents`, optional `terms`. Use `.strict()` so any
       unknown key (a cost/EPH/labor-minutes field) is a validation error.
-- [ ] 1.2 Add a `.refine` enforcing the arithmetic: `subtotalCents === Σ line.priceCents` and
+- [x] 1.2 Add a `.refine` enforcing the arithmetic: `subtotalCents === Σ line.priceCents` and
       `totalCents === subtotalCents + (taxCents ?? 0)`, so a document that doesn't add up is
       rejected.
-- [ ] 1.3 Add `parseClientDocument(payload)` returning a typed ok/error result, and small display
+- [x] 1.3 Add `parseClientDocument(payload)` returning a typed ok/error result, and small display
       helpers (money via `formatCents`). Keep the module free of Next/Drizzle/Supabase imports.
-- [ ] 1.4 Export from `src/document/index.ts`.
-- [ ] 1.5 Unit-test `src/document/document.test.ts`: a valid payload parses; a payload with a
+- [x] 1.4 Export from `src/document/index.ts`.
+- [x] 1.5 Unit-test `src/document/document.test.ts`: a valid payload parses; a payload with a
       `costCents`/`eph`/`laborMinutes`/`signal` key is rejected; a payload whose subtotal ≠ Σ lines
       or total ≠ subtotal + tax is rejected; a minimal payload (no optional fields) is valid; totals
       are integer cents.
 
 ## 2. Stage B — persistence: table, migration, RLS, token function
 
-- [ ] 2.1 Add `documents` to `src/db/schema.ts`: non-null `business_id` + `project_id`, nullable
+- [x] 2.1 Add `documents` to `src/db/schema.ts`: non-null `business_id` + `project_id`, nullable
       `estimate_id` (set null on delete), `title`, `payload` (jsonb), `share_token` (unique),
       `shared_at`, `revoked_at`, timestamps; export `DocumentRow` / `NewDocumentRow`.
-- [ ] 2.2 `npm run db:generate` → migration `0009_*`; **hand-append the RLS block** mirroring
+- [x] 2.2 `npm run db:generate` → migration `0009_*`; **hand-append the RLS block** mirroring
       `0000`: enable RLS, a per-business `FOR ALL` policy on `public.current_business_id()`, and
       `GRANT … TO authenticated`.
-- [ ] 2.3 Hand-append the `SECURITY DEFINER` `public.get_shared_document(p_token text)` returning
+- [x] 2.3 Hand-append the `SECURITY DEFINER` `public.get_shared_document(p_token text)` returning
       the payload `jsonb` only when `share_token = p_token AND shared_at IS NOT NULL AND revoked_at
       IS NULL`; `SET search_path = public`; `GRANT EXECUTE ON FUNCTION … TO anon, authenticated`.
       Comment it as the one deliberate public capability (§7), mirroring `create_business`.
-- [ ] 2.4 Add the `DocumentBackend` port to `src/db/tenant.ts` (`createDocument`, `listDocuments`,
+- [x] 2.4 Add the `DocumentBackend` port to `src/db/tenant.ts` (`createDocument`, `listDocuments`,
       `getDocument`, `shareDocument`, `revokeDocument`, each taking `businessId`) as an optional
       entry on `TenantBackends` with a private getter that throws when unwired.
-- [ ] 2.5 Add the `TenantDb` methods that pass the bound business id and stamp `business_id` + a
+- [x] 2.5 Add the `TenantDb` methods that pass the bound business id and stamp `business_id` + a
       fresh high-entropy `share_token` (`crypto`, ≥128 bits) from the handle (never from input); the
       payload is validated by `src/document/` before insert. `shareDocument` sets `shared_at`
       (token unchanged); `revokeDocument` sets `revoked_at`; **re-sharing a revoked document mints a
       new token and clears `revoked_at`**.
-- [ ] 2.6 Add `createMemoryDocumentBackend` in `tenant.ts` over a shared cross-tenant array
+- [x] 2.6 Add `createMemoryDocumentBackend` in `tenant.ts` over a shared cross-tenant array
       (mirroring the other memory backends), including a `getShareable(token)` mirror of the SQL
       access rule (payload only when `shared_at` set and `revoked_at` null) so the rule is unit-
       testable without the live function.
-- [ ] 2.7 Add the Drizzle `DocumentBackend` impl in `src/db/drizzle-backend.ts` inside
+- [x] 2.7 Add the Drizzle `DocumentBackend` impl in `src/db/drizzle-backend.ts` inside
       `withAuthenticatedTx`; wire it in `src/db/session.ts`.
-- [ ] 2.8 Tenant-isolation + lifecycle tests in `src/db/documents.test.ts`: business A cannot read,
+- [x] 2.8 Tenant-isolation + lifecycle tests in `src/db/documents.test.ts`: business A cannot read,
       share, or revoke business B's document; `business_id` and `share_token` are stamped from the
       handle; an invalid (non-safe or non-adding-up) payload is refused; **share → revoke →
       re-share** issues a new token and the old token no longer resolves via `getShareable`; a
