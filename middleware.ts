@@ -51,6 +51,10 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Run on app routes, skip static assets and Next internals.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  // Run on app routes; skip static assets, Next internals, and the public routes that never need
+  // a session — `share` (the client-facing document page) and `auth` (the sign-in callback). Those
+  // would otherwise pay a wasted Supabase auth.getUser() round trip on every hit.
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|share|auth|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 };

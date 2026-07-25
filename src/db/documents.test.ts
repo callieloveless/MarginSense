@@ -43,7 +43,7 @@ function shared(): {
 }
 
 function create(db: TenantDb, projectId = "p-1") {
-  return db.createDocument({ projectId, title: "Bathroom remodel", payload });
+  return db.createDocument({ projectId, payload });
 }
 
 describe("client documents — creation and identity", () => {
@@ -52,6 +52,8 @@ describe("client documents — creation and identity", () => {
     const doc = await create(a);
 
     expect(doc.businessId).toBe(BUSINESS_A);
+    // The row's title mirrors the payload's, so the two can't diverge.
+    expect(doc.title).toBe(payload.title);
     expect(doc.sharedAt).toBeNull();
     expect(doc.revokedAt).toBeNull();
     expect(typeof doc.shareToken).toBe("string");
@@ -64,7 +66,6 @@ describe("client documents — creation and identity", () => {
     await expect(
       a.createDocument({
         projectId: "p-1",
-        title: "x",
         payload: { ...payload, costCents: 90_000 } as unknown as ClientDocument,
       }),
     ).rejects.toThrow(/invalid client document/i);
@@ -72,7 +73,6 @@ describe("client documents — creation and identity", () => {
     await expect(
       a.createDocument({
         projectId: "p-1",
-        title: "x",
         payload: { ...payload, totalCents: 999_999 } as unknown as ClientDocument,
       }),
     ).rejects.toThrow(/invalid client document/i);

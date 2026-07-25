@@ -9,15 +9,16 @@ import { type ClientDocument } from "@/src/document";
  */
 export function DocumentView({ document }: { document: ClientDocument }) {
   const d = document;
+  // One readable identity line; render the <p> only when there's something to show.
+  const identity = [d.tradeType, d.serviceArea, d.license ? `License ${d.license}` : null]
+    .filter(Boolean)
+    .join(" · ");
   return (
     <article className="mx-auto max-w-2xl px-5 py-8 print:py-0">
       {/* Business header */}
       <header className="border-b border-neutral-200 pb-4 dark:border-neutral-800">
         <h1 className="text-2xl font-semibold">{d.businessName}</h1>
-        <p className="mt-0.5 text-sm text-neutral-500">
-          {[d.tradeType, d.serviceArea].filter(Boolean).join(" · ")}
-          {d.license ? `${d.tradeType || d.serviceArea ? " · " : ""}License ${d.license}` : ""}
-        </p>
+        {identity ? <p className="mt-0.5 text-sm text-neutral-500">{identity}</p> : null}
       </header>
 
       {/* Title + who/when */}

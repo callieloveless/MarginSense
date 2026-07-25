@@ -369,12 +369,12 @@ export interface PhotoStorageBackend {
 }
 
 /** What a caller supplies to create a client document (add-client-document). Notably absent:
- * `business_id` and the share token — both stamped by the handle, never from input. `payload` is
- * the already-validated client-safe snapshot. */
+ * `business_id`, the share token, and the title — the id/token are stamped by the handle, and the
+ * row's `title` is derived from `payload.title` so the two can never diverge. `payload` is the
+ * client-safe snapshot. */
 export interface DocumentInput {
   projectId: string;
   estimateId?: string | null | undefined;
-  title: string;
   payload: ClientDocument;
 }
 
@@ -904,7 +904,9 @@ export class TenantDb {
       businessId: this.businessId,
       projectId: input.projectId,
       estimateId: input.estimateId ?? null,
-      title: input.title,
+      // The row's title mirrors the payload's, so the owner's list and the client's page can never
+      // show different titles for the same document.
+      title: check.value.title,
       payload: check.value,
       shareToken: newShareToken(),
       sharedAt: null,

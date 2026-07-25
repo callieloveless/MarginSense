@@ -13,13 +13,23 @@
  * Server-only (uses the anon key server-side and hits the DB), but deliberately session-free.
  */
 
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { parseClientDocument, type ClientDocument } from "../document";
 
 export type SharedDocumentResult =
   | { readonly status: "ok"; readonly document: ClientDocument }
   | { readonly status: "not-found" }
   | { readonly status: "unconfigured" };
+
+/** One stateless anon client, reused across public reads (no cookies, `persistSession: false`), so
+ * the hot `/share` path doesn't construct a client per request. Rebuilt only if env changes. */
+let cachedAnon: { url: string; client: SupabaseClient } | null = null;
+function anonClient(url: string, anonKey: string): SupabaseClient {
+  if (cachedAnon?.url !== url) {
+    cachedAnon = { url, client: createClient(url, anonKey, { auth: { persistSession: false } }) };
+  }
+  return cachedAnon.client;
+}
 
 /**
  * Fetch a shared document by its token. `not-found` covers a wrong, unshared, or revoked token
@@ -34,9 +44,15 @@ export async function getSharedDocument(token: string): Promise<SharedDocumentRe
 
   // A plain anon client — no cookie/session wiring. It can only reach what anon is granted, which
   // is exactly one function returning one client-safe payload.
-  const supabase = createClient(url, anonKey, { auth: { persistSession: false } });
+  const supabase = anonClient(url, anonKey);
   const { data, error } = await supabase.rpc("get_shared_document", { p_token: token });
-  if (error || data == null) return { status: "not-found" };
+  if (error) {
+    // Fail closed (not-found), but never silent: this is where a missing function — migration 0009
+    // not applied — looks identical to a wrong token, so log the cause or every link breaks blind.
+    console.error("[share] get_shared_document RPC failed (is migration 0009 applied?):", error.message);
+    return { status: "not-found" };
+  }
+  if (data == null) return { status: "not-found" };
 
   // Defense in depth: the row was validated at write time, but re-validate what we're about to
   // show a client, so a hand-tampered row can never render as a document.
