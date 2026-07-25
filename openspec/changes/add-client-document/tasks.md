@@ -5,12 +5,16 @@
       `title`, `preparedOn`, optional `intro`, `lines: [{ description, priceCents }]`,
       `subtotalCents`, optional `taxCents`, `totalCents`, optional `terms`. Use `.strict()` so any
       unknown key (a cost/EPH/labor-minutes field) is a validation error.
-- [ ] 1.2 Add `parseClientDocument(payload)` returning a typed ok/error result, and small display
+- [ ] 1.2 Add a `.refine` enforcing the arithmetic: `subtotalCents === Σ line.priceCents` and
+      `totalCents === subtotalCents + (taxCents ?? 0)`, so a document that doesn't add up is
+      rejected.
+- [ ] 1.3 Add `parseClientDocument(payload)` returning a typed ok/error result, and small display
       helpers (money via `formatCents`). Keep the module free of Next/Drizzle/Supabase imports.
-- [ ] 1.3 Export from `src/document/index.ts`.
-- [ ] 1.4 Unit-test `src/document/document.test.ts`: a valid payload parses; a payload with a
-      `costCents`/`eph`/`laborMinutes`/`signal` key is rejected; totals are integer cents; a
-      minimal payload (no optional fields) is valid.
+- [ ] 1.4 Export from `src/document/index.ts`.
+- [ ] 1.5 Unit-test `src/document/document.test.ts`: a valid payload parses; a payload with a
+      `costCents`/`eph`/`laborMinutes`/`signal` key is rejected; a payload whose subtotal ≠ Σ lines
+      or total ≠ subtotal + tax is rejected; a minimal payload (no optional fields) is valid; totals
+      are integer cents.
 
 ## 2. Stage B — persistence: table, migration, RLS, token function
 
@@ -28,15 +32,21 @@
       `getDocument`, `shareDocument`, `revokeDocument`, each taking `businessId`) as an optional
       entry on `TenantBackends` with a private getter that throws when unwired.
 - [ ] 2.5 Add the `TenantDb` methods that pass the bound business id and stamp `business_id` + a
-      fresh high-entropy `share_token` from the handle (never from input); the payload is validated
-      by `src/document/` before insert.
+      fresh high-entropy `share_token` (`crypto`, ≥128 bits) from the handle (never from input); the
+      payload is validated by `src/document/` before insert. `shareDocument` sets `shared_at`
+      (token unchanged); `revokeDocument` sets `revoked_at`; **re-sharing a revoked document mints a
+      new token and clears `revoked_at`**.
 - [ ] 2.6 Add `createMemoryDocumentBackend` in `tenant.ts` over a shared cross-tenant array
-      (mirroring the other memory backends).
+      (mirroring the other memory backends), including a `getShareable(token)` mirror of the SQL
+      access rule (payload only when `shared_at` set and `revoked_at` null) so the rule is unit-
+      testable without the live function.
 - [ ] 2.7 Add the Drizzle `DocumentBackend` impl in `src/db/drizzle-backend.ts` inside
       `withAuthenticatedTx`; wire it in `src/db/session.ts`.
-- [ ] 2.8 Tenant-isolation tests in `src/db/documents.test.ts`: business A cannot read, share, or
-      revoke business B's document; `business_id` and `share_token` are stamped from the handle;
-      an invalid (non-safe) payload is refused; share then revoke flips `shared_at`/`revoked_at`.
+- [ ] 2.8 Tenant-isolation + lifecycle tests in `src/db/documents.test.ts`: business A cannot read,
+      share, or revoke business B's document; `business_id` and `share_token` are stamped from the
+      handle; an invalid (non-safe or non-adding-up) payload is refused; **share → revoke →
+      re-share** issues a new token and the old token no longer resolves via `getShareable`; a
+      revoked or never-shared token resolves to nothing.
 
 ## 3. Stage C — the public read and the client render
 
@@ -45,29 +55,23 @@
       validated client-safe payload or null. Report `unconfigured` gracefully when Supabase env is
       absent.
 - [ ] 3.2 Add the public `app/share/[token]/page.tsx` (top-level, outside `(app)`): read the token
-      → fetch the payload → render it, or a plain "this document isn't available" when null.
+      → fetch the payload → render it, or a plain "this document isn't available" when null. Export
+      `metadata`/`robots` as `{ index: false, follow: false }` so a leaked link isn't indexed.
 - [ ] 3.3 The render is phone- and print-friendly: business header, client block, scope/intro,
       priced line items, subtotal/tax/total, terms — and **nothing internal**. Read-only (no
       accept/sign/pay controls).
-- [ ] 3.4 Confirm the middleware does not gate `/share` (its matcher guards the app prefixes only)
-      and the `(app)` session gate never runs for it.
+- [ ] 3.4 Confirm the middleware does not gate `/share` (its matcher guards the app prefixes only),
+      the `(app)` session gate never runs for it, and the **root layout does no `getServerSession`**
+      (the public page must not trigger a session/tenant lookup).
 
-## 4. Stage D — share / revoke actions (owner side)
+## 4. Verification and close-out
 
-- [ ] 4.1 Add server actions to share and revoke a document, session-resolved and tenant-scoped
-      (never trust a client `business_id`), returning the share URL to copy. (The owner-facing
-      documents list + a create UI arrive with the 10b tool; 10a exposes the actions + the seam.)
-- [ ] 4.2 Test the actions against the memory backend: share yields a token/URL, revoke stops the
-      public read, a cross-tenant share/revoke is refused.
-
-## 5. Verification and close-out
-
-- [ ] 5.1 `npm run typecheck`, `npx vitest run`, and `npm run build` green after each stage (the
+- [ ] 4.1 `npm run typecheck`, `npx vitest run`, and `npm run build` green after each stage (the
       build catches Turbopack/App-Router issues; relative imports in `src/` stay extensionless).
-- [ ] 5.2 Add the deferred live-infra items to `relevant_notes.md`: apply `0009`, prove the
+- [ ] 4.2 Add the deferred live-infra items to `relevant_notes.md`: apply `0009`, prove the
       `get_shared_document` function returns a shared doc's payload and nothing for a wrong/unshared/
       revoked token from the anon client, and confirm no authenticated cross-tenant path to
       `documents`.
-- [ ] 5.3 Update `PROGRESS.md`: #10 split into 10a (this change) and 10b (the Client Estimate Doc
+- [ ] 4.3 Update `PROGRESS.md`: #10 split into 10a (this change) and 10b (the Client Estimate Doc
       tool), with 10a's status.
-- [ ] 5.4 `openspec validate add-client-document --strict`, then archive on its own commit.
+- [ ] 4.4 `openspec validate add-client-document --strict`, then archive on its own commit.

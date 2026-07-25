@@ -25,14 +25,26 @@ tool on top of it.
 
 ## Decisions
 
-### 1. Safety by absence: the payload has no field for an internal number
+### 1. Safety by absence: the payload has no field for an internal number, and it must add up
 `src/document/` defines the client-safe payload as a Zod schema with a **closed** shape — business
 identity, client, title/date, optional intro, `lines: [{ description, priceCents }]`, `subtotalCents`,
 optional `taxCents`, `totalCents`, optional `terms`. It uses `.strict()` so an unknown key (a
 stray `costCents`, `eph`, `laborMinutes`) is a validation **error**, not silently dropped. The
 document row stores this and only this. So "don't leak costs" isn't a rule the render has to
-remember — the cost was never written, and there is nowhere on the document to put it. This is the
-same move 8b made refusing a cost field on materials, applied to the one artifact a client sees.
+remember — the internal *number* was never written, and there is nowhere on the document to put it.
+Same move 8b made refusing a cost field on materials, applied to the one artifact a client sees.
+
+A `.refine` also enforces the arithmetic: `subtotalCents === Σ line.priceCents` and
+`totalCents === subtotalCents + (taxCents ?? 0)`. A client money document that doesn't add up is
+rejected at the boundary, so the numbers on the page are internally consistent by construction —
+10b must produce consistent figures, and 10a refuses anything else.
+
+**The limit of the guarantee, stated plainly:** `.strict()` protects field *names* and the schema
+protects the *numbers*. The free-text fields (`intro`, `terms`, line `description`) are strings, so
+their *content* is not constrained — an AI scope narrative that wrote "our cost was $X, 40% margin"
+would pass validation. Keeping that prose clean is **10b's** responsibility (its scope-writing
+prompt is told never to mention cost, margin, or profit, and the user edits it before sharing).
+10a's structural guarantee is real but bounded to the typed shape; it is not a content filter.
 
 *Alternative considered:* store a reference to the estimate and project the client view at read
 time. Rejected twice over — it would recompute from live data (so a later edit changes what the
@@ -54,28 +66,46 @@ lone, auditable public capability, mirroring `create_business` as the lone privi
 would expose the whole row shape and invite enumeration; a function returns a single computed value
 for a single secret token and nothing else.
 
-### 3. The token is a capability: high-entropy, opaque, revocable
-The share token is a URL-safe random string (≥128 bits) generated server-side — not the row id, not
-guessable, not sequential. Sharing sets `shared_at` and (re)issues the token; revoking sets
-`revoked_at`. The token is the entire access credential, so it must be unguessable and the link is
-only as private as wherever the contractor sends it — acceptable for a proposal, and the reason
-revoke exists. `shared_at`/`revoked_at` as timestamps (not a status enum) keep the check simple and
-dodge the in-transaction `ALTER TYPE` enum hazard the project already avoids.
+### 3. The token is a capability: high-entropy, opaque, and revoke-is-permanent
+The share token is a URL-safe random string (≥128 bits, `crypto`-generated) — not the row id, not
+guessable, not sequential. It is minted **at document creation** and is **stable across re-shares**
+(sharing an already-shared doc doesn't change the link the client already has). Revoking sets
+`revoked_at`; **re-sharing a revoked document mints a fresh token** and clears `revoked_at`, so a
+link the client was told is dead stays dead — the old token can never resolve again. This is the
+one non-obvious bit of the lifecycle and the reason a test walks share → revoke → re-share and
+asserts the old token is gone. `shared_at`/`revoked_at` are timestamps (not a status enum) — the
+access check is `shared_at IS NOT NULL AND revoked_at IS NULL`, which also dodges the in-transaction
+`ALTER TYPE` enum hazard the project already avoids.
 
-### 4. The public page lives outside the auth group
+The token is the entire access credential: the link is only as private as wherever the contractor
+sends it (acceptable for a proposal, and the reason revoke exists), and it rides in the URL path, so
+it appears in browser history and server logs like any share link. The public page is served
+`noindex, nofollow` (decision 4) so a leaked link doesn't get crawled; that is the extent of what
+10a can do about a leak, and it is enough for a client proposal.
+
+### 4. The public page lives outside the auth group, and is `noindex`
 `app/share/[token]/page.tsx` is a top-level route, not under `(app)`, so the layout's session gate
 and the middleware's protected-prefix redirect never touch it (the matcher guards
 `/dashboard|/projects|/settings|/onboarding`, not `/share`). It is a server component: read the
 token → anon `rpc` → render the payload, or a plain "this document isn't available" when the read
 returns null. No client JS required, so a client on any device/browser sees it, and print-to-PDF
-works.
+works. It exports `robots: { index: false, follow: false }` (Next metadata) so a leaked link is
+never indexed. It uses the root layout, not the `(app)` shell, so no app chrome, nav, or session
+lookup runs — confirm the root layout does no `getServerSession`.
 
-### 5. The `DocumentBackend` seam, like every other capability
+### 5. The `DocumentBackend` seam, like every other capability — 10a stops at the seam
 `createDocument` (payload validated by `src/document/` first; `business_id` and a fresh token
 stamped by the handle), `listDocuments(projectId)`, `getDocument(id)`, `shareDocument(id)`,
 `revokeDocument(id)` — memory impl powers the isolation tests, Drizzle impl runs in
 `withAuthenticatedTx`. Feature code never sees an unscoped handle; the public read is the *only*
 non-seam path and it goes through the token function, not the backend.
+
+10a ships **only the seam**, not the owner-facing share/revoke server actions or any document UI.
+The reason: those actions act on a document, and nothing in 10a *creates* one (that is the 10b
+tool's job) — so a 10a action would be dead code with no caller. The seam's `shareDocument` /
+`revokeDocument` are tested at the memory backend; 10b's server actions call them once there is a
+generate flow to produce a document to share. This keeps 10a to the pure, provable foundation, the
+same way 9a shipped the compose seam dormant before a real edge used it.
 
 ## Risks / Trade-offs
 

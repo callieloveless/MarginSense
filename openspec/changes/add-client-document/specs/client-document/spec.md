@@ -17,6 +17,12 @@ any such field SHALL be rejected at the validation boundary.
 - **WHEN** a payload is submitted that includes a cost, margin, EPH, signal, or labor-minutes field
 - **THEN** the write is rejected at the validation boundary and no document is created
 
+#### Scenario: A document that does not add up is rejected
+- **WHEN** a payload's subtotal is not the sum of its line prices, or its total is not the subtotal
+  plus tax
+- **THEN** the write is rejected at the validation boundary, so a client document is arithmetically
+  consistent by construction
+
 ### Requirement: A document is a frozen snapshot
 A document SHALL capture its client-facing content at creation and SHALL NOT change when the
 estimate it was generated from is later edited, so what a client was shown is always knowable. A
@@ -40,6 +46,10 @@ nothing for a wrong, unshared, or revoked token.
 #### Scenario: A revoked link stops resolving
 - **WHEN** a shared document is revoked and its token URL is opened
 - **THEN** the payload is not returned and the page shows the document is no longer available
+
+#### Scenario: Re-sharing a revoked document does not revive the old link
+- **WHEN** a revoked document is shared again
+- **THEN** it is issued a new token, and the previously revoked token never resolves again
 
 #### Scenario: A wrong or unshared token returns nothing
 - **WHEN** a token URL is opened for a token that matches no document, or a document that has not
