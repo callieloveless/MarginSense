@@ -240,7 +240,11 @@ margin is the driver, price is the outcome. The user may **override** any line o
 price, after which `netMargin` is recomputed as an outcome rather than solved. When solving,
 the final price is rounded to whole cents and margin absorbs the rounding. (Per-line
 `default_markup_bp` is an optional advanced path when a user prices a line by markup instead
-of by the single target margin.)
+of by the single target margin.) The single solved total is distributed to the lines as
+**derived baselines** proportional to cost (§3.4a); a user may **enter** a price on any line,
+after which the estimate total is the sum of line prices and margin is an outcome. Derived and
+solved prices are **never stored** — only entered prices are, so a cost change still re-solves
+(store inputs, recompute; §3.1, §6.1).
 
 The crown-jewel metric:
 ```
@@ -250,6 +254,37 @@ EPH is what the whole product is oriented around. It answers: *for every hour of
 crew's life this job consumes, how much profit is left after everything?* EPH is an
 **internal engine term** — the UI speaks plain language ("profit per hour: $X vs your $Y
 target," "loaded cost," "% of your year") rather than the acronym.
+
+### 3.4a Per-line pricing and the per-line signal
+
+The single margin-solve of §3.4 answers "does the whole estimate pull its weight?" To also
+answer **"which lines drag it down,"** the model supports a **per-line view** — an *extension*
+of §3.4, not a replacement: every whole-estimate figure above is unchanged.
+
+**Per-line price.** Each line has an **effective price**: the price the user **entered** on
+that line, or — when none is entered — a **derived baseline** allocating the estimate total
+across the lines **proportional to cost**, exact to the cent (the rounding remainder to the
+largest-weight line). `revenue = Σ effective line price`. Baselines are **derived, never
+stored** (§3.4's pricing rule); only a user-entered price persists. An entered price replaces
+only its own line's baseline; when any line price is entered, the estimate total is the sum of
+effective prices (margin becomes an outcome) and a total-price override is not additionally
+applied.
+
+**Per-line profit per hour (labor lines only).** For a labor line,
+`lineNet = effectivePrice − burdenedLaborCost − lineOverhead − lineContingencyShare`, where
+`lineOverhead = lineHours × overheadRecoveryRate` and `lineContingencyShare` is the line's slice
+of the estimate contingency allocated on the **contingency base** (`directCost +
+overheadAllocated`, §3.4). `lineProfitPerHour = lineNet / lineHours`, classified by the **same**
+thresholds as the estimate signal (§3.5). Non-labor lines have no hours and therefore **no
+per-hour signal**.
+
+**Reconciliation invariant.** The per-line nets **sum exactly to the estimate `netProfit`** —
+overhead and contingency are allocated across lines so their per-line shares sum exactly to
+`overheadAllocated` and `contingency` (remainder to the largest-weight line). The whole-estimate
+profit-per-hour is therefore the labor-hour-weighted blend of the per-line values, and per-line
+computation never alters `revenue`, `directCost`, `overheadAllocated`, `contingency`,
+`netProfit`, or the whole-estimate EPH. Each per-line color is explainable from its effective
+price, cost, overhead, contingency share, hours, and target (§6.6).
 
 ### 3.5 "Pull-their-weight" — the red/yellow/green signal
 
