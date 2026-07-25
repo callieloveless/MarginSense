@@ -6,8 +6,9 @@
  * user at construction; `TenantDb` supplies the `business_id`.
  */
 
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import {
+  businesses as businessesTable,
   businessSettings,
   contextEntries,
   conversationMessages,
@@ -47,6 +48,16 @@ export function createDrizzleProjectBackend(db: Db, authUserId: string): Project
           .select()
           .from(projects)
           .where(and(eq(projects.id, id), eq(projects.businessId, businessId)))
+          .limit(1);
+        return found[0] ?? null;
+      });
+    },
+    getBusiness(businessId: BusinessId) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const found = await tx
+          .select()
+          .from(businessesTable)
+          .where(eq(businessesTable.id, businessId))
           .limit(1);
         return found[0] ?? null;
       });
@@ -522,6 +533,24 @@ export function createDrizzleDocumentBackend(db: Db, authUserId: string): Docume
       return withAuthenticatedTx(db, authUserId, async (tx) => {
         const inserted = await tx.insert(documents).values(row).returning();
         return inserted[0]!;
+      });
+    },
+    updatePayload(businessId: BusinessId, id: string, payload, title: string) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const updated = await tx
+          .update(documents)
+          // Only an unshared draft is editable — a shared snapshot is frozen (enforced by the
+          // TenantDb caller); the extra `shared_at is null` guard makes it true in SQL too.
+          .set({ payload, title, updatedAt: new Date() })
+          .where(
+            and(
+              eq(documents.id, id),
+              eq(documents.businessId, businessId),
+              isNull(documents.sharedAt),
+            ),
+          )
+          .returning();
+        return updated[0] ?? null;
       });
     },
     setShared(businessId: BusinessId, id: string, token: string) {

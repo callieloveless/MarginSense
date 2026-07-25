@@ -22,6 +22,7 @@ import {
 } from "../photos";
 import { parseClientDocument, type ClientDocument } from "../document";
 import type {
+  BusinessRow,
   BusinessSettingsRow,
   ContextEntryKindName,
   ContextEntryRow,
@@ -88,6 +89,8 @@ export interface ProjectInput {
 export interface ProjectBackend {
   listByBusiness(businessId: BusinessId): Promise<ProjectRow[]>;
   getByBusiness(businessId: BusinessId, id: string): Promise<ProjectRow | null>;
+  /** This business's own row (its identity: name, trade). Scoped like everything else. */
+  getBusiness(businessId: BusinessId): Promise<BusinessRow | null>;
   /** `row.businessId` is set by `TenantDb`; the backend persists it verbatim. */
   insert(row: NewProjectRow): Promise<ProjectRow>;
   updateStatusByBusiness(
@@ -389,6 +392,9 @@ export interface DocumentBackend {
   listByProject(businessId: BusinessId, projectId: string): Promise<DocumentRow[]>;
   getById(businessId: BusinessId, id: string): Promise<DocumentRow | null>;
   insert(row: NewDocumentRow): Promise<DocumentRow>;
+  /** Replace an unshared draft's payload (and mirrored title), scoped to the business. Null if the
+   * document isn't ours. */
+  updatePayload(businessId: BusinessId, id: string, payload: ClientDocument, title: string): Promise<DocumentRow | null>;
   /** Set `shared_at = now`, `revoked_at = null`, and `share_token = token`, scoped to the
    * business. Null if the document isn't ours. */
   setShared(businessId: BusinessId, id: string, token: string): Promise<DocumentRow | null>;
@@ -512,6 +518,11 @@ export class TenantDb {
   /** Get one project by id, scoped to this business. Returns null if it isn't ours. */
   getProject(id: string): Promise<ProjectRow | null> {
     return this.#projects.getByBusiness(this.businessId, id);
+  }
+
+  /** This business's own row — its identity (name, trade), for a client document header. */
+  getBusiness(): Promise<BusinessRow | null> {
+    return this.#projects.getBusiness(this.businessId);
   }
 
   /** Create a project. The stored `business_id` is always this handle's — never the input's. */
@@ -933,6 +944,37 @@ export class TenantDb {
     return this.#documentBackend.setRevoked(this.businessId, id);
   }
 
+  /**
+   * Edit an **unshared** draft's scope narrative and terms — the owner's review step before
+   * sharing (add-client-estimate-doc). Refuses once a document has ever been shared: a shared
+   * snapshot is frozen (§5), so a revision is a *new* document, not an edit of what was sent.
+   * Re-validates the payload so an edit can't introduce an inconsistent or unsafe document. Null
+   * if it isn't ours or isn't an editable draft.
+   */
+  async updateDocumentDraft(
+    id: string,
+    edits: { intro?: string | null | undefined; terms?: string | null | undefined },
+  ): Promise<DocumentRow | null> {
+    const doc = await this.#documentBackend.getById(this.businessId, id);
+    if (!doc || doc.sharedAt !== null) return null;
+
+    const current = doc.payload as ClientDocument;
+    // Build the next payload without setting optional keys to undefined; a null/"" edit removes it.
+    const next: Record<string, unknown> = { ...current };
+    if (edits.intro !== undefined) {
+      if (edits.intro === null || edits.intro.trim() === "") delete next.intro;
+      else next.intro = edits.intro.trim();
+    }
+    if (edits.terms !== undefined) {
+      if (edits.terms === null || edits.terms.trim() === "") delete next.terms;
+      else next.terms = edits.terms.trim();
+    }
+
+    const check = parseClientDocument(next);
+    if (!check.ok) throw new Error(`Refusing to store an invalid client document: ${check.error}`);
+    return this.#documentBackend.updatePayload(this.businessId, id, check.value, check.value.title);
+  }
+
   /** Accept a suggestion — the ONLY path that commits its proposed change (server-side, one
    * transaction). A no-op if it isn't pending. */
   acceptSuggestion(id: string): Promise<SuggestionResolution> {
@@ -965,8 +1007,12 @@ export function createTenantDb(
  * its own `businessId`, a handle bound to A can never see or touch B's rows here, which
  * is what the isolation tests assert.
  */
-export function createMemoryProjectBackend(seed: ProjectRow[] = []): ProjectBackend {
+export function createMemoryProjectBackend(
+  seed: ProjectRow[] = [],
+  seedBusinesses: BusinessRow[] = [],
+): ProjectBackend {
   const rows: ProjectRow[] = [...seed];
+  const businesses: BusinessRow[] = [...seedBusinesses];
   let seq = seed.length;
   const now = new Date(0);
 
@@ -976,6 +1022,19 @@ export function createMemoryProjectBackend(seed: ProjectRow[] = []): ProjectBack
     },
     async getByBusiness(businessId, id) {
       return rows.find((r) => r.id === id && r.businessId === businessId) ?? null;
+    },
+    async getBusiness(businessId) {
+      // Synthesize a minimal identity row when a test didn't seed one — the isolation guarantee is
+      // still that only this business's id is ever asked for.
+      return (
+        businesses.find((b) => b.id === businessId) ?? {
+          id: businessId,
+          name: "Test Business",
+          tradeType: "general",
+          createdAt: now,
+          updatedAt: now,
+        }
+      );
     },
     async insert(row) {
       const stored: ProjectRow = {
@@ -1479,6 +1538,13 @@ export function createMemoryDocumentBackend(seed: DocumentRow[] = []): DocumentB
       };
       rows.push(stored);
       return stored;
+    },
+    async updatePayload(businessId, id, payload, title) {
+      const row = rows.find((r) => r.id === id && r.businessId === businessId);
+      if (!row) return null;
+      row.payload = payload;
+      row.title = title;
+      return row;
     },
     async setShared(businessId, id, token) {
       const row = rows.find((r) => r.id === id && r.businessId === businessId);

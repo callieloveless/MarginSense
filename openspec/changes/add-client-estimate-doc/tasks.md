@@ -42,7 +42,7 @@
 
 ## 3. Stage C — the generate + share/revoke actions
 
-- [ ] 3.1 Add the generate action under `app/(app)/projects/[id]/`: resolve the session, read the
+- [x] 3.1 Add the generate action under `app/(app)/projects/[id]/`: resolve the session, read the
       active estimate + lines + settings + business + project tenant-scoped, compute the total via
       `computeFromRows`, **stamp `preparedOn`** as a readable date formatted for the business at
       generation time (frozen into the snapshot), assemble the tool input (mark each line's
@@ -50,27 +50,27 @@
       `dispatchAndCompose`, take `output`, and `createDocument` **unshared** via 10a's seam. Never
       trust a client `business_id`. Surface the projection's refusal reasons (unpriceable /
       per-line override) as a clear message.
-- [ ] 3.2 Add the share / revoke / update-draft actions calling 10a's `shareDocument` /
+- [x] 3.2 Add the share / revoke / update-draft actions calling 10a's `shareDocument` /
       `revokeDocument` (and a narrow update for the unshared draft's `intro`/`terms`), all
       session-resolved and tenant-scoped; share returns the `/share/<token>` URL.
-- [ ] 3.3 Test the generate + share flow against the memory backends: generate creates an unshared
+- [x] 3.3 Test the generate + share flow against the memory backends: generate creates an unshared
       document from an estimate whose numbers add up; share yields a token and the public read
       resolves; revoke stops it; a cross-tenant generate/share is refused.
 
 ## 4. Stage D — the owner Documents surface
 
-- [ ] 4.1 Add a **Documents** section/page under the project: list the project's documents (status:
+- [x] 4.1 Add a **Documents** section/page under the project: list the project's documents (status:
       draft / shared / revoked), a **Generate client document** control from the active estimate,
       and per-document share / copy-link / revoke.
-- [ ] 4.2 Add the draft **preview** with the priced lines, total, and the scope narrative, and let
+- [x] 4.2 Add the draft **preview** with the priced lines, total, and the scope narrative, and let
       the owner **edit or remove** the narrative (and terms) before sharing — the free-text review
       step. A "connect AI" note when the narrative couldn't be generated; a plain "add/price an
       estimate first" state when there's nothing to generate from.
-- [ ] 4.3 Link the Documents surface from the project page; phone-first; colour paired with text.
+- [x] 4.3 Link the Documents surface from the project page; phone-first; colour paired with text.
 
 ## 5. Verification and close-out
 
-- [ ] 5.1 `npm run typecheck`, `npx vitest run`, and `npm run build` green after each stage
+- [x] 5.1 `npm run typecheck`, `npx vitest run`, and `npm run build` green after each stage
       (relative imports in `src/` stay extensionless).
 - [ ] 5.2 Add the live-AI proof item to `relevant_notes.md` §5: with a key set, generate a document
       whose scope narrative reads well and states **no** cost/margin/hour figure, and confirm the

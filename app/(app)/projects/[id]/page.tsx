@@ -63,6 +63,12 @@ export default async function ProjectPage({
         >
           Tools →
         </Link>
+        <Link
+          href={`/projects/${id}/documents`}
+          className="inline-flex items-center gap-1 rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium dark:border-neutral-700"
+        >
+          Client documents →
+        </Link>
       </div>
 
       <div className="mt-6">
