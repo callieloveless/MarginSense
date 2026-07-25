@@ -27,7 +27,7 @@
 | 9a | `add-tool-compose` (composition seam, dormant) | `tool-platform` | ✅ **Done** (archived 2026-07-24) |
 | 9b | `add-code-finder` (compose off findings + standalone query) | `code-finder`, `project-context` | ✅ **Done** (archived 2026-07-24; live-AI proof deferred) |
 | 10a | `add-client-document` (the doc + revocable share link) | `client-document` | ✅ **Done** (archived 2026-07-25; live-infra proof deferred) |
-| 10b | Client Estimate Doc tool (estimate → doc + AI scope) | `client-estimate-doc` | ⏳ Planned |
+| 10b | `add-client-estimate-doc` (estimate → doc + AI scope) | `client-estimate-doc` | ✅ **Done** (archived 2026-07-25; live-AI proof deferred) |
 | 11 | Hardening & launch pass | — | ⏳ Planned |
 | 12 | Tool graph editor (meta) | — | 🌟 North-star (after core tools ship) |
 
@@ -198,12 +198,19 @@ mints a fresh token so a dead link never revives. `DocumentBackend` on the `Tena
 tool, no AI, no estimate transform, no owner UI** — all 10b. Open item deferred to live infra
 (relevant_notes.md §1): apply `0009` and prove the token function + cross-tenant isolation.
 
-### 10b. ⏳ Client Estimate Doc tool
-The tool on top of 10a: projects a finished estimate into the client-safe payload (client prices,
-never costs), optionally writes a scope narrative with the model (prompt forbidden from mentioning
-cost/margin/profit — the free-text gap 10a can't close structurally), creates the document, and the
-owner surface to generate / share / revoke. Registered as a Tool (constitution §5); the last of the
-v1 tools.
+### 10b. ✅ Client Estimate Doc tool
+The tool on top of 10a, and **the last v1 tool** — the whole product loop now closes (estimate →
+signal → client proposal). A pure projection (`src/estimate/client-projection.ts`) allocates the
+engine's single solved total across the lines proportional to cost, exact to the cent (drops
+zero-cost lines; refuses a per-line override or an unpriceable estimate); the tool wraps it with an
+optional AI **scope narrative** (prompt forbidden from stating cost/margin/profit/hour — the
+free-text gap 10a can't close structurally) and returns the finished document as its typed `output`
+(a document, not a suggestion). Generate → **unshared draft** → owner reviews/edits the narrative →
+share, so a disobedient model is caught before any client sees it. Owner Documents surface (list,
+generate, preview+edit, share/copy/revoke) under the project. **Open item deferred to live AI**
+(relevant_notes.md §5): confirm a real narrative reads well and leaks nothing. **This completes the
+v1 tool set (#7 Material Finder, #8 Photo Advisor, #9 Code Finder, #10 Client Estimate Doc); only
+#11 hardening & launch remains.**
 
 ### 11. ⏳ Hardening & launch pass
 Money-critical e2e suite (onboarding → estimate → signal → accept suggestion → client

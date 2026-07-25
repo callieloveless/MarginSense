@@ -120,6 +120,11 @@ buildable and typed now, live calls wait on a key.
       with `tool_choice` auto (forcing it would pre-empt the search). `output_config.format` is
       **incompatible with citations** (400) — that's why we use the result-tool. Everything is
       proven offline via the mock's canned result; only the live wire is deferred.
+- [ ] **#10b Client Estimate Doc** (`add-client-estimate-doc`): with a key set, generate a client
+      document and confirm the AI **scope narrative reads well and states no cost/margin/profit/hour
+      figure** (the one free-text path — the owner review is the guard), and that generation records
+      a `tool_run`. The projection/allocation math is fully proven offline (`client-projection.test`);
+      only the narrative's live wording is deferred.
 - [ ] **#9b Code Finder** (`add-code-finder`): with a key set, prove a real `web_search` returns
       **sourced local codes** (not a generic model code) + citations, that a Photo Advisor run
       **composes Code Finder per `safety`/`attention` finding** (a `note` composes nothing) with

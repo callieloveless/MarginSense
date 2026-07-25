@@ -72,9 +72,9 @@
 
 - [x] 5.1 `npm run typecheck`, `npx vitest run`, and `npm run build` green after each stage
       (relative imports in `src/` stay extensionless).
-- [ ] 5.2 Add the live-AI proof item to `relevant_notes.md` §5: with a key set, generate a document
+- [x] 5.2 Add the live-AI proof item to `relevant_notes.md` §5: with a key set, generate a document
       whose scope narrative reads well and states **no** cost/margin/hour figure, and confirm the
       generation records a `tool_run`.
-- [ ] 5.3 Update `PROGRESS.md`: 10b done; the **v1 tool set and the core product loop complete**;
+- [x] 5.3 Update `PROGRESS.md`: 10b done; the **v1 tool set and the core product loop complete**;
       #11 hardening next.
-- [ ] 5.4 `openspec validate add-client-estimate-doc --strict`, then archive on its own commit.
+- [x] 5.4 `openspec validate add-client-estimate-doc --strict`, then archive on its own commit.
