@@ -1,10 +1,11 @@
 # MarginSense — Progress & Roadmap
 
 > Working tracker: what is **done**, what is **in flight**, and what comes **next**.
-> The plan below is derived from [`constitution.md`](./constitution.md) (domain model §2,
-> financial model §3, tool system §5, non-negotiables §6) and sequenced so every change
-> stands on ground that already exists. Specs are the source of truth
-> ([`openspec/`](./openspec/)); this file is the at-a-glance view.
+> The foundation (§ below) is derived from [`constitution.md`](./constitution.md); the
+> **UI Revamp** (the current body of work) is derived from the interactive UI prototype —
+> *the prototype is the behavior spec* — reconciled against the constitution, which still
+> wins where they disagree. Specs are the source of truth ([`openspec/`](./openspec/));
+> this file is the at-a-glance view.
 
 **Last updated:** 2026-07-25
 
@@ -12,229 +13,383 @@
 
 ## Status at a glance
 
-| # | Change | Capability(ies) | Status |
-|---|--------|-----------------|--------|
-| 1 | `add-profit-engine` | `profit-engine` | ✅ **Done** (archived 2026-07-22) |
-| 2 | `add-tenancy-foundation` | `tenancy-foundation` | ✅ **Done** (archived 2026-07-22; live-infra tasks deferred) |
-| 3 | `add-onboarding` | `onboarding` | ✅ **Done** (archived 2026-07-22; live-infra proof deferred) |
-| 4 | `add-estimate-dashboard` | `estimates`, `profit-dashboard` | ✅ **Done** (archived 2026-07-22; live-infra proof deferred) |
-| 5 | `add-project-context` | `project-context` | ✅ **Done** (archived 2026-07-22; live-infra proof deferred) |
-| 6 | `add-tool-platform` (contract, `src/ai/`, `tool_run`) | `tool-platform` | ✅ **Done** (archived 2026-07-23; live-AI + live-infra proof deferred) |
-| 7a | `add-structured-result-port` (port typed result + citations, real Anthropic impl) | `tool-platform` | ✅ **Done** (archived 2026-07-23; live-AI proof deferred) |
-| 7b | `add-material-finder` (the first real tool) | `material-finder`, `project-context`, `onboarding` | ✅ **Done** (archived 2026-07-23; live-AI + live-infra proof deferred) |
-| 8a | `add-photo-capture` (job photo upload + tenant-scoped storage) | `job-photos` | ✅ **Done** (archived 2026-07-23; live-storage proof deferred) |
-| 8b | `add-photo-advisor` (the vision tool) | `photo-advisor`, `project-context` | ✅ **Done** (archived 2026-07-24; live-AI proof deferred) |
-| 9a | `add-tool-compose` (composition seam, dormant) | `tool-platform` | ✅ **Done** (archived 2026-07-24) |
-| 9b | `add-code-finder` (compose off findings + standalone query) | `code-finder`, `project-context` | ✅ **Done** (archived 2026-07-24; live-AI proof deferred) |
-| 10a | `add-client-document` (the doc + revocable share link) | `client-document` | ✅ **Done** (archived 2026-07-25; live-infra proof deferred) |
-| 10b | `add-client-estimate-doc` (estimate → doc + AI scope) | `client-estimate-doc` | ✅ **Done** (archived 2026-07-25; live-AI proof deferred) |
-| 11 | Hardening & launch pass | — | ⏳ Planned |
-| 12 | Tool graph editor (meta) | — | 🌟 North-star (after core tools ship) |
+### Foundation — changes #1–#10 ✅ complete
 
-> **Tools each ship as their own change** (one capability per change, one tool per
-> stage) — the platform (#6) lands first with no user-facing tool, then each tool (#7–#10)
-> is a separate proposal on top of it. This is a change from the earlier plan that bundled
-> the platform with Material Finder (#6) and Photo Advisor with Code Finder (#7).
+The domain spine, profit engine, tenancy/RLS, the four v1 tools, and the client document all
+exist, are unit-tested (~306 tests), and typecheck + build green. This is the ground the
+revamp stands on — **the revamp reshapes and extends these, it does not rebuild them.**
 
-Legend: ✅ done · 🔨 in progress · 📝 proposal written, not started · ⏳ planned, not yet proposed · 🌟 north-star, later
+| # | Change | Capability | Status |
+|---|--------|-----------|--------|
+| 1 | `add-profit-engine` | `profit-engine` | ✅ archived 2026-07-22 |
+| 2 | `add-tenancy-foundation` | `tenancy-foundation` | ✅ archived 2026-07-22 |
+| 3 | `add-onboarding` | `onboarding` | ✅ archived 2026-07-22 |
+| 4 | `add-estimate-dashboard` | `estimates`, `profit-dashboard` | ✅ archived 2026-07-22 |
+| 5 | `add-project-context` | `project-context` | ✅ archived 2026-07-22 |
+| 6–9 | tool platform + Material Finder + Photo Advisor + Code Finder (+ compose) | `tool-platform`, `material-finder`, `job-photos`, `photo-advisor`, `code-finder` | ✅ archived 2026-07-23/24 |
+| 10 | `add-client-document`, `add-client-estimate-doc` | `client-document`, `client-estimate-doc` | ✅ archived 2026-07-25 |
 
-> Work that's coded but waiting on a live Supabase project (apply migrations, prove RLS
-> end-to-end, walk the flows), plus gotchas and conventions worth remembering, live in
-> [`relevant_notes.md`](./relevant_notes.md) — skim it at the start of a task.
+> Live Supabase **exists** (migrations `0000`–`0008` applied 2026-07-24; `0009` pending).
+> What's deferred is *proving* it end-to-end (RLS/object isolation, the share-token fn) and
+> live-AI proofs. See [`relevant_notes.md`](./relevant_notes.md). **The revamp applies each
+> new migration and proves isolation per phase — it does not re-defer everything to R10.**
+
+### UI Revamp — replaces the old "#11 hardening" ⏳ planned (this document)
+
+| Phase | Name | OpenSpec change(s) | Financial model / schema |
+|---|---|---|---|
+| **R1** | App shell, navigation & design system | `revamp-app-shell` | — |
+| **R2** | Estimate pricing & signal core + dashboard home | `add-per-line-pricing-signal`, `add-portfolio-pulse` | **§3 amendment** (per-line pricing) |
+| **R3** | Onboarding + settings reshape | `revamp-onboarding`, `revamp-settings` | — |
+| **R4** | Project lifecycle: setup wizard + rich job hub | `revamp-project-setup`, `revamp-project-hub` | schema (project fields) |
+| **R5** | Estimate editor: per-line chips + traceable roll-up | `revamp-estimate-editor` | — (consumes R2) |
+| **R6** | Tools: Photo Advisor · Material Finder · Code & Permits | `revamp-photo-advisor`, `revamp-material-finder`, `add-code-permits` | schema (permits) |
+| **R7** | Client experience: branding · tiers · templates/tones · send | `add-business-branding`, `add-document-tiers`, `revamp-client-estimate-doc` | schema (branding, doc payload) |
+| **R8** | One memory: activity feed + client answers | `add-activity-feed`, `add-client-answers` | schema (Q&A) |
+| **R9** | Composition: auto-run rules + the chain | `add-autorun-rules`, `add-tool-chain` | schema (rules, provenance) |
+| **R10** | Hardening & launch | `harden-and-launch` | — |
+| #12 | Tool-graph editor (meta) | — | 🌟 north-star, after the revamp |
+
+Legend: ✅ done · 🔨 in progress · 📝 proposal written, not started · ⏳ planned · 🌟 north-star, later
+
+> **Every change runs the full OpenSpec pipeline:** `/opsx:propose` → `openspec validate <id>
+> --strict` → **STOP, show Callie, wait for explicit approval** → `/opsx:apply` → verify
+> (`npm run typecheck`, `npx vitest run`, `npm run build`, + apply migration & prove isolation
+> where the live project is reachable) → `/code-review`, fix findings → `/opsx:archive` on its
+> own commit → `git push`. No `src/`/`app/`/migration code is touched before the change's
+> proposal is approved. **Big changes stage A/B** like the foundation did (engine+tests, then
+> UI). A phase is "done" only when its last change is archived, reviewed, and pushed.
+
+**Decisions locked (2026-07-25):** ①per-line = **Option A** (own price per line, proportional
+allocation as the fallback) + **§3 amendment**; ②onboarding keeps all goal inputs so target/hr
+stays derived; ③Good·Better·Best from real **scope** options; ④auto-runs stay **synchronous**
+(analyzing-state + 3-step cap) for v1, background queue deferred to R10; ⑤~10 phases.
+
+---
+
+## The revamp, in one paragraph
+
+The app's *capabilities* are largely built; the prototype asks for a different **shape and
+depth of use**: a dashboard-first home with a plain-language month signal, a rich per-job hub
+that composes pieces we scatter across sub-pages, **per-line red/yellow/green** so a contractor
+sees which lines drag a job down, guided friendly flows, and three tools grown into real
+working surfaces (a per-job material list, per-photo saved reads, code **and** permits). Then
+the connective tissue the prototype makes visible: one activity feed per job, a client-answers
+log, user-toggleable auto-run rules, and "the chain" that shows how a photo became money. Almost
+none of this is a rebuild — it's reshaping real screens and adding a small number of
+**money-critical engine** and **schema** capabilities, each specced first.
+
+### Reshape vs new (from the current-state audit)
+
+**Mostly reshape (behavior already real):** the 3-tab nav (add active state, rename
+Projects→Jobs), onboarding's guided feel (the 3 profit steps + review already exist), the
+estimate roll-up's drillable "why", suggestion accept/dismiss with before→after profit/hr,
+the context feed + single conversation, photo capture/gallery, Material/Code/Photo tool runs,
+the client-doc generate/edit/share/revoke + public prices-only page, Settings' full inputs.
+
+**Genuinely new:** per-line pricing + per-line profit/hr signal (engine + §3); the dashboard
+**month pulse** (aggregate profit/hr + shortfall); business **branding/letterhead** (logo in
+Storage + fields); project setup fields (type, crew, start window); **Good·Better·Best tiers** +
+templates/tones + real **send** options; **permits & inspections**; **client answers**;
+user-configurable **auto-run rules** + **the chain** (provenance).
+
+---
+
+## Cross-cutting design principles (the durable output of the critique)
+
+These bind every phase. They are as load-bearing as the phase list.
+
+1. **Server-first, client islands.** The prototype is a single client-side SPA; the app stays
+   server-rendered with *small* client islands (toggles, sheets, editors, tool forms). Do **not**
+   SPA-ify the app to match the mock (techstack §6).
+2. **Engine owns all money math.** Per-line pricing, per-line signal, and the portfolio pulse
+   live in `src/engine`/`src/profit`; UI only renders. Module boundaries (§6.8) preserved.
+3. **Signals are constructive, never just a verdict.** Every red/yellow pairs with a next step
+   ("reprice this line", "cut hours", "rescope") and a one-tap "why". Color always with text.
+4. **Three levels of one metric, kept distinct.** Portfolio ("your month") vs job ("this job")
+   vs line ("this line") profit/hour get distinct framing so they never blur — and per-line
+   color avoids a *sea of red*: surface the worst 1–2 draggers, keep the rest quiet.
+5. **Chips & defaults over typing.** Phone-first, dirty hands: pickers, chips, prefilled
+   defaults, pull-from-prior. Free text only where unavoidable.
+6. **Just-in-time setup, short onboarding.** Only what's needed to compute a signal is required
+   up front; heavier setup (branding/letterhead) is prompted *when first needed* (first client
+   doc), exactly as the prototype does — not front-loaded.
+7. **Minimize new tables.** Prefer a column or a context-entry kind over a new table unless the
+   data has its own lifecycle: permits, client-Q&A, auto-run-rules → tables; branding → 1:1
+   settings columns; provenance → a link on `tool_runs`. Each new table still gets `business_id`
+   + RLS + an isolation test in the same migration.
+8. **Provenance kept minimal.** "The chain" reconstructs from links that mostly exist already
+   (`tool_runs.source`, `toolRunId` on suggestions/messages) + **one** trigger link — not a
+   general provenance graph.
+9. **Low-connectivity posture.** Capture (photos, notes) queues/works offline; reads are cached;
+   AI tools clearly state they need connectivity. Full offline is post-v1 (constitution
+   principle 5: a phone at a job site with one bar).
+10. **Trades stay data-driven.** Job types, trades, and jurisdictions are data, not code, so the
+    electrical/plumbing expansion needs no rearchitecture.
+11. **Prove isolation per phase.** Apply each new migration to the live project and prove
+    RLS/object isolation as the phase lands (live DB exists); don't grow an unvalidated pile.
+12. **No dead buttons, no mock data.** Anything visible must be real or honestly labeled
+    ("Copy link / Print PDF" if a send provider isn't wired). The prototype is the behavior spec.
 
 ---
 
 ## Phase detail
 
-### 1. ✅ Profit engine (`src/engine/`) — DONE
-The pure financial core (constitution §3, §6.1): money/minutes/bp primitives, derived
-annual rates, estimate roll-up with contingency, margin-solve pricing, EPH, and the
-red/yellow/green signal (absolute + comparative views). Unit-tested, no framework imports.
-Spec: [`openspec/specs/profit-engine/spec.md`](./openspec/specs/profit-engine/spec.md).
+Per-phase **Definition of Done** = the pipeline above + engine math and its tests land before
+dependent UI/DB + isolation test per new table + colors paired with text + phone-width first.
 
-### 2. ✅ Tenancy & app foundation — DONE (archived 2026-07-22)
-All in-code work is complete, validated, and archived; the spec is synced into
-[`openspec/specs/tenancy-foundation/`](./openspec/specs/tenancy-foundation/spec.md). The
-only open items are **deferred to live infra** (owner provisions Supabase): apply migration
-`0000`, prove RLS end-to-end via `npm run test:rls`, and walk the flow live.
+### R1 — App shell, navigation & design system
+Establish the prototype's calm look and the frame every screen sits in: active-state bottom tabs
+(Dashboard · **Jobs** · Settings, `aria-current`), paper/green theme tokens + signal palette as
+shared tokens, shared primitives (section header, card, signal chip extending `SignalBadge`,
+stat row, stepped progress, **bottom sheet**), teaching empty states. Reorganize routes into the
+shell **without** changing behavior — R1 owns the *frame/tokens/primitives*, each later phase
+owns its *screen content* (no double-restyle). Keep the responsive `max-w-md` column — do **not**
+hardcode the prototype's literal device frame (that's mock scaffolding; the app is a PWA).
+- **Change:** `revamp-app-shell`. **Constitution:** none.
 
-Everything downstream presumes the domain spine **Business → Project → Estimate** and
-DB-enforced tenant isolation (constitution §2, §6.3) — none of which existed yet. This
-change lays it down:
+### R2 — Estimate pricing & signal core + dashboard home  ⚠ money-critical
+**`add-per-line-pricing-signal`** (engine; §3 amendment). **Option A:** each line can carry its
+**own price** (`line_items.priceCents`, reserved today); when a line's price is unset the engine
+**derives a baseline from the proportional-to-cost allocation already in `client-projection.ts`**
+(so legacy/unedited estimates still render, and there is one allocation method in the codebase).
+Baselines are **derived, never persisted** — only user-entered prices are stored, so cost changes
+keep re-solving; an entered line price supersedes a total override; the estimate total is the sum
+of effective line prices; margin is the outcome. Per-line profit/hr is then meaningful and **labor-only**:
+```
+lineProfitPerHour = ( linePrice − hours×burdenedRate − hours×overheadRecovery − contingencyShare ) / hours
+color: ratio = lineProfitPerHour / targetProfitPerHour   (≥1 green · 0.80–0.99 yellow · <0.80 red)
+```
+Non-labor lines carry no hours → no per-hour signal (as the prototype shows). **Invariant tested:**
+per-line nets sum to the estimate net. Also updates `client-projection.ts` to *use a line's price
+when present, else allocate* — which **simplifies** the client doc downstream. Exhaustive tests:
+zero-hour line, unpriced/legacy line (fallback), override estimate, boundaries 0.79/0.80/0.99/1.00,
+negative line net. *Why A won:* it's the only model that carries information (a single global price
+makes every labor line the same color — proven degenerate), it handles legacy via the fallback,
+it simplifies the client doc, and it gives Good·Better·Best a natural home.
 
-- Next.js (App Router) skeleton: `(auth)` and `(app)` shells, phone-first.
-- Drizzle + Postgres (Supabase) wiring; forward-only migration setup.
-- Core tables: `businesses`, `users`, `projects` — every business-owned row
-  with non-null `business_id`, **RLS on**.
-- Tenant-scoped query helpers in `src/db/` that require a `business_id`.
-- Supabase Auth integration points (sessions scoped to one business).
-- **RLS made real over Drizzle**: every tenant query runs in an authenticated
-  request-context transaction (`src/db/rls.ts`) that sets `auth.uid()` from the verified
-  session and drops to the `authenticated` role, so the policies actually enforce.
-- Tenant-isolation tests (one business can never read/write another's rows).
+**`add-portfolio-pulse`** (`src/profit` summing engine outputs — engine stays pure) **+ dashboard
+home reshape.** `aggregateProfitPerHour = Σ netProfit / Σ laborHours` over active jobs;
+`shortfallPerHour = max(0, target − aggregate)`; signal + plain verdict. Reshapes the dashboard
+into the prototype's home: the "This month" headline card (profit/hr, verdict, progress,
+drill-down to net/hours/target/shortfall) + worst-first job cards with per-job profit/hr + signal
+chip + note. Draft/no-estimate jobs render calmly as `Computed` NA.
+- **Constitution.** **Amend §3** (its own commit) to define the per-line view (labor-only, own
+  price with allocation fallback, same thresholds, nets sum to estimate net) and per-line pricing
+  as an allowed pricing direction alongside the global solve. Keep `targetProfitPerHour` derived
+  (never the prototype's hardcoded 92). **Non-goal:** true calendar-month scoping (v1 = active jobs).
 
-**Needs from Callie:** a Supabase project + env secrets to run against live infra.
-Everything else (schema, migrations, helpers, policies, tests, app skeleton) is
-buildable now and wired up when the keys land.
+### R3 — Onboarding + settings reshape
+`revamp-onboarding` — welcome + "Skip for now", the guided profit setup (already **Overhead →
+Time & pay → Goals** in code; keep *all* goal inputs so target/hr stays derived) with friendlier
+copy/progress + the "Here are your numbers" review, and fold **identity** (name/trade/service
+area) into the flow. **Onboarding stays short** — branding/logo is *not* here (moved to R7,
+prompted at first client doc). `revamp-settings` — the "Your numbers" playback (exists) +
+entries for automation (lands R9) and letterhead (lands R7) + "Replay setup".
+- **Constitution.** No amendment (reconcile, don't diverge): keep §3.2 inputs, derive target/hr.
 
-### 3. 🔨 Onboarding (wizard + Review) — CURRENT
-Captures the §3.2 solo-operator inputs (overhead, wage+burden, capacity, goals) in a
-3-step phone-first wizard; Review screen plays back the derived rates via the engine.
-Stores **inputs only** — rates are always recomputed. Proposal:
-[`openspec/changes/add-onboarding/`](./openspec/changes/add-onboarding/).
+### R4 — Project lifecycle: setup wizard + rich job hub
+`revamp-project-setup` — the 2-step new-job wizard: *Who & where* (client, address→jurisdiction,
+job-type chips, scope) and *Money & schedule* (target margin, contingency, crew, start window, an
+auto-run panel → rules). Adds `projects.job_type`, `crew_size?`, `start_window?`; **seeds the
+first estimate's** `target_margin_bp`/`contingency_bp` (single source of truth on the estimate,
+not duplicated on the project). `revamp-project-hub` — replaces the thin 3-link page with the
+prototype hub: profit-per-hour hero (→ estimate), tools grid with live badges, a **"Waiting on
+you"** queue (reusing the built before→after preview), a chain teaser, and the **job activity
+feed** (real events only). Migration + isolation test.
+- **Constitution.** Per-job margin/contingency is consistent with §3.4 (override allowed).
 
-### 4. 📝 Estimate builder + profit dashboard
-The two core surfaces, in **separate modules** (constitution §6.8): `src/estimate/`
-(line items, versions, margin-solve pricing) and `src/profit/` (signal rendering,
-portfolio "against your year" dashboard). Proposal:
-[`openspec/changes/add-estimate-dashboard/`](./openspec/changes/add-estimate-dashboard/).
+### R5 — Estimate editor: per-line chips + traceable roll-up
+Wire R2 into the editor: "v_ · Active" + the "private, never the client's" note; the profit hero
+with the **existing** drillable roll-up; **per-line editing incl. an optional own price**, each
+labor line showing its own signal with a plain note + **a constructive nudge** ("reprice — well
+under target"); calm treatment (surface the worst draggers, quiet the rest); price/your-profit
+summary; "Turn into the client estimate." Non-labor lines legibly show *no* per-hour signal.
+- **Change:** `revamp-estimate-editor`. **Constitution.** Traceability extends to per-line inputs.
 
-### 5. ⏳ Shared project context + suggestions queue
-"One job, one memory" (constitution §4): typed context entries (`finding`, `material`,
-`code_ref`, `photo`, `fact`), the **single** project conversation, and the suggestions
-queue with accept/dismiss. This is the substrate every Tool depends on — it ships
-before any tool. Estimate creation seeds the context (wired here).
+### R6 — Tools: Photo Advisor · Material Finder · Code & Permits (3 independent changes)
+`revamp-photo-advisor` — gallery/camera import, captions, per-photo **tags**, the analyzing state,
+the photo-detail **single saved-recommendation reveal** + confirm/dismiss + standing disclaimer.
+`revamp-material-finder` — a **running per-job material list** ("On this job", from `material`
+entries) distinct from estimate suggestions; results with "Suggest for this job"; subtotal;
+"View estimate" (no double-write when also adding to an estimate). `add-code-permits` — Code
+Finder reshape (per-code "priced-in / not in estimate / not triggered" status, cited sources,
+chips) **+ a `project_permits` table** (name, dates, status, fee; total) — permits scoped to
+what feeds the estimate + a simple status, **not** a scheduler.
+- **Constitution.** Tools suggest → user confirms; Photo Advisor never prices; disclaimers (§5,§7).
 
-### 6. ✅ Tool platform — the tool contract & AI layer — DONE (archived 2026-07-23)
-All in-code work is complete, reviewed, and archived; the spec is synced into
-[`openspec/specs/tool-platform/`](./openspec/specs/tool-platform/spec.md). The uniform tool
-contract (techstack §4): every tool in `src/tools/*` exports `inputSchema`/`outputSchema`/
-`run(ctx)`, receives a **read-only** context + estimate snapshot, and returns a `ToolResult`
-that separates a typed **`output`** (read-only, routable for the future graph editor #12)
-from **`suggestions`** (the only commit path, into change #5's queue) and a **`message`**
-(the single conversation, with an optional disclaimer). The runner de-duplicates identical
-pending suggestions, records a `tool_run` (tokens, latency, status — failed runs too), and
-links each emission back via `tool_run_id`. Adds `src/ai/` — a **mockable model port** shaped
-for web search + vision (system/messages/images/server-tools → content/usage/citations),
-memory/mock impl for tests, real Anthropic impl behind `ANTHROPIC_API_KEY`, model IDs/config
-centralized. Ships a trivial reference/echo tool + the project-page **Tools** surface shell;
-no real tool. **The only open items are deferred to live infra** (see
-[`relevant_notes.md`](./relevant_notes.md) §5): apply migration `0004`, prove `tool_runs` RLS,
-and prove one live model call through the reference tool once a key exists.
+### R7 — Client experience: branding · tiers · templates/tones · send (3 changes)
+`add-business-branding` — the **just-in-time** letterhead setup (logo in a private Storage bucket
+mirroring `job-photos`: tenant-prefixed key, object policy, signed URLs; + license/phone/email/
+address/trade-shown/default-terms as 1:1 settings columns), prompted at the first client doc and
+editable from Settings. `add-document-tiers` — extend `clientDocumentSchema` for **Good·Better·Best**
+tiers (`{name, priceCents, description}`), still `.strict()`, still prices-only, still
+self-consistent; tiers derived from real **scope** option sets (not markups). `revamp-client-estimate-doc`
+— the setup (template picker incl. tiers, tone chips, prompt chips, guardrail, generating state) →
+proposal preview (letterhead, tone-varied narrative, lines **or** tier cards, terms) → **real send**
+(link / email / text / download, or honestly-labeled copy-link/print-PDF). Fixes the **dead "Client
+Estimate Doc" card** on the Tools page.
+- **Constitution.** Document stays prices-only (§5) — tiers don't weaken `.strict()`; owner reviews
+  the draft before share (the free-text guard).
 
-### 7a. ✅ Structured-result port
-Split out of #7: the model port's structured-output capability. `ModelRequest.resultSchema`
-(Zod) + `ModelResponse.result` (validated) + `readResult()`; the mock returns a canned,
-schema-validated result + citations; the **real Anthropic impl** (`src/ai/anthropic.ts`) makes
-one `messages.create` combining `web_search_20260209`, citations, and a strict `record_result`
-tool built from the schema via `z.toJSONSchema` — deliberately not `output_config.format`
-(incompatible with citations). SDK loaded lazily; resolver stays unconfigured without a key.
-**Live end-to-end proof deferred** (relevant_notes.md §5).
+### R8 — One memory: activity feed + client answers (2 changes)
+`add-activity-feed` (thin, only if R4 didn't fully compose it) — the calm timeline every tool
+posts into (the single conversation already exists). `add-client-answers` — a searchable Q&A log
+(`client_qa` table: question, answer?, status answered/waiting, impact?, timestamps) so "a decision
+never lives in your texts", captured low-friction from the conversation. Migration + isolation test.
+- **Constitution.** Client answers are shared-context job facts (§4); a preference that locks a
+  line is still committed only by the user.
 
-### 7b. ✅ Material Finder
-First real tool (constitution §5): web-searches materials, current prices, and suppliers via
-`web_search` + #7a's structured result. Two modes (free-text query / everything-for-this-
-estimate); returns **comparable, sourced options** — each an `estimate_line_item` suggestion
-when there's an active estimate (so options compare by profit-per-hour via P2's card) else a
-`material` context entry; an unsourced option is dropped (§7). Localizes to a new
-`business_settings.service_area` (migration `0006`, edited in Settings); snapshot exposes
-`activeEstimateId`; **manual add** proposes the same suggestions with no model/no `tool_run`.
-Per-tool input UI (mode toggle + query + location + hand-add) sets the pattern for #8–#10.
-**The only open items are deferred to live infra** (relevant_notes.md §5): apply migration
-`0006`, and prove real `web_search` returns sourced prices + citations with live `tool_run`
-token usage once a key exists.
+### R9 — Composition: auto-run rules + the chain (2 changes)
+`add-autorun-rules` — a persisted `autorun_rules` config (per business/project) with toggles +
+guardrail copy; **each rule mapped to its real mechanism** — trigger / compose-edge / dashboard
+behavior / pre-send validation — and only genuinely-optional automations get a toggle (e.g.
+"profit/hr under target → flag red" is inherent, "line has no hours → warn" is a validation). The
+`photo-advisor → code-finder` edge is **already live** — this *governs* composition, doesn't switch
+it on. `add-tool-chain` — a **minimal** provenance link (`tool_runs.triggered_by_run_id` + the
+existing source/`toolRunId` links) to reconstruct + render "the chain" and each step's figure.
+- **Constitution.** Unchanged guarantees: read-only snapshot in, **pending** suggestions out; the
+  chain **stops after 3 auto steps** (`MAX_TOOL_STEPS`); nothing writes/spends without a Confirm.
+- **Risk (decided ④):** synchronous fan-out with the analyzing-state + 3-step cap for v1; a
+  background queue is an R10 item if phone latency proves rough.
 
-### 8a. ✅ Job photo capture & storage
-Split out of #8 (as #7 split into 7a/7b) so the storage slab stands alone — it involves **no
-AI at all**. A job photo is a tenant-isolated asset: `project_photos` + RLS (migration `0007`),
-a `PhotoStorageBackend` on the `TenantDb` seam (memory impl for isolation tests; Supabase
-Storage over the **session-scoped** SSR client, never service-role), a private bucket with a
-`storage.objects` policy on the same `business_id/project_id/…` key prefix the app derives, and
-short-lived signed URLs. Uploading is an **outer-layer user action** — it commits a `photo`
-context entry directly, never a suggestion — and the client downscales, re-encodes (dropping
-**EXIF/GPS**, §7), and thumbnails on the device. Caption, delete, and a phone-first gallery on
-the job context page. A successful upload emits **`photo.uploaded`** through P1's dormant
-trigger seam (`TRIGGERS` still empty, so a no-op today) — #9 subscribes Code Finder with one
-entry. **Open items are deferred to live infra** (relevant_notes.md §1, §2b): create the
-private bucket, apply `0007`, and prove object isolation + signed-URL expiry end to end.
+### R10 — Hardening & launch
+The old #11, at the end. Money-critical e2e (onboarding → estimate → per-line + portfolio signal →
+accept a suggestion → generate/share the client doc), tenant-isolation audit **extended to every
+new table** via `test:rls`, AI cost-observability review (compose fan-out), accessibility pass
+(color+text, `aria-current`, ≥44px targets), the optional compose **background queue**, Vercel +
+production Supabase, and the remaining deferred live-infra / live-AI proofs walked end-to-end.
+- **Change:** `harden-and-launch`.
 
-### 8b. ✅ Photo Advisor (the vision tool)
-The tool on top of 8a: **one photo per run** — taken right there or chosen from the job — its
-bytes passed in as tool **input** (tools get no storage handle) to the model port's existing
-`images`, with #7a's structured result. It proposes `finding` entries carrying a **severity**
-(`safety` / `attention` / `note`) and the photo behind them, plus **labor** line items whose
-minutes flow into P2's preview, so you see what a repair does to the job's profit per hour before
-accepting. It **never prices anything**: the result schema has no cost field, materials are named
-in the finding, and the post hands pricing to Material Finder — an uncosted material line would
-roll up as zero and quietly overstate the job's profit. An implausibly large estimate is proposed
-*and* flagged, never dropped. Carries the shared licensed-professional disclaimer
-(`src/tools/disclaimer.ts`) via `message.disclaimer` **and** as a standing panel notice (§5, §7).
-**The only open item is deferred to live AI** (relevant_notes.md §5): prove a real vision call
-returns sane severities, plausible minutes, and no smuggled price.
+---
 
-### 9a. ✅ Tool composition (the seam)
-Implements the composition the tool-platform spec has described since #6: `dispatchAndCompose`
-(`app/_lib/compose.ts`) is the one app-layer way to run a tool — it dispatches the tool, then fans
-its typed `output` out to any registered consumers via `dispatch(source: "compose")`, bounded by
-P1's step budget. **App-layer, not in the DB-free runner**, because an edge's mapper needs tenant
-data (9b's Code Finder needs the service area). Ships **dormant** (`COMPOSE_EDGES` empty) — every
-path is `dispatch` + a no-op — proven with a reference producer/consumer; the three existing tool
-actions route through it with no behavior change.
+## Self-critique
 
-### 9b. ✅ Code Finder (compose off findings + standalone query)
-Surfaces relevant **local** building codes two ways: a **standalone query** (ask a code question →
-`web_search` → sourced `code_ref` entries with citations, capped and posted to the one thread), and
-**composed off Photo Advisor findings** — 9a's first live edge (`photo-advisor → code-finder`, one
-run per **`safety`/`attention`** finding, not cosmetic `note`s), so codes are looked up for a
-*known* defect without retyping. Jurisdiction comes from `business_settings.service_area`
-(overridable). Drops any code it can't source (§7), proposes **no line item** (an unpriced permit
-line would understate cost — 8b's trap), and frames each compliance note as the job's **added
-cost/hours** so a codes tool stays on the EPH spine. Shared licensed-professional disclaimer (§5,
-§7). `photo.uploaded` stays emitting for a future subscriber; the compose edge is the real trigger.
-**Open item deferred to live AI** (relevant_notes.md §5): prove real `web_search` returns sourced
-local codes and that composed runs record live token usage. **This completes the v1 tool set
-(#7 Material Finder, #8 Photo Advisor, #9 Code Finder).**
+### Round 1 — initial draft (structure/ordering/method)
+1. **Per-line method was degenerate** → pinned the real method + made it a §3 amendment (see R2).
+2. **Target/hr must stay derived** (prototype hardcodes 92) → kept derived, called out.
+3. **Onboarding looked like a conflict; it isn't** → reshape, not amendment (R3).
+4. **Don't hardcode the phone frame** → responsive column + tokens (R1).
+5. **Double-restyle risk** → R1 owns frame only; screens owned by their phase.
+6. **Composition mis-scoped as "activate from zero"** → `photo→code` is live; R9 governs it.
+7. **"Auto-run rules" conflates 4 mechanisms** → map each rule to its mechanism (R9).
+8. **Draft/no-estimate jobs** → render as `Computed` NA (R2/R4).
+9. **Dead buttons forbidden** → fix the dead doc card; real/labeled send (R7).
+10. **New-data homes vague** → each phase states a leaning (principle 7).
+11. **Ordering** → engine before its consumers; branding before the doc; tools before the chain.
 
-### 10a. ✅ Client document + share link
-The security-sensitive half of the Client Estimate Doc, split out because a document is the FIRST
-thing MarginSense exposes outside the login wall. A `documents` table (RLS, migration `0009`)
-stores a **client-safe payload snapshot** — the `src/document/` schema is `.strict()` and has no
-field for cost/overhead/margin/EPH/signal/labor-minutes, so an internal number is *unrepresentable*
-on a document, and a `.superRefine` makes it add up. A revocable, unguessable **share token** backs
-a public `/share/<token>` page (no login, `noindex`) read through the `get_shared_document`
-`SECURITY DEFINER` function — the one deliberate public capability (§7), returning one payload only
-when shared and not revoked; RLS unchanged for every authenticated path. Re-sharing a revoked doc
-mints a fresh token so a dead link never revives. `DocumentBackend` on the `TenantDb` seam. **No
-tool, no AI, no estimate transform, no owner UI** — all 10b. Open item deferred to live infra
-(relevant_notes.md §1): apply `0009` and prove the token function + cross-tenant isolation.
+### Round 2 — the 5-lens critique (feasibility · UI/UX · CX · contracting-fit · architecture)
+1. **Per-line pricing ripples past R2 (architecture/feasibility).** It changes the estimate model,
+   which R5 and R7 consume. *Revised:* treated as the foundational engine change it is; R5/R7
+   depend on it explicitly; the **allocation-fallback** means legacy/unedited estimates keep
+   working (no destructive data migration).
+2. **Per-line pricing actually *simplifies* the client doc (architecture).** The projection's job
+   is splitting a global total into line prices — if lines already have prices, that mostly
+   disappears, and Good·Better·Best gets a clean home. *Revised:* R2 updates `client-projection`
+   to prefer line price else allocate; noted as a win for Option A.
+3. **Branding-in-onboarding hurts time-to-value (UX/CX).** The prototype prompts letterhead
+   just-in-time at the first client doc; front-loading it lengthens the highest-abandonment flow.
+   *Revised:* branding **moved R3 → R7** (JIT + editable in Settings); onboarding stays short
+   (principle 6).
+4. **Three profit numbers can blur; per-line risks a "sea of red" (UI/UX/CX).** *Revised:*
+   principle 4 (distinct framing per level; surface worst draggers, quiet the rest) + principle 3
+   (every signal carries a constructive next step), wired into R2/R5.
+5. **Signals must be constructive, not judgmental (CX/trust).** A red bid without "what to do"
+   erodes trust. *Revised:* principle 3; the "why" drill-down is one tap from any signal.
+6. **Live infra already exists — stop deferring everything (feasibility).** *Revised:* principle 11
+   (apply migrations + prove isolation per phase); R10 shrinks to true launch items.
+7. **New-table proliferation (architecture).** 5 candidate tables. *Revised:* principle 7 — branding
+   → settings columns; provenance → a `tool_runs` link; only lifecycle data (permits, Q&A, rules)
+   becomes a table.
+8. **Provenance risks over-modeling (architecture).** *Revised:* principle 8 — one trigger link +
+   existing links, not a provenance graph.
+9. **Chips-over-typing + low-connectivity for a job-site tool (CX/contracting-fit).** *Revised:*
+   principles 5 and 9.
+10. **Scope creep in permits toward project-management (contracting-fit).** *Revised:* R6 scopes
+    permits to estimate-feeding cost + simple status, explicitly not a scheduler.
+11. **Trades beyond GC (contracting-fit).** *Revised:* principle 10 — job types/trades/jurisdictions
+    stay data-driven so expansion needs no rearchitecture. Change-orders/invoicing noted
+    out-of-scope-but-anticipated; the per-line model leaves room.
+12. **Server-first discipline vs an SPA prototype (architecture).** *Revised:* principle 1.
 
-### 10b. ✅ Client Estimate Doc tool
-The tool on top of 10a, and **the last v1 tool** — the whole product loop now closes (estimate →
-signal → client proposal). A pure projection (`src/estimate/client-projection.ts`) allocates the
-engine's single solved total across the lines proportional to cost, exact to the cent (drops
-zero-cost lines; refuses a per-line override or an unpriceable estimate); the tool wraps it with an
-optional AI **scope narrative** (prompt forbidden from stating cost/margin/profit/hour — the
-free-text gap 10a can't close structurally) and returns the finished document as its typed `output`
-(a document, not a suggestion). Generate → **unshared draft** → owner reviews/edits the narrative →
-share, so a disobedient model is caught before any client sees it. Owner Documents surface (list,
-generate, preview+edit, share/copy/revoke) under the project. **Open item deferred to live AI**
-(relevant_notes.md §5): confirm a real narrative reads well and leaks nothing. **This completes the
-v1 tool set (#7 Material Finder, #8 Photo Advisor, #9 Code Finder, #10 Client Estimate Doc); only
-#11 hardening & launch remains.**
+**Residual risks tracked to their phase:** contingency-share treatment in the per-line net (R2
+design.md), Good·Better·Best scope-tier derivation (R7 design.md), compose latency (R9/R10),
+legacy-estimate rendering under the fallback (R2 tests).
 
-### 11. ⏳ Hardening & launch pass
-Money-critical e2e suite (onboarding → estimate → signal → accept suggestion → client
-doc), tenant-isolation audit, AI cost observability review, accessibility pass
-(colors always paired with text), Vercel + production Supabase setup.
+### Round 3 — proposal-level critique (`/critique`, 2026-07-25, on the three pending changes)
+1. **"Solve *seeds* line prices" would persist derived values** — freezing estimates against later
+   cost changes and violating store-inputs-only. *Revised:* baselines are derived, never written;
+   only user-entered prices persist (spec scenario + test).
+2. **Partial pricing / override precedence was unspecified** — circular allocation and a
+   `Σ price ≠ override` contradiction were possible. *Revised:* baseline = allocation of the
+   solved/overridden total across all lines; an entered price replaces only its own baseline; any
+   entered price ⇒ total = Σ effective prices, total override not applied.
+3. **Tab bar visibility on job pages contradicted the prototype** (hidden there, not merely
+   inactive). *Revised:* app-shell spec/tasks hide the bar on drill-ins, back affordance instead.
+4. **Contingency share now allocated on the constitutional base** (`cost+overhead`, not cost
+   alone) + zero-direct-cost / zero-base guards (no divide-by-zero). *Revised:* R2 design/spec.
+5. **Negative aggregate** renders honestly (red, progress clamped) — pulse spec scenario added.
+6. **Dashboard camera → job-picker sheet** was a dropped prototype promise. *Revised:* added to
+   `add-portfolio-pulse` (lands on the job's existing photo surface; R1 sheet's first consumer).
+7. Smaller: "month" claim removed from the pulse spec (scope stated honestly); Jobs relabel covers
+   the list title; deterministic allocation tie-breaks; sheet scroll-lock.
 
-### 12. 🌟 Tool graph editor (meta) — north-star, later
-A **visual tool-graph editor** where tools are nodes and their connections are edges: one
-tool's output feeds another's input, and auto-triggers (photo upload → Code Finder) are drawn
-rather than coded (constitution §5, "Composing tools"). Starts as a **meta / admin** surface
-for configuring how the tools connect, later opening to power-user contractors. Lands **after
-the v1 tools ship** (#6–#8) and changes none of the tool rules — composed tools still read a
-read-only snapshot and emit only suggestions. No redesign needed now; the only ask on earlier
-phases is to keep tool `inputSchema`/`outputSchema` typed and side-effect-free (techstack §4)
-so tools stay wirable.
+### Round 4 — R1 implementation review (multi-agent workflow, verified, 2026-07-25)
+`revamp-app-shell` built (tokens, primitives, nav island, relabel); typecheck + 306 tests + build
+green. A 3-dimension adversarial review workflow (correctness/a11y · architecture/tokens ·
+constitution-fidelity) raised 11 findings; adversarial verification confirmed **6** and rejected
+5 as false-positive/out-of-scope (empty focus-trap, nav exact-match, "← Projects" transient label,
+unused `EmptyState` — all correctly deferred to their phases). Fixed all 6:
+- `--muted` failed WCAG AA in light mode (3.73:1) → darkened to `#6f665f` (≈5.1:1).
+- BottomSheet: no accessible name when `title` omitted → `useId` + `aria-labelledby`/`aria-label`
+  fallback; focus not returned on close → capture + restore invoker; no SSR/mounted guard → added.
+- Unconfigured banner consumed `signal-amber` tokens raw (violating the token rule this change
+  wrote) → new non-threshold `--notice-*` tokens; signal palette reserved for `SignalBadge`.
+- globals.css comment named a non-existent `SignalChip` → corrected to `SignalBadge`/`SignalUnknown`.
+
+**R1 `revamp-app-shell` ✅ implemented · reviewed · archived (2026-07-25).**
+
+---
+
+## Constitution reconciliation (before any code)
+
+- **Amendment (R2), its own commit:** add the **per-line profit-per-hour view** and **per-line
+  pricing** to §3 — labor-only signal; a line carries its own price, else the proportional
+  allocation applies; same thresholds; per-line nets sum to the estimate net; the target-margin
+  solve is a helper. An *extension* of the canonical model (whole-estimate EPH unchanged), which is
+  why it's recorded in the constitution rather than added silently.
+- **Reconcile, no amendment (R3):** onboarding keeps §3.2's full inputs (goals included) and
+  **derives** target/hr; we adopt the prototype's friendlier presentation, not its dropped goals or
+  hardcoded target.
+- **Additive, new specs, no amendment:** branding/letterhead (R7), per-job margin/contingency (R4,
+  allowed by §3.4), document tiers + templates/tones (R7, still prices-only under §5), permits &
+  inspections (R6), client answers (R8), user-toggleable auto-run rules (R9, §5 already allows
+  auto-triggers), the chain/provenance (R9). `openspec/config.yaml` context stays in sync.
+- **No prototype behavior violates the hard rules:** integer cents/minutes/bp, engine-owns-math,
+  tenant isolation + RLS, tools-suggest-users-confirm, prices-only client doc, forward-only
+  migrations. Confirmed against both the domain map and the UI audit.
+
+---
+
+## North-star — #12 Tool-graph editor (meta), after the revamp
+
+A visual canvas where tools are nodes and connections are edges (one tool's output feeding
+another's input; auto-triggers drawn, not coded). R9's governed composition + minimal provenance
+is the stepping-stone. Lands after the revamp; changes none of the tool rules (read-only snapshot
+in, suggestions out).
 
 ---
 
 ## Standing rules (apply to every phase)
 
-- Non-trivial change starts as an OpenSpec proposal (`/opsx:propose`) and is validated
-  before code (constitution §6.7).
-- Money = integer cents; time = integer minutes; percentages = basis points.
-- All math in `src/engine/`; UI/DB never re-derive it.
-- Every business-owned table: non-null `business_id` + RLS + tenant-isolation test.
+- Non-trivial change starts as an OpenSpec proposal, validated `--strict`, **shown to Callie and
+  approved before any `src/`/`app/`/migration edit** (constitution §6.7).
+- Money = integer cents; time = integer minutes; percentages = basis points. No floats for money.
+- All financial math in `src/engine/`; UI/DB never re-derive it. `targetProfitPerHour` is derived.
+- Every business-owned table: non-null `business_id` + RLS + isolation test (+ prove RLS live per
+  phase, per principle 11).
 - Tools suggest; users confirm. No tool write-path to estimates or context.
-- Phone-first; colors always paired with text.
+- Every displayed number traceable; colors always paired with text; phone-first; server-first with
+  client islands.
+- The **UI prototype is the behavior spec** — no dead buttons, no mock data; adapt where the domain
+  requires, don't silently drop what the UI promises.
