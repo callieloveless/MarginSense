@@ -25,6 +25,7 @@ import {
 } from "./money";
 import type { EngineConfig } from "./config";
 import { contingencyBaseAmount, DEFAULT_CONFIG } from "./config";
+import { signalAbsolute, type AbsoluteSignal } from "./signal";
 
 /** Granular line categories (§3.4). Any grouping (e.g. "subs / equip / permits") is display. */
 export type LineCategory =
@@ -231,4 +232,119 @@ export function solvePriceForMargin(
   );
 
   return { ok: true, value: { price, rollUp } };
+}
+
+/**
+ * Allocate a `total` across weighted lines, exact to the cent: each line gets
+ * `round(total × weight / Σweight)`, and the rounding remainder is placed on the largest-weight
+ * line (ties → earliest) so the parts sum to `total` exactly. When every weight is zero (nothing
+ * to allocate) all parts are zero. This is the **one** allocation method in the codebase — the
+ * per-line price baseline, the per-line overhead share, and the per-line contingency share all
+ * use it, and the client-document projection delegates to it (constitution §3.4a).
+ */
+export function allocateByWeight(total: Cents, weights: readonly number[]): Cents[] {
+  const n = weights.length;
+  const out: Cents[] = new Array<Cents>(n).fill(0);
+  let sumW = 0;
+  for (const w of weights) sumW += w;
+  if (sumW <= 0) {
+    // No proportional basis (every weight is zero). Split `total` equally so the parts still sum
+    // to it — never silently drop the total — with the remainder on the first line.
+    if (n === 0 || total === 0) return out;
+    const each = roundHalfUp(total / n);
+    for (let i = 0; i < n; i++) out[i] = each;
+    const remainder = total - each * n;
+    if (remainder !== 0) out[0]! += remainder;
+    return out;
+  }
+
+  let allocated = 0;
+  let largest = 0;
+  for (let i = 0; i < n; i++) {
+    out[i] = roundHalfUp((total * weights[i]!) / sumW);
+    allocated += out[i]!;
+    if (weights[i]! > weights[largest]!) largest = i;
+  }
+  const remainder = total - allocated;
+  if (remainder !== 0) out[largest]! += remainder;
+  return out;
+}
+
+/** One line's full profit decomposition, for the per-line signal (constitution §3.4a). */
+export interface LineBreakdown {
+  readonly category: LineCategory;
+  /** Effective price: the entered price, else the cost-proportional derived baseline. */
+  readonly price: Cents;
+  readonly directCost: Cents;
+  readonly overheadAllocated: Cents;
+  readonly contingencyShare: Cents;
+  readonly net: Cents;
+  readonly laborHours: number;
+  /** `net / laborHours` — labor lines only; not-applicable for non-labor or zero-hour lines. */
+  readonly profitPerHour: Computed<CentsPerHour>;
+  /** The red/yellow/green signal on the same thresholds — labor lines only. */
+  readonly signal: Computed<AbsoluteSignal>;
+}
+
+/** Inputs to decompose an estimate into per-line breakdowns. */
+export interface LineBreakdownsInput {
+  readonly lines: readonly LineItem[];
+  /** Effective price per line (entered or baseline), aligned to `lines`. */
+  readonly prices: readonly Cents[];
+  readonly burdenedLaborRate: CentsPerHour;
+  /** The estimate's total overhead and contingency, split across lines so shares sum exactly. */
+  readonly overheadAllocated: Cents;
+  readonly contingency: Cents;
+  /** For the per-line signal; when not-applicable, per-line signals are not-applicable. */
+  readonly targetProfitPerHour: Computed<CentsPerHour>;
+}
+
+/**
+ * Decompose an estimate into per-line net + per-line profit-per-hour signal (constitution §3.4a).
+ * Overhead follows labor hours and contingency follows the contingency base (cost + overhead);
+ * both are allocated with {@link allocateByWeight} so the per-line shares sum **exactly** to the
+ * estimate's `overheadAllocated` and `contingency` — which makes `Σ line.net === netProfit`.
+ * Non-labor and zero-hour lines get a not-applicable per-hour signal.
+ */
+export function lineBreakdowns(
+  input: LineBreakdownsInput,
+  config: EngineConfig = DEFAULT_CONFIG,
+): LineBreakdown[] {
+  const { lines, prices, burdenedLaborRate, overheadAllocated, contingency, targetProfitPerHour } =
+    input;
+
+  const costs = lines.map((line) => lineCost(line, burdenedLaborRate));
+  const hours = lines.map((line) => lineLaborHours(line));
+  const overheadShares = allocateByWeight(overheadAllocated, hours);
+  const contingencyWeights = costs.map((cost, i) => cost + overheadShares[i]!);
+  const contingencyShares = allocateByWeight(contingency, contingencyWeights);
+
+  return lines.map((line, i) => {
+    const price = prices[i] ?? 0;
+    const directCost = costs[i]!;
+    const overhead = overheadShares[i]!;
+    const contingencyShare = contingencyShares[i]!;
+    const net = price - directCost - overhead - contingencyShare;
+    const laborHours = hours[i]!;
+
+    const profitPerHour: Computed<CentsPerHour> =
+      isLaborLine(line) && laborHours > 0
+        ? { ok: true, value: roundHalfUp(net / laborHours) }
+        : notApplicable(isLaborLine(line) ? "no labor hours" : "not a labor line");
+    const signal: Computed<AbsoluteSignal> = profitPerHour.ok
+      ? signalAbsolute(profitPerHour, targetProfitPerHour, config)
+      : notApplicable(profitPerHour.reason);
+
+    return {
+      category: line.category,
+      price,
+      directCost,
+      overheadAllocated: overhead,
+      contingencyShare,
+      net,
+      laborHours,
+      profitPerHour,
+      signal,
+    };
+  });
 }

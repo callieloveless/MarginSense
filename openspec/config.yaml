@@ -19,7 +19,11 @@ context: |
   profit; target profit/hr = (income + profit) / annualBillableHours. Estimate roll-up adds
   a contingency cost line = contingency_bp x (directCost + overheadAllocated); netProfit =
   revenue - directCost - overheadAllocated - contingency. Pricing is margin-solve by default
-  (costs entered, price solved to target_margin_bp) with per-line/total override. Portfolio
+  (costs entered, price solved to target_margin_bp) with per-line/total override. The solved
+  total is distributed to lines as derived, never-stored baselines proportional to cost; a user
+  may enter a per-line price (then total = sum of line prices, margin an outcome). Per-line
+  profit/hr (labor lines only) = lineNet / lineHours on the same thresholds, with per-line nets
+  reconciling exactly to netProfit (constitution §3.4a). Portfolio
   view: percentOfYear = laborHours / annualBillableHours; percentOfProfitGoal = (netProfit +
   overheadAllocated) / grossProfitGoal.
 

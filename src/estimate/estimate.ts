@@ -14,9 +14,12 @@ import {
   type Computed,
   type EngineConfig,
   type EstimateRollUp,
+  type LineBreakdown,
   type LineCategory,
   type LineItem,
+  allocateByWeight,
   DEFAULT_CONFIG,
+  lineBreakdowns,
   lineCost,
   lineLaborHours,
   notApplicable,
@@ -48,18 +51,25 @@ export interface StoredEstimate {
 export interface BusinessRatesInput {
   readonly overheadRecoveryRate: CentsPerHour;
   readonly burdenedLaborRate: CentsPerHour;
+  /** For per-line signals (§3.4a); omit to leave per-line colors not-applicable. */
+  readonly targetProfitPerHour?: Computed<CentsPerHour> | undefined;
 }
 
-/** Whether the price was solved to the target margin or entered as an override. */
-export type PriceSource = "solved" | "override";
+/**
+ * How the price came to be: `solved` to the target margin, an entered `override` total, or
+ * `line` when the user entered one or more per-line prices (margin becomes an outcome).
+ */
+export type PriceSource = "solved" | "override" | "line";
 
-/** A computed estimate: the engine roll-up plus how the price came to be. */
+/** A computed estimate: the engine roll-up, how the price came to be, and the per-line breakdown. */
 export interface EstimateComputation {
   readonly rollUp: EstimateRollUp;
   readonly priceSource: PriceSource;
   readonly price: Cents;
   readonly directCost: Cents;
   readonly laborHours: number;
+  /** Per-line price + net + profit-per-hour signal (§3.4a), aligned to the estimate's lines. */
+  readonly lines: LineBreakdown[];
 }
 
 /** Map a stored line to the engine's `LineItem` (labor vs non-labor shape). */
@@ -88,54 +98,80 @@ export function computeEstimate(
   config: EngineConfig = DEFAULT_CONFIG,
 ): Computed<EstimateComputation> {
   const engineLines = est.lines.map(toEngineLine);
-  const directCost = sumCents(engineLines.map((l) => lineCost(l, rates.burdenedLaborRate)));
+  const costs = engineLines.map((l) => lineCost(l, rates.burdenedLaborRate));
+  const directCost = sumCents(costs);
   let laborHours = 0;
   for (const l of engineLines) laborHours += lineLaborHours(l);
 
-  if (est.totalPriceOverrideCents != null) {
-    const rollUp = rollUpTotals(
+  // A price the user ENTERED on a line (null = unpriced; its baseline applies).
+  const entered = est.lines.map((l) => (l.priceCents != null ? (l.priceCents as Cents) : null));
+  const hasEntered = entered.some((p) => p !== null);
+  const anyUnpriced = entered.some((p) => p === null);
+
+  // How the price is determined (§3.4a): entered prices supersede a total override, which
+  // supersedes the margin-solve.
+  const priceSource: PriceSource = hasEntered
+    ? "line"
+    : est.totalPriceOverrideCents != null
+      ? "override"
+      : "solved";
+
+  // The total that UNPRICED lines allocate their baselines against. A fully-priced estimate needs
+  // no baseline (and no solve — so an unreachable target margin can't make it not-applicable).
+  let baselineTotal: Cents;
+  if (priceSource === "override") {
+    baselineTotal = est.totalPriceOverrideCents as Cents;
+  } else if (priceSource === "line" && !anyUnpriced) {
+    baselineTotal = 0;
+  } else {
+    const solved = solvePriceForMargin(
       {
-        revenue: est.totalPriceOverrideCents,
         directCost,
         laborHours,
         overheadRecoveryRate: rates.overheadRecoveryRate,
         contingencyBp: est.contingencyBp,
+        targetMarginBp: est.targetMarginBp,
       },
       config,
     );
-    return {
-      ok: true,
-      value: {
-        rollUp,
-        priceSource: "override",
-        price: est.totalPriceOverrideCents,
-        directCost,
-        laborHours,
-      },
-    };
+    if (!solved.ok) return notApplicable(solved.reason);
+    baselineTotal = solved.value.price;
   }
 
-  const solved = solvePriceForMargin(
+  // Effective price per line = entered, else the cost-proportional baseline. With no entered
+  // price the baselines sum to `baselineTotal`, so revenue and every whole-estimate figure are
+  // identical to the pre-per-line roll-up.
+  const baselines = allocateByWeight(baselineTotal, costs);
+  const prices: Cents[] = costs.map((_, i) => (entered[i] !== null ? entered[i]! : baselines[i]!));
+  const revenue = sumCents(prices);
+
+  const rollUp = rollUpTotals(
     {
+      revenue,
       directCost,
       laborHours,
       overheadRecoveryRate: rates.overheadRecoveryRate,
       contingencyBp: est.contingencyBp,
-      targetMarginBp: est.targetMarginBp,
     },
     config,
   );
-  if (!solved.ok) return notApplicable(solved.reason);
+
+  const lines = lineBreakdowns(
+    {
+      lines: engineLines,
+      prices,
+      burdenedLaborRate: rates.burdenedLaborRate,
+      overheadAllocated: rollUp.overheadAllocated,
+      contingency: rollUp.contingency,
+      targetProfitPerHour:
+        rates.targetProfitPerHour ?? notApplicable("target profit per hour not provided"),
+    },
+    config,
+  );
 
   return {
     ok: true,
-    value: {
-      rollUp: solved.value.rollUp,
-      priceSource: "solved",
-      price: solved.value.price,
-      directCost,
-      laborHours,
-    },
+    value: { rollUp, priceSource, price: revenue, directCost, laborHours, lines },
   };
 }
 

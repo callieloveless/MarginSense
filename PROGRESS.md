@@ -349,6 +349,24 @@ unused `EmptyState` — all correctly deferred to their phases). Fixed all 6:
 
 **R1 `revamp-app-shell` ✅ implemented · reviewed · archived (2026-07-25).**
 
+### Round 5 — R2a per-line engine review (`/code-review`, high, 2026-07-25)
+`add-per-line-pricing-signal` built (allocateByWeight + lineBreakdowns in the engine;
+computeEstimate reworked; client-projection delegates; targetProfitPerHour wired); constitution
+§3.4a committed alone; typecheck + 326 tests green (15 new). Inline 8-angle `/code-review` raised
+5 findings → **4 fixed, 1 skipped**:
+- **allocateByWeight silently zeroed the total when all weights were 0** → a zero-cost estimate
+  (or a total override on cost-less lines) lost its revenue. Fixed: equal-split fallback so the
+  parts always sum to the total; test updated (it had asserted the buggy behaviour).
+- **A fully line-priced estimate went not-applicable under an unreachable target margin** (it
+  solved needlessly) → fixed: skip the solve when every line is priced; also dedups the two
+  identical solve branches.
+- Added tests for both edges + the mixed entered/unpriced reconciliation.
+- Skipped: lineBreakdowns recomputes per-line costs (O(lines), trivial; passing an aligned array
+  into the shared engine helper would add a footgun for no real saving).
+
+**R2a `add-per-line-pricing-signal` ✅ implemented · reviewed · archived (2026-07-25).** Build
+deferred (disk); last green build covered the import graph, fixes since are body/test-only.
+
 ---
 
 ## Constitution reconciliation (before any code)

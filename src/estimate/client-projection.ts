@@ -17,7 +17,7 @@
  * total that gets allocated.
  */
 
-import { roundHalfUp, applyBp, type BasisPoints, type Cents } from "../engine";
+import { allocateByWeight, applyBp, type BasisPoints, type Cents } from "../engine";
 import { clientDocumentSchema, type ClientDocument } from "../document";
 
 /** One estimate line as the projection sees it: what it is, what it costs, and whether the
@@ -87,16 +87,13 @@ export function projectClientDocument(input: ClientProjectionInput): ClientProje
     return { ok: false, error: "This estimate has no priced work to show a client." };
   }
 
-  // Allocate proportional to cost, then push the rounding remainder onto the largest line so the
-  // line prices sum exactly to the total.
-  const prices = costed.map((l) => roundHalfUp((input.totalPriceCents * l.costCents) / totalCost));
-  const allocated = prices.reduce((a, b) => a + b, 0);
-  const remainder = input.totalPriceCents - allocated;
-  if (remainder !== 0) {
-    let largest = 0;
-    for (let i = 1; i < costed.length; i++) if (costed[i]!.costCents > costed[largest]!.costCents) largest = i;
-    prices[largest]! += remainder;
-  }
+  // Allocate proportional to cost, exact to the cent (remainder onto the largest-cost line), via
+  // the engine's single allocation method (constitution §3.4a) — the same split the internal
+  // per-line baseline uses, so the client and internal views never disagree on the arithmetic.
+  const prices = allocateByWeight(
+    input.totalPriceCents,
+    costed.map((l) => l.costCents),
+  );
 
   const lines = costed.map((l, i) => ({ description: l.description, priceCents: prices[i]! }));
   const subtotalCents = input.totalPriceCents;

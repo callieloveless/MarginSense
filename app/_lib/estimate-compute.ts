@@ -47,5 +47,6 @@ export function computeFromRows(
   return computeEstimate(rowsToStoredEstimate(est, lines), {
     overheadRecoveryRate: rates.overheadRecoveryRate.value,
     burdenedLaborRate: rates.burdenedLaborRate,
+    targetProfitPerHour: rates.targetProfitPerHour,
   });
 }
