@@ -1,35 +1,51 @@
 "use client";
 
 import { useActionState, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { completeOnboardingAction, type OnboardingResult } from "./actions";
-import { Label, MoneyField, MoneyInput, NumberField, PercentField } from "@/app/_components/fields";
+import {
+  Label,
+  MoneyField,
+  MoneyInput,
+  NumberField,
+  PercentField,
+  TextField,
+} from "@/app/_components/fields";
+import { SteppedProgress } from "@/app/_components/ui";
 
 /**
- * The 3-step, phone-first onboarding wizard (constitution §1, §3.2). One `<form>`; the
- * steps show/hide (fields stay mounted so every value submits together). Human dollars and
- * percentages are converted to integer cents/bp on the server (constitution §3.1) — this
- * client only collects and previews. Persisting continues to the Review screen.
+ * The guided, phone-first onboarding (constitution §1, §3.2). A welcome (with a "Skip for now")
+ * then a stepped `<form>` — steps show/hide, fields stay mounted so every value submits together.
+ * Step 1 folds in identity (business name/trade shown, service area captured for code lookups);
+ * the three profit steps follow. Human dollars/percents convert to integer cents/bp on the server
+ * (§3.1) — this client only collects and previews. Persisting continues to the Review screen.
  */
 
 type Values = Record<string, string>;
-
-const STEP_FIELDS: string[][] = [
-  ["annualOverhead"],
-  ["ownerWage", "laborBurden", "workingDaysPerYear", "billableHoursPerDay"],
-  ["incomeGoal", "profitTarget", "targetMargin", "defaultContingency"],
-];
-
-const STEP_TITLES = ["Your overhead", "The cost of an hour", "Your goals"];
-
 type OverheadItem = { name: string; amount: string };
+
+const STEP_TITLES = ["Your business", "Your overhead", "The cost of an hour", "Your goals"];
+const STEP_BLURBS = [
+  "Where you work sets which building code we look up for your jobs.",
+  "Everything it costs to keep the business running for a year — outside the jobs themselves.",
+  "The four numbers behind every profit signal in the app.",
+  "What the year should earn you, on top of covering your costs.",
+];
+const STEP_COUNT = STEP_TITLES.length;
 
 export function OnboardingWizard({
   initial,
   initialItems,
+  businessName,
+  tradeType,
 }: {
   initial?: Values | undefined;
   initialItems?: OverheadItem[] | undefined;
+  businessName?: string | undefined;
+  tradeType?: string | undefined;
 }) {
+  const router = useRouter();
+  const [started, setStarted] = useState(false);
   const [step, setStep] = useState(0);
   const [values, setValues] = useState<Values>(initial ?? {});
   const [itemize, setItemize] = useState((initialItems?.length ?? 0) > 0);
@@ -42,11 +58,10 @@ export function OnboardingWizard({
     null,
   );
 
-  const set = (name: string, value: string) =>
-    setValues((v) => ({ ...v, [name]: value }));
+  const set = (name: string, value: string) => setValues((v) => ({ ...v, [name]: value }));
 
-  // When itemizing, the annual overhead total is the sum of the items (kept reconciled;
-  // the engine only ever reads the total — constitution §6.8).
+  // When itemizing, the annual overhead total is the sum of the items (the engine reads only the
+  // total — constitution §6.8).
   const itemsSum = useMemo(
     () =>
       items.reduce((sum, it) => {
@@ -64,33 +79,84 @@ export function OnboardingWizard({
       )
     : "";
 
-  const isLast = step === STEP_FIELDS.length - 1;
+  const isLast = step === STEP_COUNT - 1;
+
+  if (!started) {
+    return (
+      <div className="space-y-6 pt-6 text-center">
+        <h1 className="text-2xl font-bold leading-tight tracking-tight text-ink">
+          Let&apos;s find out what your jobs really pay.
+        </h1>
+        <p className="text-base leading-relaxed text-ink-soft">
+          A few quick numbers. After that, every estimate tells you whether it&apos;s worth the
+          crew hours it takes.
+        </p>
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => setStarted(true)}
+            className="w-full rounded-xl bg-brand px-4 py-3.5 text-base font-semibold text-brand-ink"
+          >
+            Get started
+          </button>
+          <button
+            type="button"
+            onClick={() => router.push("/dashboard")}
+            className="w-full rounded-xl px-4 py-3 text-base font-medium text-muted"
+          >
+            Skip for now
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <form action={formAction} className="space-y-5">
-      {/* Progress — text, not color alone (constitution §6). */}
       <div>
-        <p className="text-xs font-medium text-neutral-500">
-          Step {step + 1} of {STEP_FIELDS.length}
+        <p className="text-xs font-semibold text-muted">
+          Step {step + 1} of {STEP_COUNT}
         </p>
-        <div className="mt-1 flex gap-1" aria-hidden>
-          {STEP_FIELDS.map((_, i) => (
-            <span
-              key={i}
-              className={`h-1 flex-1 rounded-full ${i <= step ? "bg-neutral-900 dark:bg-white" : "bg-neutral-200 dark:bg-neutral-800"}`}
-            />
-          ))}
+        <div className="mt-1.5">
+          <SteppedProgress step={step + 1} total={STEP_COUNT} />
         </div>
-        <h2 className="mt-3 text-lg font-semibold">{STEP_TITLES[step]}</h2>
+        <h2 className="mt-3 text-xl font-bold tracking-tight text-ink">{STEP_TITLES[step]}</h2>
+        <p className="mt-1 text-sm text-ink-soft">{STEP_BLURBS[step]}</p>
       </div>
 
-      {/* Step 1 — overhead + optional itemization. */}
-      <fieldset hidden={step !== 0} className="space-y-3">
+      {/* Step 1 — identity: business name/trade (set at sign-up) + service area. */}
+      <fieldset hidden={step !== 0} className="space-y-4">
+        {businessName || tradeType ? (
+          <div className="rounded-xl border border-line bg-surface px-4 py-3">
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted">
+              Your business
+            </div>
+            {businessName ? (
+              <div className="mt-1 font-semibold text-ink">{businessName}</div>
+            ) : null}
+            {tradeType ? <div className="text-sm text-muted">{tradeType}</div> : null}
+            <p className="mt-1.5 text-xs text-muted">
+              Set when you created your account — change it later in Settings.
+            </p>
+          </div>
+        ) : null}
+        <TextField
+          name="serviceArea"
+          label="Service area"
+          hint="Where you work (e.g. “Austin, TX”). Sets the building code we look up and biases material prices. Optional."
+          value={values.serviceArea ?? ""}
+          onChange={(val) => set("serviceArea", val)}
+          placeholder="City, state"
+        />
+      </fieldset>
+
+      {/* Step 2 — overhead + optional itemization. */}
+      <fieldset hidden={step !== 1} className="space-y-3">
         {itemize ? (
           <div className="space-y-2">
-            <p className="text-sm text-neutral-600 dark:text-neutral-400">
-              List your yearly overhead items — insurance, vehicle, phone, software, rent. The
-              total below is what the math uses.
+            <p className="text-sm text-ink-soft">
+              List your yearly overhead items — insurance, vehicle, phone, software, rent. The total
+              below is what the math uses.
             </p>
             {items.map((it, i) => (
               <div key={i} className="flex gap-2">
@@ -114,7 +180,7 @@ export function OnboardingWizard({
                   type="button"
                   onClick={() => setItems((arr) => arr.filter((_, j) => j !== i))}
                   aria-label="Remove item"
-                  className="rounded-md border border-neutral-300 px-3 text-neutral-500 dark:border-neutral-700"
+                  className="rounded-md border border-line px-3 text-muted"
                 >
                   ×
                 </button>
@@ -123,18 +189,20 @@ export function OnboardingWizard({
             <button
               type="button"
               onClick={() => setItems((arr) => [...arr, { name: "", amount: "" }])}
-              className="text-sm font-medium text-neutral-700 underline dark:text-neutral-300"
+              className="text-sm font-semibold text-brand underline"
             >
               + Add item
             </button>
-            <div className="flex items-center justify-between rounded-md bg-neutral-100 px-3 py-2 dark:bg-neutral-900">
-              <span className="text-sm text-neutral-600 dark:text-neutral-400">Annual overhead</span>
-              <span className="text-base font-semibold tabular-nums">${itemsSum.toLocaleString()}</span>
+            <div className="flex items-center justify-between rounded-xl bg-brand-soft px-3 py-2">
+              <span className="text-sm text-ink-soft">Annual overhead</span>
+              <span className="text-base font-semibold tabular-nums text-ink">
+                ${itemsSum.toLocaleString()}
+              </span>
             </div>
             <button
               type="button"
               onClick={() => setItemize(false)}
-              className="text-sm text-neutral-500 underline"
+              className="text-sm text-muted underline"
             >
               Enter a single total instead
             </button>
@@ -142,9 +210,9 @@ export function OnboardingWizard({
         ) : (
           <div className="space-y-2">
             <Label htmlFor="annualOverhead">Annual overhead</Label>
-            <p className="text-sm text-neutral-500">
-              Everything it costs to keep the business running for a year, outside the cost of
-              doing the jobs themselves.
+            <p className="text-sm text-muted">
+              Everything it costs to keep the business running for a year, outside the cost of doing
+              the jobs themselves.
             </p>
             <MoneyInput
               id="annualOverhead"
@@ -155,19 +223,18 @@ export function OnboardingWizard({
             <button
               type="button"
               onClick={() => setItemize(true)}
-              className="text-sm text-neutral-500 underline"
+              className="text-sm text-muted underline"
             >
               Itemize it instead
             </button>
           </div>
         )}
-        {/* Submitted overhead + items (hidden; kept reconciled with the UI above). */}
         <input type="hidden" name="annualOverhead" value={overheadValue} />
         <input type="hidden" name="overheadItems" value={itemsJson} />
       </fieldset>
 
-      {/* Step 2 — wage, burden, capacity. */}
-      <fieldset hidden={step !== 1} className="space-y-4">
+      {/* Step 3 — wage, burden, capacity. */}
+      <fieldset hidden={step !== 2} className="space-y-4">
         <MoneyField
           name="ownerWage"
           label="Your hourly wage on the tools"
@@ -202,8 +269,8 @@ export function OnboardingWizard({
         />
       </fieldset>
 
-      {/* Step 3 — goals. */}
-      <fieldset hidden={step !== 2} className="space-y-4">
+      {/* Step 4 — goals. */}
+      <fieldset hidden={step !== 3} className="space-y-4">
         <MoneyField
           name="incomeGoal"
           label="Income goal"
@@ -238,23 +305,21 @@ export function OnboardingWizard({
         />
       </fieldset>
 
-      {state && !state.ok ? <p className="text-sm text-red-600">{state.error}</p> : null}
+      {state && !state.ok ? <p className="text-sm text-danger-fg">{state.error}</p> : null}
 
       <div className="flex gap-2">
-        {step > 0 ? (
-          <button
-            type="button"
-            onClick={() => setStep((s) => s - 1)}
-            className="flex-1 rounded-md border border-neutral-300 px-3 py-2 text-base font-medium dark:border-neutral-700"
-          >
-            Back
-          </button>
-        ) : null}
+        <button
+          type="button"
+          onClick={() => (step > 0 ? setStep((s) => s - 1) : setStarted(false))}
+          className="flex-1 rounded-xl border border-line px-3 py-3 text-base font-semibold text-ink"
+        >
+          Back
+        </button>
         {isLast ? (
           <button
             type="submit"
             disabled={pending}
-            className="flex-1 rounded-md bg-neutral-900 px-3 py-2 text-base font-medium text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900"
+            className="flex-1 rounded-xl bg-brand px-3 py-3 text-base font-semibold text-brand-ink disabled:opacity-50"
           >
             {pending ? "Saving…" : "See my numbers"}
           </button>
@@ -262,7 +327,7 @@ export function OnboardingWizard({
           <button
             type="button"
             onClick={() => setStep((s) => s + 1)}
-            className="flex-1 rounded-md bg-neutral-900 px-3 py-2 text-base font-medium text-white dark:bg-white dark:text-neutral-900"
+            className="flex-1 rounded-xl bg-brand px-3 py-3 text-base font-semibold text-brand-ink"
           >
             Next
           </button>

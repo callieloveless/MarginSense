@@ -47,7 +47,20 @@ export async function saveSettingsFromForm(formData: FormData): Promise<SaveSett
   if (!parsed.ok) return { ok: false, error: parsed.error };
 
   const tenantDb = tenantDbForSession(session.authUserId, session.businessId);
-  await tenantDb.saveSettings(parsed.data);
+
+  // Advanced defaults (markup/tax) are only editable in full Settings, which always submits them
+  // (blank included, so it can clear them). A form that omits them entirely — the onboarding
+  // wizard — must NOT wipe the stored values, so preserve them when neither field is present.
+  let dataToSave = parsed.data;
+  if (!formData.has("defaultMarkup") && !formData.has("defaultTaxRate")) {
+    const current = await tenantDb.getSettings();
+    dataToSave = {
+      ...parsed.data,
+      defaultMarkupBp: current?.defaultMarkupBp ?? null,
+      defaultTaxRateBp: current?.defaultTaxRateBp ?? null,
+    };
+  }
+  await tenantDb.saveSettings(dataToSave);
 
   // Optional overhead itemization — replace only when the form includes the field.
   if (formData.has("overheadItems")) {

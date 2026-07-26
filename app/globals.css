@@ -26,6 +26,8 @@
   --notice-bg: #f3ecdd; /* non-threshold infra notice (NOT a signal colour) */
   --notice-fg: #6b5836;
   --notice-line: #e5d8bd;
+  --danger-fg: #b42318; /* form/validation error text — separate from the profit signal palette */
+  --ok-fg: #15803d; /* form save-success text — separate from the profit signal palette */
 
   --signal-green: #1f8a50; /* dot */
   --signal-green-bg: #e2f0e6; /* chip fill */
@@ -55,6 +57,8 @@
     --notice-bg: #241f14;
     --notice-fg: #d8c9a8;
     --notice-line: #3a3220;
+    --danger-fg: #f5a99f;
+    --ok-fg: #86efac;
 
     --signal-green: #6fd79b;
     --signal-green-bg: #16281f;
@@ -84,6 +88,8 @@
   --color-notice-bg: var(--notice-bg);
   --color-notice-fg: var(--notice-fg);
   --color-notice-line: var(--notice-line);
+  --color-danger-fg: var(--danger-fg);
+  --color-ok-fg: var(--ok-fg);
   --color-signal-green: var(--signal-green);
   --color-signal-green-bg: var(--signal-green-bg);
   --color-signal-green-fg: var(--signal-green-fg);

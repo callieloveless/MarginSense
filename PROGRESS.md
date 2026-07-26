@@ -367,6 +367,26 @@ computeEstimate reworked; client-projection delegates; targetProfitPerHour wired
 **R2a `add-per-line-pricing-signal` ✅ implemented · reviewed · archived (2026-07-25).** Build
 deferred (disk); last green build covered the import graph, fixes since are body/test-only.
 
+### Round 6 — R3 onboarding review (multi-agent workflow, verified, 2026-07-26)
+`revamp-onboarding` built; typecheck + 337 tests + build green. A 3-dimension adversarial review
+(engine-correctness · onboarding-flow · tokens/scope/a11y) raised 3 findings, verified **2**:
+- **Data-loss (medium):** the new "Replay setup" link let a configured business silently wipe its
+  advanced defaults (`defaultMarkupBp`/`defaultTaxRateBp`) — the wizard doesn't submit them and
+  `saveSettingsFromForm` upserted `null` unconditionally (unlike overhead items). Fixed: guard —
+  a form that omits both advanced fields preserves the stored values; the settings form (always
+  submits them) can still clear them.
+- **Token discipline (medium):** form error/success messages used the reserved `signal-red/green`
+  palette on non-threshold states. Fixed: added dedicated non-signal `--danger-fg`/`--ok-fg`
+  tokens and switched the wizard + settings messages to them, keeping red/yellow/green 1:1 with
+  the profit signal.
+
+**R3 `revamp-onboarding` ✅ implemented · reviewed · archived (2026-07-26).** Guided welcome +
+skip; service-area capture; the expanded grouped "Here are your numbers" (+ annual billable
+hours, monthly overhead, and the bill-rate-to-pull-its-weight = loaded + target, the per-line
+green threshold); settings restyled + Replay setup. Engine gained `monthlyOverheadCents` +
+`targetBillRatePerHour` (derived, tested). Consolidated the plan's revamp-onboarding + revamp-
+settings (shared capability + `DerivedRates` component).
+
 **R2b `add-portfolio-pulse` ✅ implemented · self-reviewed · archived (2026-07-26).** Engine
 `signalAggregate` (Σnet/Σhours + shortfall + signal, NA-safe, negative-safe) + `portfolioPulse`;
 dashboard reshaped to lead with the "This month" pulse card (aggregate profit/hr, plain verdict,

@@ -16,8 +16,8 @@ export default async function SettingsPage() {
   if (session.status !== "ready") {
     return (
       <section className="space-y-2">
-        <h1 className="text-xl font-semibold">Settings</h1>
-        <p className="rounded-md bg-neutral-100 px-3 py-2 text-sm text-neutral-500 dark:bg-neutral-900">
+        <h1 className="text-xl font-semibold text-ink">Settings</h1>
+        <p className="rounded-xl bg-surface px-3 py-2 text-sm text-muted">
           {session.status === "unconfigured"
             ? "Connect Supabase to save your business settings."
             : "Sign in to manage your business settings."}
@@ -32,14 +32,14 @@ export default async function SettingsPage() {
   if (!settings) {
     return (
       <section className="space-y-3">
-        <h1 className="text-xl font-semibold">Settings</h1>
-        <p className="text-sm text-neutral-600 dark:text-neutral-400">
-          Finish setting up your business — overhead, wage, capacity, and goals — so the
-          profit math has what it needs.
+        <h1 className="text-xl font-semibold text-ink">Settings</h1>
+        <p className="text-sm text-ink-soft">
+          Finish setting up your business — overhead, wage, capacity, and goals — so the profit math
+          has what it needs.
         </p>
         <Link
           href="/onboarding"
-          className="inline-block rounded-md bg-neutral-900 px-4 py-2 text-base font-medium text-white dark:bg-white dark:text-neutral-900"
+          className="inline-block rounded-xl bg-brand px-4 py-2 text-base font-semibold text-brand-ink"
         >
           Set up your business
         </Link>
@@ -50,10 +50,9 @@ export default async function SettingsPage() {
   return (
     <section className="space-y-6">
       <div>
-        <h1 className="text-xl font-semibold">Your numbers</h1>
-        <p className="mt-1 text-sm text-neutral-500">
-          Derived from your inputs — tap any line to see how. Recomputed every time; never
-          stored.
+        <h1 className="text-xl font-semibold text-ink">Your numbers</h1>
+        <p className="mt-1 text-sm text-muted">
+          Derived from your inputs — tap any line to see how. Recomputed every time; never stored.
         </p>
         <div className="mt-3">
           <DerivedRates settings={settings} />
@@ -61,12 +60,19 @@ export default async function SettingsPage() {
       </div>
 
       <div>
-        <h2 className="text-lg font-semibold">Edit your inputs</h2>
-        <p className="mt-1 mb-3 text-sm text-neutral-500">
+        <h2 className="text-lg font-semibold text-ink">Edit your inputs</h2>
+        <p className="mb-3 mt-1 text-sm text-muted">
           Change any value and save — your numbers above update.
         </p>
         <SettingsForm initial={rowToFormValues(settings)} />
       </div>
+
+      <Link
+        href="/onboarding"
+        className="block rounded-xl border border-line px-4 py-3 text-center text-base font-semibold text-ink"
+      >
+        Replay setup
+      </Link>
     </section>
   );
 }

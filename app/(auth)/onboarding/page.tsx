@@ -17,33 +17,28 @@ export default async function OnboardingPage() {
   if (session.status === "unconfigured") {
     return (
       <div className="space-y-3">
-        <h1 className="text-xl font-semibold">Set up your business</h1>
-        <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
-          Connect Supabase (see <code>.env.example</code>) to save your overhead, wage, and
-          goals.
+        <h1 className="text-xl font-semibold text-ink">Set up your business</h1>
+        <p className="rounded-xl border border-notice-line bg-notice-bg px-3 py-2 text-sm text-notice-fg">
+          Connect Supabase (see <code>.env.example</code>) to save your overhead, wage, and goals.
         </p>
       </div>
     );
   }
 
   const tenantDb = tenantDbForSession(session.authUserId, session.businessId);
-  const existing = await tenantDb.getSettings();
+  const [existing, business] = await Promise.all([
+    tenantDb.getSettings(),
+    tenantDb.getBusiness(),
+  ]);
   const items = existing ? await tenantDb.listOverheadItems() : [];
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold">Set up your business</h1>
-        <p className="mt-1 text-sm text-neutral-500">
-          A few numbers so MarginSense can tell you whether a job is worth the hours. You can
-          change any of these later in Settings.
-        </p>
-      </div>
-      <OnboardingWizard
-        initial={existing ? rowToFormValues(existing) : undefined}
-        initialItems={items.map((i) => ({ name: i.name, amount: dollars(i.amountCents) }))}
-      />
-    </div>
+    <OnboardingWizard
+      initial={existing ? rowToFormValues(existing) : undefined}
+      initialItems={items.map((i) => ({ name: i.name, amount: dollars(i.amountCents) }))}
+      businessName={business?.name}
+      tradeType={business?.tradeType ?? undefined}
+    />
   );
 }
 
@@ -64,5 +59,6 @@ function rowToFormValues(row: BusinessSettingsRow): Record<string, string> {
     profitTarget: dollars(row.profitTargetCents),
     targetMargin: String(row.targetMarginBp / 100),
     defaultContingency: String(row.defaultContingencyBp / 100),
+    serviceArea: row.serviceArea ?? "",
   };
 }

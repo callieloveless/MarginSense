@@ -25,10 +25,10 @@ export default async function OnboardingReviewPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-semibold">Here are your numbers</h1>
-        <p className="mt-1 text-sm text-neutral-500">
-          Computed from what you entered. Tap any line to see the inputs behind it. These update
-          whenever you change your settings — they are never stored.
+        <h1 className="text-2xl font-bold tracking-tight text-ink">Here are your numbers</h1>
+        <p className="mt-1 text-sm text-ink-soft">
+          Computed from what you entered — tap any line to see the inputs behind it. These recompute
+          whenever you change your settings; they&apos;re never stored.
         </p>
       </div>
 
@@ -37,13 +37,13 @@ export default async function OnboardingReviewPage() {
       <div className="flex gap-2 pt-2">
         <Link
           href="/onboarding"
-          className="flex-1 rounded-md border border-neutral-300 px-3 py-2 text-center text-base font-medium dark:border-neutral-700"
+          className="flex-1 rounded-xl border border-line px-3 py-3 text-center text-base font-semibold text-ink"
         >
           Edit inputs
         </Link>
         <Link
           href="/dashboard"
-          className="flex-1 rounded-md bg-neutral-900 px-3 py-2 text-center text-base font-medium text-white dark:bg-white dark:text-neutral-900"
+          className="flex-1 rounded-xl bg-brand px-3 py-3 text-center text-base font-semibold text-brand-ink"
         >
           Go to dashboard
         </Link>

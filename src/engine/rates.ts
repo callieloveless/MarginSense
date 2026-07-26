@@ -51,8 +51,16 @@ export interface BusinessRates {
   readonly breakEvenDayRate: Computed<Cents>;
   /** `annual_overhead + income_goal + profit_target` — the year's gross-profit goal. */
   readonly grossProfitGoal: Cents;
+  /** `annual_overhead / 12` — a display derivation (§3.2); the annual total stays the truth. */
+  readonly monthlyOverheadCents: Cents;
   /** `(income_goal + profit_target) / annualBillableHours` — the benchmark for the signal. */
   readonly targetProfitPerHour: Computed<CentsPerHour>;
+  /**
+   * `loadedCostPerHour + targetProfitPerHour` — the rate an hour of work must bill to clear its
+   * loaded cost and hit the target. The same threshold a per-line signal uses (§3.4a), so setup
+   * and pricing speak one language. Not-applicable when capacity is zero.
+   */
+  readonly targetBillRatePerHour: Computed<CentsPerHour>;
 }
 
 /** Annual billable minutes from the two time inputs (`working_days × billable_min/day`). */
@@ -113,6 +121,14 @@ export function deriveRates(
     "no annual billable hours",
   );
 
+  // The rate an hour must bill to clear loaded cost AND hit the target — the per-line green
+  // threshold (§3.4a). Not-applicable whenever either input is (no capacity).
+  const targetBillRatePerHour: Computed<CentsPerHour> = !loadedCostPerHour.ok
+    ? loadedCostPerHour
+    : !targetProfitPerHour.ok
+      ? targetProfitPerHour
+      : { ok: true, value: loadedCostPerHour.value + targetProfitPerHour.value };
+
   return {
     annualBillableMinutes: minutes,
     annualBillableHours: hours,
@@ -121,6 +137,8 @@ export function deriveRates(
     loadedCostPerHour,
     breakEvenDayRate,
     grossProfitGoal: grossProfitGoal(settings),
+    monthlyOverheadCents: roundHalfUp(settings.annualOverheadCents / 12),
     targetProfitPerHour,
+    targetBillRatePerHour,
   };
 }

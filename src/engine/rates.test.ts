@@ -45,6 +45,14 @@ describe("deriveRates — reference business", () => {
   it("target profit per hour = ($90k + $15k) / 1,200 = $87.50/hr", () => {
     expect(valueOr(rates.targetProfitPerHour, -1)).toBe(8_750);
   });
+
+  it("monthly overhead = $60k / 12 = $5,000.00 (display derivation)", () => {
+    expect(rates.monthlyOverheadCents).toBe(500_000);
+  });
+
+  it("target bill rate = loaded $93.75 + target $87.50 = $181.25/hr (the per-line green threshold)", () => {
+    expect(valueOr(rates.targetBillRatePerHour, -1)).toBe(18_125);
+  });
 });
 
 describe("deriveRates — zero billable hours", () => {
@@ -61,5 +69,10 @@ describe("deriveRates — zero billable hours", () => {
   it("still defines the rates that do not divide by capacity", () => {
     expect(rates.burdenedLaborRate).toBe(4_375);
     expect(rates.grossProfitGoal).toBe(16_500_000);
+    expect(rates.monthlyOverheadCents).toBe(500_000); // annual/12 needs no capacity
+  });
+
+  it("reports the target bill rate as not-applicable without capacity", () => {
+    expect(rates.targetBillRatePerHour.ok).toBe(false);
   });
 });

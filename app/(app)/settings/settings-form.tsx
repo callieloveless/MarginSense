@@ -41,8 +41,8 @@ export function SettingsForm({ initial }: { initial: Record<string, string> }) {
         placeholder="City, state"
       />
 
-      <details className="rounded-md border border-neutral-200 px-3 py-2 dark:border-neutral-800">
-        <summary className="cursor-pointer text-sm font-medium">Advanced defaults</summary>
+      <details className="rounded-xl border border-line px-3 py-2">
+        <summary className="cursor-pointer text-sm font-medium text-ink">Advanced defaults</summary>
         <div className="mt-3 space-y-4">
           <PercentField
             name="defaultMarkup"
@@ -61,13 +61,13 @@ export function SettingsForm({ initial }: { initial: Record<string, string> }) {
         </div>
       </details>
 
-      {state && !state.ok ? <p className="text-sm text-red-600">{state.error}</p> : null}
-      {state && state.ok ? <p className="text-sm text-green-700 dark:text-green-500">{state.message}</p> : null}
+      {state && !state.ok ? <p className="text-sm text-danger-fg">{state.error}</p> : null}
+      {state && state.ok ? <p className="text-sm text-ok-fg">{state.message}</p> : null}
 
       <button
         type="submit"
         disabled={pending}
-        className="w-full rounded-md bg-neutral-900 px-3 py-2 text-base font-medium text-white disabled:opacity-50 dark:bg-white dark:text-neutral-900"
+        className="w-full rounded-xl bg-brand px-3 py-3 text-base font-semibold text-brand-ink disabled:opacity-50"
       >
         {pending ? "Saving…" : "Save settings"}
       </button>
