@@ -1,7 +1,7 @@
 # Critique lenses — MarginSense
 
 derived: 2026-07-25 · from: CLAUDE.md, constitution.md, techstack.md, PROGRESS.md, relevant_notes.md, UI prototype
-updated: 2026-07-25 · round-3 proposal critique added the derived-values rule below
+updated: 2026-07-26 · R5 estimate-editor critique added the User access lens (a11y + unsaved-work + graceful degradation)
 
 ## What this is
 A phone-first business OS for trade contractors (GCs first). Load-bearing promise: for every
@@ -16,6 +16,7 @@ dirty hands and one bar of signal; trust in the numbers is the entire product.
 - **Tools suggest, users confirm**: does any AI output mutate an estimate/context without an explicit accept? Does a tool smuggle a price it shouldn't set?
 - **Client boundary**: can any internal figure (cost, margin, hours, EPH, signal) reach a client-facing artifact? Is the schema structurally incapable of it, or just polite?
 - **Job-site reality**: does the flow work one-handed at phone width with chips/defaults over typing? What happens on one bar of signal? Is heavy setup front-loaded instead of just-in-time?
+- **User access**: can the real user reach it (≤1–2 taps, discoverable), use it accessibly (real labels, aria-live on the signal, keyboard/screen-reader, colour+text), and not lose work on a phone (unsaved-draft, navigate-away guard)? Does a network-dependent feature degrade gracefully to an offline-safe path (save), never becoming the only way to get the number?
 - **Trust voice**: is a red verdict paired with a constructive next step? Is language plain (never "EPH") and encouraging, never shaming?
 - **AI honesty & liability**: sourced or dropped (no unsourced price/code)? Licensed-professional disclaimer where physical-work/code advice appears? Cost observability per run?
 - **Module boundaries**: engine pure (no framework/DB/AI imports); estimate/profit/tools separate, meeting only through engine types; UI as server-first with minimal client islands?
