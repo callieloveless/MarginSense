@@ -37,8 +37,13 @@ The engine SHALL derive business rates on an annual basis from the solo-operator
 `overheadRecoveryRate = annual_overhead / annualBillableHours`; `burdenedLaborRate =
 owner_wage × (1 + labor_burden)`; `loadedCostPerHour = overheadRecoveryRate +
 burdenedLaborRate`; `breakEvenDayRate = loadedCostPerHour × billable_hours_per_day`;
-`grossProfitGoal = annual_overhead + income_goal + profit_target`; and
-`targetProfitPerHour = (income_goal + profit_target) / annualBillableHours`.
+`grossProfitGoal = annual_overhead + income_goal + profit_target`;
+`targetProfitPerHour = (income_goal + profit_target) / annualBillableHours`;
+`monthlyOverheadCents = annual_overhead / 12` (a display derivation, §3.2); and
+`targetBillRatePerHour = loadedCostPerHour + targetProfitPerHour` — the rate an hour of work must
+bill to clear its loaded cost and hit the target (the same threshold the per-line signal uses,
+§3.4a). All are recomputed, never stored; rates that divide by billable capacity are
+not-applicable rather than a divide-by-zero.
 
 #### Scenario: Overhead recovery rate on an annual basis
 - **WHEN** annual_overhead is 6000000 cents and annualBillableHours is 1200
@@ -54,10 +59,15 @@ burdenedLaborRate`; `breakEvenDayRate = loadedCostPerHour × billable_hours_per_
   1500000 cents, and annualBillableHours is 1200
 - **THEN** grossProfitGoal is 16500000 cents and targetProfitPerHour is 8750 cents/hour
 
+#### Scenario: Monthly overhead and the target bill rate
+- **WHEN** annual_overhead is 6000000 cents, loadedCostPerHour is 9375 cents/hour, and
+  targetProfitPerHour is 8750 cents/hour
+- **THEN** monthlyOverheadCents is 500000 cents and targetBillRatePerHour is 18125 cents/hour
+
 #### Scenario: Zero billable hours does not divide by zero
 - **WHEN** annualBillableHours is 0
-- **THEN** the engine reports overheadRecoveryRate and targetProfitPerHour as
-  not-applicable rather than raising a divide-by-zero
+- **THEN** the engine reports overheadRecoveryRate, targetProfitPerHour, and targetBillRatePerHour
+  as not-applicable rather than raising a divide-by-zero
 
 ### Requirement: Line-item cost and price
 The engine SHALL compute each line item's cost by category: labor lines as
