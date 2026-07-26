@@ -12,9 +12,7 @@ import { useRouter } from "next/navigation";
 import { createProjectAction } from "../actions";
 import { SteppedProgress } from "@/app/_components/ui";
 import { Label, PercentField, TextField, inputClassName } from "@/app/_components/fields";
-
-const JOB_TYPES = ["Kitchen", "Bath", "Addition", "Deck", "Whole house", "Repair"];
-const CREW_SIZES = ["Just me", "2", "3", "4+"];
+import { CREW_SIZES, JOB_TYPES } from "@/app/_lib/job-vocab";
 
 type Values = Record<string, string>;
 

@@ -48,10 +48,19 @@ describe("documentBadge", () => {
     expect(documentBadge([{ sharedAt: at, revokedAt: null }])).toBe("Shared");
   });
 
-  it("reads 'Draft' when a document exists but none is live", () => {
+  it("reads 'Draft' when a document exists but none is shared", () => {
     expect(documentBadge([{ sharedAt: null, revokedAt: null }])).toBe("Draft");
-    // A shared-then-revoked document is no longer live → Draft, not Shared.
-    expect(documentBadge([{ sharedAt: at, revokedAt: at }])).toBe("Draft");
+  });
+
+  it("reads 'Link off' for a revoked document, matching the documents panel", () => {
+    // A shared-then-revoked document is no longer live — the canonical label is "Link off", not "Draft".
+    expect(documentBadge([{ sharedAt: at, revokedAt: at }])).toBe("Link off");
+  });
+
+  it("prefers a live shared document over a draft when a job has several", () => {
+    expect(documentBadge([{ sharedAt: null, revokedAt: null }, { sharedAt: at, revokedAt: null }])).toBe(
+      "Shared",
+    );
   });
 
   it("shows no badge when there is no document", () => {

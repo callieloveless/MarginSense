@@ -211,7 +211,13 @@ preview + the existing accept/dismiss), a **tools grid** with honest badges (pho
 **activity feed** (entries + conversation, most-recent slice → job memory), and the estimate versions.
 Purely additive presentation — **no schema, no engine, no new write path**; the entry one-liner was
 extracted to one shared helper so hub + memory can't drift; the "Active" marker is a neutral chip
-(signal palette stays for the profit signal alone); typecheck + **353 tests** (+9) + build green.
+(signal palette stays for the profit signal alone). **Code-reviewed (xhigh): 8 findings → 6 fixed**
+(restored the job's scope + status on the hub; `documentBadge` now reuses the canonical
+draft/shared/revoked derivation via shared `document-status.ts`; the estimate list is read once and
+shared with `loadJobProfit`; crew vocab centralized in `job-vocab.ts`; a `Chip` primitive dedups the
+badge markup), **1 kept as spec-required** (the pending queue lives on both hub and job-memory
+because photo-upload there auto-triggers code-finder and its result must surface in place), **1
+deferred to R10** (payload-free document reads + limited feed reads). typecheck + **355 tests** + build green.
 Original blurb: the 2-step new-job wizard: *Who & where* (client,
 address→jurisdiction, job-type chips, scope) and *Money & schedule* (target margin, contingency,
 crew, start window, an **informational** auto-run panel — only what runs today, no rules-screen

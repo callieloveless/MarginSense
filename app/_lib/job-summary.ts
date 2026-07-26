@@ -5,6 +5,8 @@
  */
 
 import type { DocumentRow, ProjectRow } from "@/src/db/schema";
+import { crewLabel } from "./job-vocab";
+import { DOCUMENT_STATUS_LABEL, documentStatus, type DocumentStatus } from "./document-status";
 
 /**
  * The job's identity sub-line — address · job type · crew · start window — built from only the
@@ -17,7 +19,7 @@ export function jobSubline(
   const parts: string[] = [];
   if (project.address) parts.push(project.address);
   if (project.jobType) parts.push(project.jobType);
-  if (project.crewSize) parts.push(project.crewSize === "Just me" ? "Just me" : `${project.crewSize} crew`);
+  if (project.crewSize) parts.push(crewLabel(project.crewSize));
   if (project.startWindow) parts.push(project.startWindow);
   return parts.length > 0 ? parts.join(" · ") : null;
 }
@@ -29,17 +31,21 @@ export function photoBadge(storageReady: boolean, photoCount: number): string | 
   return photoCount === 1 ? "1 photo" : `${photoCount} photos`;
 }
 
-export type DocBadge = "Shared" | "Draft" | null;
-
 /**
- * The Client-document tile's badge, derived from the job's documents: "Shared" when a live shared
- * document exists (shared and not revoked), "Draft" when a document exists but none is live, and
- * null when there is no document (no badge — the tile still opens to generate one).
+ * The Client-document tile's badge — the most salient document status for the job, using the same
+ * derivation and labels as the documents panel (so a revoked document reads "Link off" here too):
+ * a live shared document wins, else a draft, else the share is off. No document → null (the tile
+ * still opens to generate one).
  */
 export function documentBadge(
   documents: readonly Pick<DocumentRow, "sharedAt" | "revokedAt">[],
-): DocBadge {
+): string | null {
   if (documents.length === 0) return null;
-  const live = documents.some((d) => d.sharedAt != null && d.revokedAt == null);
-  return live ? "Shared" : "Draft";
+  const statuses = documents.map(documentStatus);
+  const salient: DocumentStatus = statuses.includes("shared")
+    ? "shared"
+    : statuses.includes("draft")
+      ? "draft"
+      : "revoked";
+  return DOCUMENT_STATUS_LABEL[salient];
 }

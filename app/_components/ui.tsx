@@ -19,6 +19,22 @@ export function Card({
   );
 }
 
+/** A small pill for a short status or count, always carrying text (never colour alone, §6). The
+ * default brand tint reads as a live/positive marker; `muted` is for a neutral state (e.g. archived).
+ * Uses the brand palette, distinct from the reserved red/yellow/green signal (that's SignalBadge). */
+export function Chip({
+  children,
+  tone = "brand",
+}: {
+  children: ReactNode;
+  tone?: "brand" | "muted";
+}) {
+  const cls = tone === "muted" ? "bg-line text-ink-soft" : "bg-brand-soft text-ink";
+  return (
+    <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>{children}</span>
+  );
+}
+
 /** A titled section heading with an optional right-aligned action/aside. */
 export function SectionHeader({ title, action }: { title: string; action?: ReactNode }) {
   return (

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { formatCents } from "@/src/engine";
 import { type ClientDocument } from "@/src/document";
 import { inputClassName } from "@/app/_components/fields";
+import { DOCUMENT_STATUS_LABEL, type DocumentStatus } from "@/app/_lib/document-status";
 import {
   generateDocumentAction,
   revokeDocumentAction,
@@ -11,8 +12,6 @@ import {
   updateDraftAction,
   type DocumentActionResult,
 } from "./actions";
-
-export type DocumentStatus = "draft" | "shared" | "revoked";
 
 /** A document as the owner panel needs it: status, the client-safe payload to preview, and (when
  * live) the share token so the link can be copied. */
@@ -101,8 +100,11 @@ function StatusBadge({ status }: { status: DocumentStatus }) {
       : status === "revoked"
         ? "bg-neutral-200 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400"
         : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200";
-  const label = status === "shared" ? "Shared" : status === "revoked" ? "Link off" : "Draft";
-  return <span className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium ${tone}`}>{label}</span>;
+  return (
+    <span className={`inline-block rounded px-1.5 py-0.5 text-xs font-medium ${tone}`}>
+      {DOCUMENT_STATUS_LABEL[status]}
+    </span>
+  );
 }
 
 function DocumentRow({ projectId, doc }: { projectId: string; doc: DocumentSummary }) {

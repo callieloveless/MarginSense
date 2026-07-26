@@ -4,6 +4,7 @@ import { getServerSession, tenantDbForSession } from "@/src/db/session";
 import { resolveModelPort } from "@/src/ai";
 import { activeVersion } from "@/src/estimate";
 import { parseClientDocument } from "@/src/document";
+import { documentStatus } from "@/app/_lib/document-status";
 import { DocumentsPanel, type DocumentSummary } from "./documents-panel";
 
 /**
@@ -48,7 +49,7 @@ export default async function ProjectDocumentsPage({
     return {
       id: r.id,
       title: r.title,
-      status: r.revokedAt ? "revoked" : r.sharedAt ? "shared" : "draft",
+      status: documentStatus(r),
       shareToken: r.sharedAt && !r.revokedAt ? r.shareToken : null,
       document: parsed.ok ? parsed.value : null,
     };

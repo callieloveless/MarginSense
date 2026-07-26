@@ -24,13 +24,19 @@ export interface JobProfit {
 }
 
 /** Load the active estimate's profit state, or null when there's no active estimate or no
- * settings yet (the caller shows a "no active estimate" state). */
-export async function loadJobProfit(tenantDb: TenantDb, projectId: string): Promise<JobProfit | null> {
-  const [settings, estimates] = await Promise.all([
+ * settings yet (the caller shows a "no active estimate" state). A caller that already needs the
+ * estimate list (e.g. the hub, which also renders the versions) may pass it — or the promise for it
+ * — so the list is read once and shared rather than fetched twice. */
+export async function loadJobProfit(
+  tenantDb: TenantDb,
+  projectId: string,
+  estimates?: EstimateRow[] | Promise<EstimateRow[]>,
+): Promise<JobProfit | null> {
+  const [settings, list] = await Promise.all([
     tenantDb.getSettings(),
-    tenantDb.listEstimates(projectId),
+    estimates ?? tenantDb.listEstimates(projectId),
   ]);
-  const active = activeVersion(estimates);
+  const active = activeVersion(list);
   if (!settings || !active) return null;
 
   const rates = businessRates(settings);

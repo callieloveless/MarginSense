@@ -9,7 +9,7 @@ import Link from "next/link";
 import { authorFromRow, authorLabel } from "@/src/context";
 import type { ContextEntryRow, ConversationMessageRow } from "@/src/db/schema";
 import { describeEntry, KIND_LABEL } from "@/app/_lib/context-entry-summary";
-import { SectionHeader } from "@/app/_components/ui";
+import { Chip, SectionHeader } from "@/app/_components/ui";
 
 /** One tool tile — opens an existing surface, with an honest badge only when one is passed. */
 function ToolTile({
@@ -27,11 +27,7 @@ function ToolTile({
     <Link href={href} className="flex flex-col rounded-2xl border border-line bg-surface p-4">
       <span className="flex items-start justify-between gap-2">
         <span className="font-semibold text-ink">{title}</span>
-        {badge ? (
-          <span className="shrink-0 rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-ink">
-            {badge}
-          </span>
-        ) : null}
+        {badge ? <Chip>{badge}</Chip> : null}
       </span>
       <span className="mt-1 text-sm text-muted">{hint}</span>
     </Link>

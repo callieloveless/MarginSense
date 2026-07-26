@@ -5,7 +5,7 @@ import { loadJobProfit, previewForSuggestion } from "@/app/_lib/job-profit";
 import { documentBadge, jobSubline, photoBadge } from "@/app/_lib/job-summary";
 import { ProfitHeader } from "@/app/_components/profit-header";
 import { SuggestionCard } from "@/app/_components/suggestion-card";
-import { SectionHeader } from "@/app/_components/ui";
+import { Chip, SectionHeader } from "@/app/_components/ui";
 import { ActivityFeed, ToolsGrid } from "./hub-sections";
 import { NewEstimateForm } from "./new-estimate";
 import { acceptSuggestionAction, dismissSuggestionAction } from "./context/actions";
@@ -46,11 +46,13 @@ export default async function ProjectHubPage({
   if (!project) notFound();
 
   // One pass through the bound handle — the hero, the queue, the tools badges, the feed, and the
-  // versions all read here so a single job open is one round of reads.
+  // versions all read here so a single job open is one round of reads. The estimate list is read
+  // once (estimatesP) and shared with loadJobProfit, which needs the active version.
   const storageReady = tenantDb.hasPhotoStorage;
+  const estimatesP = tenantDb.listEstimates(id);
   const [job, estimates, pending, entries, messages, photos, documents] = await Promise.all([
-    loadJobProfit(tenantDb, id),
-    tenantDb.listEstimates(id),
+    loadJobProfit(tenantDb, id, estimatesP),
+    estimatesP,
     tenantDb.listPendingSuggestions(id),
     tenantDb.listContextEntries(id),
     tenantDb.listMessages(id),
@@ -59,14 +61,20 @@ export default async function ProjectHubPage({
   ]);
 
   const subline = jobSubline(project);
+  const statusLabel =
+    project.status === "active" ? null : project.status.charAt(0).toUpperCase() + project.status.slice(1);
 
   return (
     <section>
       <Link href="/projects" className="text-sm text-muted">
         ← Jobs
       </Link>
-      <h1 className="mt-2 text-xl font-semibold text-ink">{project.clientName}</h1>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <h1 className="text-xl font-semibold text-ink">{project.clientName}</h1>
+        {statusLabel ? <Chip tone="muted">{statusLabel}</Chip> : null}
+      </div>
       {subline ? <p className="mt-1 text-sm text-muted">{subline}</p> : null}
+      {project.scope ? <p className="mt-2 text-sm text-ink-soft">{project.scope}</p> : null}
 
       {/* Profit-per-hour hero — the signal the whole product turns on; absent-safe with no estimate. */}
       <div className="mt-4">
@@ -128,13 +136,7 @@ export default async function ProjectHubPage({
                   className="flex items-center justify-between gap-3"
                 >
                   <span className="font-medium text-ink">{e.versionLabel}</span>
-                  {e.isActive ? (
-                    <span className="shrink-0 rounded-full bg-brand-soft px-2 py-0.5 text-xs font-medium text-ink">
-                      Active
-                    </span>
-                  ) : (
-                    <span className="text-xs text-muted">draft</span>
-                  )}
+                  {e.isActive ? <Chip>Active</Chip> : <span className="text-xs text-muted">draft</span>}
                 </Link>
               </li>
             ))
