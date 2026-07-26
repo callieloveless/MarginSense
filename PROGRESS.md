@@ -198,7 +198,12 @@ numbers" playback (exists) + "Replay setup" (automation entry → **L2**, letter
 - **Constitution.** No amendment (reconcile, don't diverge): keep §3.2 inputs, derive target/hr.
 
 ### R4 — Project lifecycle: setup wizard + rich job hub
-`revamp-project-setup` (📝 proposed) — the 2-step new-job wizard: *Who & where* (client,
+**`revamp-project-setup` ✅ implemented · self-reviewed · archived (2026-07-26).** 2-step guided
+new-job wizard (`/projects/new`) + nullable project columns (migration `0010`, **applied live**)
++ the estimate seed-precedence (project default → business, seed-not-link, unit-tested). typecheck
++ **344 tests** (+7) + build green; in-memory isolation proven (live `test:rls` proof still
+deferred — `DATABASE_URL` not in the vitest env; migration adds no new policy). `revamp-project-hub`
+(the rich hub) is the next proposal. Original blurb: the 2-step new-job wizard: *Who & where* (client,
 address→jurisdiction, job-type chips, scope) and *Money & schedule* (target margin, contingency,
 crew, start window, an **informational** auto-run panel — only what runs today, no rules-screen
 link). Adds nullable `projects.job_type`, `crew_size`, `start_window`, **`default_target_margin_bp`,

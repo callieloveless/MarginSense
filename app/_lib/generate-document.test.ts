@@ -33,6 +33,11 @@ const project: ProjectRow = {
   address: "12 Oak St",
   scope: null,
   status: "active",
+  jobType: null,
+  crewSize: null,
+  startWindow: null,
+  defaultTargetMarginBp: null,
+  defaultContingencyBp: null,
   createdAt: NOW,
   updatedAt: NOW,
 };

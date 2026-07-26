@@ -23,6 +23,11 @@ function seedRow(over: Partial<ProjectRow> & Pick<ProjectRow, "id" | "businessId
     address: null,
     scope: null,
     status: "active",
+    jobType: null,
+    crewSize: null,
+    startWindow: null,
+    defaultTargetMarginBp: null,
+    defaultContingencyBp: null,
     createdAt: new Date(0),
     updatedAt: new Date(0),
     ...over,
@@ -76,6 +81,43 @@ describe("tenant isolation — projects", () => {
     expect(created.businessId).toBe(BUSINESS_A);
     const b = createTenantDb(BUSINESS_B, { projects: backend });
     expect(await b.listProjects()).toEqual([]);
+  });
+
+  it("persists the per-job fields on create, still tenant-isolated", async () => {
+    const backend = createMemoryProjectBackend();
+    const a = createTenantDb(BUSINESS_A, { projects: backend });
+
+    const created = await a.createProject({
+      clientName: "Kitchen job",
+      jobType: "Kitchen",
+      crewSize: "2",
+      startWindow: "Week of Oct 13",
+      defaultTargetMarginBp: 3000,
+      defaultContingencyBp: 500,
+    });
+
+    expect(created.businessId).toBe(BUSINESS_A);
+    expect(created.jobType).toBe("Kitchen");
+    expect(created.crewSize).toBe("2");
+    expect(created.startWindow).toBe("Week of Oct 13");
+    expect(created.defaultTargetMarginBp).toBe(3000);
+    expect(created.defaultContingencyBp).toBe(500);
+
+    // B cannot see A's project or its fields.
+    const b = createTenantDb(BUSINESS_B, { projects: backend });
+    expect(await b.getProject(created.id)).toBeNull();
+    expect(await b.listProjects()).toEqual([]);
+  });
+
+  it("defaults the per-job fields to null when omitted", async () => {
+    const backend = createMemoryProjectBackend();
+    const a = createTenantDb(BUSINESS_A, { projects: backend });
+    const created = await a.createProject({ clientName: "Minimal" });
+    expect(created.jobType).toBeNull();
+    expect(created.crewSize).toBeNull();
+    expect(created.startWindow).toBeNull();
+    expect(created.defaultTargetMarginBp).toBeNull();
+    expect(created.defaultContingencyBp).toBeNull();
   });
 
   it("refuses to build a handle without a business id", () => {

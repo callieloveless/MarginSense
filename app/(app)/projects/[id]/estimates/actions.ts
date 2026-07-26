@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getServerSession, tenantDbForSession } from "@/src/db/session";
 import { dollarsToCents, parseLineItems, percentToBp } from "@/src/db/validation";
+import { seedEstimatePricing } from "@/app/_lib/estimate-seed";
 
 export type EstimateActionResult = { ok: true; message?: string } | { ok: false; error: string };
 
@@ -33,14 +34,21 @@ export async function createEstimateAction(
   }
 
   const versionLabel = field(formData, "versionLabel").trim() || "v1";
-  const existing = await tenantDb.listEstimates(projectId);
+  const [existing, project] = await Promise.all([
+    tenantDb.listEstimates(projectId),
+    tenantDb.getProject(projectId),
+  ]);
   const isFirst = existing.length === 0;
+
+  // Seed margin/contingency from the project's per-job defaults when set, else the business
+  // default (revamp-project-setup). A seed, not a link — copied onto the estimate now.
+  const seed = seedEstimatePricing(project, settings);
 
   const estimate = await tenantDb.createEstimate({
     projectId,
     versionLabel,
-    targetMarginBp: settings.targetMarginBp,
-    contingencyBp: settings.defaultContingencyBp,
+    targetMarginBp: seed.targetMarginBp,
+    contingencyBp: seed.contingencyBp,
     isActive: isFirst, // first version is the active one
   });
 

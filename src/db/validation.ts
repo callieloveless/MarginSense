@@ -8,7 +8,7 @@
 
 import { z } from "zod";
 import { LINE_CATEGORIES, PROJECT_STATUSES } from "./schema";
-import type { LineItemInput, OverheadItemInput, SettingsInput } from "./tenant";
+import type { LineItemInput, OverheadItemInput, ProjectInput, SettingsInput } from "./tenant";
 
 /** Input for creating a business (the minimal create-business step). */
 export const createBusinessSchema = z.object({
@@ -181,6 +181,62 @@ function optionalBp(input: string | undefined, max: number): number | null | typ
 
 function err(message: string): ParseResult<never> {
   return { ok: false, error: message };
+}
+
+/** The raw new-job wizard form as submitted (all strings; only client name is required). */
+export const projectFormRawSchema = z.object({
+  clientName: z.string(),
+  address: z.string().optional(),
+  scope: z.string().optional(),
+  jobType: z.string().optional(),
+  crewSize: z.string().optional(),
+  startWindow: z.string().optional(),
+  targetMargin: z.string().optional(),
+  contingency: z.string().optional(),
+});
+
+/** Trim, empty → null, cap length. */
+function optionalText(v: string | undefined, max: number): string | null {
+  const t = (v ?? "").trim();
+  return t === "" ? null : t.slice(0, max);
+}
+
+/**
+ * Parse the two-step new-job wizard into {@link ProjectInput} (revamp-project-setup). Client
+ * name is required; the rest optional. Target margin and contingency are converted to integer
+ * basis points here at the boundary (empty → null → the estimate seeds from the business default).
+ */
+export function parseProjectForm(raw: unknown): ParseResult<ProjectInput> {
+  const shape = projectFormRawSchema.safeParse(raw);
+  if (!shape.success) return err("Please fill in the client name.");
+  const r = shape.data;
+
+  const clientName = r.clientName.trim();
+  if (clientName === "") return err("Client name is required.");
+  if (clientName.length > 200) return err("Client name must be 200 characters or fewer.");
+
+  const defaultTargetMarginBp = optionalBp(r.targetMargin, 9_999);
+  if (defaultTargetMarginBp === INVALID) {
+    return err("Target margin must be a percentage between 0 and 99.99.");
+  }
+  const defaultContingencyBp = optionalBp(r.contingency, 10_000);
+  if (defaultContingencyBp === INVALID) {
+    return err("Contingency must be a percentage between 0 and 100.");
+  }
+
+  return {
+    ok: true,
+    data: {
+      clientName,
+      address: optionalText(r.address, 500),
+      scope: optionalText(r.scope, 2000),
+      jobType: optionalText(r.jobType, 80),
+      crewSize: optionalText(r.crewSize, 40),
+      startWindow: optionalText(r.startWindow, 120),
+      defaultTargetMarginBp,
+      defaultContingencyBp,
+    },
+  };
 }
 
 /** One raw overhead item (name + dollar amount + optional category) as submitted. */

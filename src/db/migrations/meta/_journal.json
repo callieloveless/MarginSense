@@ -71,6 +71,13 @@
       "when": 1784995968406,
       "tag": "0009_powerful_fixer",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1785099765502,
+      "tag": "0010_soft_ben_parker",
+      "breakpoints": true
     }
   ]
 }

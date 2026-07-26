@@ -78,6 +78,13 @@ export interface ProjectInput {
   clientName: string;
   address?: string | null | undefined;
   scope?: string | null | undefined;
+  jobType?: string | null | undefined;
+  crewSize?: string | null | undefined;
+  startWindow?: string | null | undefined;
+  /** Default target margin (bp) that seeds a new estimate; null → the business default. */
+  defaultTargetMarginBp?: number | null | undefined;
+  /** Default contingency (bp) that seeds a new estimate; null → the business default. */
+  defaultContingencyBp?: number | null | undefined;
 }
 
 /**
@@ -532,6 +539,11 @@ export class TenantDb {
       clientName: input.clientName,
       address: input.address ?? null,
       scope: input.scope ?? null,
+      jobType: input.jobType ?? null,
+      crewSize: input.crewSize ?? null,
+      startWindow: input.startWindow ?? null,
+      defaultTargetMarginBp: input.defaultTargetMarginBp ?? null,
+      defaultContingencyBp: input.defaultContingencyBp ?? null,
     });
   }
 
@@ -1044,6 +1056,11 @@ export function createMemoryProjectBackend(
         address: row.address ?? null,
         scope: row.scope ?? null,
         status: row.status ?? "active",
+        jobType: row.jobType ?? null,
+        crewSize: row.crewSize ?? null,
+        startWindow: row.startWindow ?? null,
+        defaultTargetMarginBp: row.defaultTargetMarginBp ?? null,
+        defaultContingencyBp: row.defaultContingencyBp ?? null,
         createdAt: now,
         updatedAt: now,
       };

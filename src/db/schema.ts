@@ -70,6 +70,20 @@ export const projects = pgTable("projects", {
   /** Short scope note; the detailed costing lives in estimates (a later change). */
   scope: text("scope"),
   status: projectStatus("status").notNull().default("active"),
+  /** Job type (e.g. "Kitchen", "Bath"). Free text, chip-selected in setup; nullable. Data-driven
+   * so new trades need no migration (revamp-project-setup). */
+  jobType: text("job_type"),
+  /** Crew on this job (e.g. "Just me", "2", "4+"). Free text, chip-selected; nullable. */
+  crewSize: text("crew_size"),
+  /** When the job starts (e.g. "Week of Oct 13"). Free text; nullable. */
+  startWindow: text("start_window"),
+  /** Default target margin (bp) that SEEDS a new estimate's `target_margin_bp` at creation — a
+   * seed, not a link (editing it never mutates an existing estimate). Nullable → fall back to the
+   * business default (revamp-project-setup). */
+  defaultTargetMarginBp: integer("default_target_margin_bp"),
+  /** Default contingency (bp) that seeds a new estimate's `contingency_bp`; nullable → business
+   * default. */
+  defaultContingencyBp: integer("default_contingency_bp"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

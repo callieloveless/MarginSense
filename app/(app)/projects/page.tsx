@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { getServerSession, tenantDbForSession } from "@/src/db/session";
 import type { ProjectRow } from "@/src/db/schema";
-import { NewProjectForm } from "./new-project-form";
 
 /**
  * Projects list (constitution §2 outer layer). Lists this business's jobs through the
@@ -25,9 +24,12 @@ export default async function ProjectsPage() {
         One job per client — the home for its estimates and shared context.
       </p>
 
-      <div className="mt-4">
-        <NewProjectForm disabled={!live} />
-      </div>
+      <Link
+        href="/projects/new"
+        className="mt-4 block rounded-xl bg-brand px-4 py-3 text-center text-base font-semibold text-brand-ink"
+      >
+        + New job
+      </Link>
 
       <ul className="mt-6 divide-y divide-neutral-200 dark:divide-neutral-800">
         {projects.length === 0 ? (
