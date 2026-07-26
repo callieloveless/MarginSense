@@ -36,19 +36,28 @@ revamp stands on — **the revamp reshapes and extends these, it does not rebuil
 
 ### UI Revamp — replaces the old "#11 hardening" ⏳ planned (this document)
 
+**Core revamp — each main tool is its own feature:**
+
 | Phase | Name | OpenSpec change(s) | Financial model / schema |
 |---|---|---|---|
 | **R1** | App shell, navigation & design system | `revamp-app-shell` | — |
 | **R2** | Estimate pricing & signal core + dashboard home | `add-per-line-pricing-signal`, `add-portfolio-pulse` | **§3 amendment** (per-line pricing) |
-| **R3** | Onboarding + settings reshape | `revamp-onboarding`, `revamp-settings` | — |
+| **R3** | Onboarding + settings reshape | `revamp-onboarding` | — |
 | **R4** | Project lifecycle: setup wizard + rich job hub | `revamp-project-setup`, `revamp-project-hub` | schema (project fields) |
 | **R5** | Estimate editor: per-line chips + traceable roll-up | `revamp-estimate-editor` | — (consumes R2) |
-| **R6** | Tools: Photo Advisor · Material Finder · Code & Permits | `revamp-photo-advisor`, `revamp-material-finder`, `add-code-permits` | schema (permits) |
-| **R7** | Client experience: branding · tiers · templates/tones · send | `add-business-branding`, `add-document-tiers`, `revamp-client-estimate-doc` | schema (branding, doc payload) |
-| **R8** | One memory: activity feed + client answers | `add-activity-feed`, `add-client-answers` | schema (Q&A) |
-| **R9** | Composition: auto-run rules + the chain | `add-autorun-rules`, `add-tool-chain` | schema (rules, provenance) |
+| **R6** | **Photo Advisor** — gallery/captions, per-photo saved read, confirm/dismiss | `revamp-photo-advisor` | — |
+| **R7** | **Material Finder** — running per-job list, search, add-as-suggestion | `revamp-material-finder` | — |
+| **R8** | **Code & Permits** — code finder reshape + permits/inspections | `add-code-permits` | schema (permits) |
+| **R9** | **Client document** — branding · tiers · templates/tones · send | `add-business-branding`, `add-document-tiers`, `revamp-client-estimate-doc` | schema (branding, doc payload) |
 | **R10** | Hardening & launch | `harden-and-launch` | — |
-| #12 | Tool-graph editor (meta) | — | 🌟 north-star, after the revamp |
+
+**Later features** — valuable, but parked *after* the core revamp (not sequenced into R1–R10):
+
+| Feature | Name | OpenSpec change(s) | Schema |
+|---|---|---|---|
+| **L1** | One memory: activity-feed deepening + **client answers** (Q&A log) | `add-activity-feed`, `add-client-answers` | schema (Q&A) |
+| **L2** | Composition: **auto-run rules** + **"the chain"** (provenance/replay) | `add-autorun-rules`, `add-tool-chain` | schema (rules, provenance) |
+| **L3** | Tool-graph editor (meta) — the visual node/edge canvas | — | 🌟 north-star |
 
 Legend: ✅ done · 🔨 in progress · 📝 proposal written, not started · ⏳ planned · 🌟 north-star, later
 
@@ -183,21 +192,25 @@ chip + note. Draft/no-estimate jobs render calmly as `Computed` NA.
 `revamp-onboarding` — welcome + "Skip for now", the guided profit setup (already **Overhead →
 Time & pay → Goals** in code; keep *all* goal inputs so target/hr stays derived) with friendlier
 copy/progress + the "Here are your numbers" review, and fold **identity** (name/trade/service
-area) into the flow. **Onboarding stays short** — branding/logo is *not* here (moved to R7,
-prompted at first client doc). `revamp-settings` — the "Your numbers" playback (exists) +
-entries for automation (lands R9) and letterhead (lands R7) + "Replay setup".
+area) into the flow. **Onboarding stays short** — branding/logo is *not* here (moved to **R9**,
+prompted at first client doc). `revamp-settings` (folded into `revamp-onboarding`) — the "Your
+numbers" playback (exists) + "Replay setup" (automation entry → **L2**, letterhead → **R9**).
 - **Constitution.** No amendment (reconcile, don't diverge): keep §3.2 inputs, derive target/hr.
 
 ### R4 — Project lifecycle: setup wizard + rich job hub
-`revamp-project-setup` — the 2-step new-job wizard: *Who & where* (client, address→jurisdiction,
-job-type chips, scope) and *Money & schedule* (target margin, contingency, crew, start window, an
-auto-run panel → rules). Adds `projects.job_type`, `crew_size?`, `start_window?`; **seeds the
-first estimate's** `target_margin_bp`/`contingency_bp` (single source of truth on the estimate,
-not duplicated on the project). `revamp-project-hub` — replaces the thin 3-link page with the
-prototype hub: profit-per-hour hero (→ estimate), tools grid with live badges, a **"Waiting on
-you"** queue (reusing the built before→after preview), a chain teaser, and the **job activity
-feed** (real events only). Migration + isolation test.
-- **Constitution.** Per-job margin/contingency is consistent with §3.4 (override allowed).
+`revamp-project-setup` (📝 proposed) — the 2-step new-job wizard: *Who & where* (client,
+address→jurisdiction, job-type chips, scope) and *Money & schedule* (target margin, contingency,
+crew, start window, an **informational** auto-run panel — only what runs today, no rules-screen
+link). Adds nullable `projects.job_type`, `crew_size`, `start_window`, **`default_target_margin_bp`,
+`default_contingency_bp`**; those margin/contingency defaults **seed a new estimate** when it's
+created (a **seed, not a link** — editing a default never mutates an existing estimate; falls back
+to the business default). `revamp-project-hub` — replaces the thin 3-link page with the prototype
+hub: profit-per-hour hero (→ estimate), tools grid with live badges (only for what exists), a
+**"Waiting on you"** queue (reusing the built before→after preview), and the **basic job activity
+feed** (real events only). Migration + isolation test. *(The chain teaser + auto-run rules are
+**L2**; client-answers deepening is **L1** — not R4.)*
+- **Constitution.** Per-job margin/contingency is consistent with §3.4 (a default that seeds; the
+  estimate stays the source of truth for its own value).
 
 ### R5 — Estimate editor: per-line chips + traceable roll-up
 Wire R2 into the editor: "v_ · Active" + the "private, never the client's" note; the profit hero
@@ -207,18 +220,30 @@ under target"); calm treatment (surface the worst draggers, quiet the rest); pri
 summary; "Turn into the client estimate." Non-labor lines legibly show *no* per-hour signal.
 - **Change:** `revamp-estimate-editor`. **Constitution.** Traceability extends to per-line inputs.
 
-### R6 — Tools: Photo Advisor · Material Finder · Code & Permits (3 independent changes)
-`revamp-photo-advisor` — gallery/camera import, captions, per-photo **tags**, the analyzing state,
-the photo-detail **single saved-recommendation reveal** + confirm/dismiss + standing disclaimer.
-`revamp-material-finder` — a **running per-job material list** ("On this job", from `material`
-entries) distinct from estimate suggestions; results with "Suggest for this job"; subtotal;
-"View estimate" (no double-write when also adding to an estimate). `add-code-permits` — Code
-Finder reshape (per-code "priced-in / not in estimate / not triggered" status, cited sources,
-chips) **+ a `project_permits` table** (name, dates, status, fee; total) — permits scoped to
-what feeds the estimate + a simple status, **not** a scheduler.
-- **Constitution.** Tools suggest → user confirms; Photo Advisor never prices; disclaimers (§5,§7).
+### R6 — Photo Advisor (its own feature)
+`revamp-photo-advisor` — gallery/camera import, captions, per-photo **tags** (to review / reviewed /
+no action), the analyzing state, and the photo-detail **single saved-recommendation reveal** +
+confirm/dismiss + standing disclaimer. Reshape of the built 8a/8b to the prototype's per-photo
+saved-read model.
+- **Constitution.** Tools suggest → user confirms; Photo Advisor never prices; disclaimer (§5,§7).
 
-### R7 — Client experience: branding · tiers · templates/tones · send (3 changes)
+### R7 — Material Finder (its own feature)
+`revamp-material-finder` — a **running per-job material list** ("On this job", from `material`
+context entries) distinct from estimate suggestions; results with "Suggest for this job"; a
+subtotal; "View estimate" (no double-write when also adding to an estimate). Reshape of 7b to the
+list-first model.
+- **Constitution.** Tools suggest → user confirms; an option without a `sourceUrl` never becomes a
+  suggestion (§7).
+
+### R8 — Code & Permits (its own feature)
+`add-code-permits` — Code Finder reshape (per-code "priced-in / not in estimate / not triggered"
+status, cited sources, suggested chips) **+ a `project_permits` table** (name, dates, status, fee;
+total) — permits scoped to what feeds the estimate + a simple status, **not** a scheduler.
+- **Schema.** New business-owned `project_permits` table: non-null `business_id` + RLS + isolation
+  test in the same migration. **Constitution.** Codes framed as job cost/hours; disclaimer (§5,§7);
+  never authoritative.
+
+### R9 — Client document: branding · tiers · templates/tones · send
 `add-business-branding` — the **just-in-time** letterhead setup (logo in a private Storage bucket
 mirroring `job-photos`: tenant-prefixed key, object policy, signed URLs; + license/phone/email/
 address/trade-shown/default-terms as 1:1 settings columns), prompted at the first client doc and
@@ -232,34 +257,46 @@ Estimate Doc" card** on the Tools page.
 - **Constitution.** Document stays prices-only (§5) — tiers don't weaken `.strict()`; owner reviews
   the draft before share (the free-text guard).
 
-### R8 — One memory: activity feed + client answers (2 changes)
-`add-activity-feed` (thin, only if R4 didn't fully compose it) — the calm timeline every tool
-posts into (the single conversation already exists). `add-client-answers` — a searchable Q&A log
-(`client_qa` table: question, answer?, status answered/waiting, impact?, timestamps) so "a decision
-never lives in your texts", captured low-friction from the conversation. Migration + isolation test.
-- **Constitution.** Client answers are shared-context job facts (§4); a preference that locks a
-  line is still committed only by the user.
+### R10 — Hardening & launch
+Money-critical e2e (onboarding → estimate → per-line + portfolio signal → accept a suggestion →
+generate/share the client doc), tenant-isolation audit **extended to every new table** via
+`test:rls`, accessibility pass (color+text, `aria-current`, ≥44px targets), AI cost-observability
+review, Vercel + production Supabase, and the remaining deferred live-infra / live-AI proofs walked
+end-to-end.
+- **Change:** `harden-and-launch`.
 
-### R9 — Composition: auto-run rules + the chain (2 changes)
+---
+
+## Later features — parked after the core revamp
+
+Real and valuable, but deliberately **outside** the R1–R10 core: they layer onto the finished
+tools and can be picked up once the core ships. Each still runs the full OpenSpec pipeline. Moved
+here (from the old R8/R9) so the core revamp stays a tight, tool-by-tool line.
+
+### L1 — One memory: activity-feed deepening + client answers (Q&A)
+`add-activity-feed` — the calm per-job timeline every tool posts into (the single conversation +
+typed entries already exist; **R4's hub shows the basic feed** — this deepens it). `add-client-answers`
+— a searchable Q&A log (`client_qa` table: question, answer?, status answered/waiting, impact?,
+timestamps) so "a decision never lives in your texts", captured low-friction from the conversation.
+Migration + isolation test.
+- **Constitution.** Client answers are shared-context job facts (§4); a preference that locks a line
+  is still committed only by the user.
+
+### L2 — Composition: auto-run rules + "the chain"
 `add-autorun-rules` — a persisted `autorun_rules` config (per business/project) with toggles +
 guardrail copy; **each rule mapped to its real mechanism** — trigger / compose-edge / dashboard
-behavior / pre-send validation — and only genuinely-optional automations get a toggle (e.g.
-"profit/hr under target → flag red" is inherent, "line has no hours → warn" is a validation). The
+behavior / pre-send validation — and only genuinely-optional automations get a toggle. The
 `photo-advisor → code-finder` edge is **already live** — this *governs* composition, doesn't switch
 it on. `add-tool-chain` — a **minimal** provenance link (`tool_runs.triggered_by_run_id` + the
 existing source/`toolRunId` links) to reconstruct + render "the chain" and each step's figure.
-- **Constitution.** Unchanged guarantees: read-only snapshot in, **pending** suggestions out; the
-  chain **stops after 3 auto steps** (`MAX_TOOL_STEPS`); nothing writes/spends without a Confirm.
-- **Risk (decided ④):** synchronous fan-out with the analyzing-state + 3-step cap for v1; a
-  background queue is an R10 item if phone latency proves rough.
+- **Constitution.** Read-only snapshot in, **pending** suggestions out; the chain **stops after 3
+  auto steps** (`MAX_TOOL_STEPS`); nothing writes/spends without a Confirm. Includes the
+  compose-latency + AI-cost review (a background queue if phone fan-out proves rough).
 
-### R10 — Hardening & launch
-The old #11, at the end. Money-critical e2e (onboarding → estimate → per-line + portfolio signal →
-accept a suggestion → generate/share the client doc), tenant-isolation audit **extended to every
-new table** via `test:rls`, AI cost-observability review (compose fan-out), accessibility pass
-(color+text, `aria-current`, ≥44px targets), the optional compose **background queue**, Vercel +
-production Supabase, and the remaining deferred live-infra / live-AI proofs walked end-to-end.
-- **Change:** `harden-and-launch`.
+### L3 — Tool-graph editor (meta) 🌟 north-star
+The visual canvas where tools are nodes and connections are edges. L2's governed composition +
+minimal provenance is the stepping-stone. Changes none of the tool rules (read-only snapshot in,
+suggestions out).
 
 ---
 
@@ -313,7 +350,7 @@ production Supabase, and the remaining deferred live-infra / live-AI proofs walk
 12. **Server-first discipline vs an SPA prototype (architecture).** *Revised:* principle 1.
 
 **Residual risks tracked to their phase:** contingency-share treatment in the per-line net (R2
-design.md), Good·Better·Best scope-tier derivation (R7 design.md), compose latency (R9/R10),
+design.md), Good·Better·Best scope-tier derivation (**R9** design.md), compose latency (**L2**),
 legacy-estimate rendering under the fallback (R2 tests).
 
 ### Round 3 — proposal-level critique (`/critique`, 2026-07-25, on the three pending changes)
@@ -417,12 +454,11 @@ the job's photo surface, teaches when no jobs). typecheck + **334 tests** (+8) +
 
 ---
 
-## North-star — #12 Tool-graph editor (meta), after the revamp
+## After the core revamp
 
-A visual canvas where tools are nodes and connections are edges (one tool's output feeding
-another's input; auto-triggers drawn, not coded). R9's governed composition + minimal provenance
-is the stepping-stone. Lands after the revamp; changes none of the tool rules (read-only snapshot
-in, suggestions out).
+The **Later features** (L1 client answers, L2 composition/auto-run rules + "the chain", L3 the
+tool-graph editor north-star) are detailed in their section above. They layer onto the finished
+tools once R1–R10 ship; none change the tool rules (read-only snapshot in, suggestions out).
 
 ---
 
