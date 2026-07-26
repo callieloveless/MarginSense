@@ -1,15 +1,9 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getServerSession, tenantDbForSession } from "@/src/db/session";
-import { formatCents } from "@/src/engine";
-import {
-  authorFromRow,
-  authorLabel,
-  FINDING_SEVERITY_LABEL,
-  findingSeverityOf,
-} from "@/src/context";
-import type { ContextEntryKindName } from "@/src/db/schema";
+import { authorFromRow, authorLabel } from "@/src/context";
 import { loadJobProfit, previewForSuggestion } from "@/app/_lib/job-profit";
+import { describeEntry, KIND_LABEL } from "@/app/_lib/context-entry-summary";
 import { SuggestionCard } from "@/app/_components/suggestion-card";
 import { ProfitHeader } from "@/app/_components/profit-header";
 import { PostMessageForm } from "./post-message-form";
@@ -162,38 +156,6 @@ export default async function ProjectContextPage({
       </section>
     </Shell>
   );
-}
-
-const KIND_LABEL: Record<ContextEntryKindName, string> = {
-  finding: "Finding",
-  material: "Material",
-  code_ref: "Code",
-  photo: "Photo",
-  fact: "Fact",
-};
-
-/** A plain-language one-liner for a context entry's payload (defensive over the JSON blob). */
-function describeEntry(kind: ContextEntryKindName, payload: unknown): string {
-  const p = (payload ?? {}) as Record<string, unknown>;
-  const s = (v: unknown) => (v == null ? "" : String(v));
-  switch (kind) {
-    case "finding": {
-      // Severity in words (never colour alone, §6); `note` adds nothing worth saying.
-      const severity = findingSeverityOf(p);
-      const prefix = severity === "note" ? "" : `${FINDING_SEVERITY_LABEL[severity]}: `;
-      return `${prefix}${s(p.summary)}`;
-    }
-    case "material": {
-      const price = typeof p.priceCents === "number" ? ` — ${formatCents(p.priceCents)}/${s(p.unit)}` : "";
-      return `${s(p.name)}${price}`;
-    }
-    case "code_ref":
-      return `${s(p.code)}: ${s(p.citation)}`;
-    case "photo":
-      return `Photo (${s(p.storageKey)})`;
-    case "fact":
-      return `${s(p.label)}: ${s(p.value)}`;
-  }
 }
 
 function Shell({ projectId, children }: { projectId: string; children: React.ReactNode }) {

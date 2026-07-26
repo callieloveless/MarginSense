@@ -202,8 +202,17 @@ numbers" playback (exists) + "Replay setup" (automation entry → **L2**, letter
 new-job wizard (`/projects/new`) + nullable project columns (migration `0010`, **applied live**)
 + the estimate seed-precedence (project default → business, seed-not-link, unit-tested). typecheck
 + **344 tests** (+7) + build green; in-memory isolation proven (live `test:rls` proof still
-deferred — `DATABASE_URL` not in the vitest env; migration adds no new policy). `revamp-project-hub`
-(the rich hub) is the next proposal. Original blurb: the 2-step new-job wizard: *Who & where* (client,
+deferred — `DATABASE_URL` not in the vitest env; migration adds no new policy).
+**`revamp-project-hub` ✅ implemented · self-reviewed · archived (2026-07-26).** The thin 3-link job
+page is now the command-center **hub**: identity sub-line (only set setup fields), the profit-per-hour
+hero, a **"Waiting on you"** pending-suggestion queue (reusing `SuggestionCard` + the before→after
+preview + the existing accept/dismiss), a **tools grid** with honest badges (photo count · client-doc
+*Shared/Draft* — only where a real count/status exists; no tile for an unbuilt tool), a compact
+**activity feed** (entries + conversation, most-recent slice → job memory), and the estimate versions.
+Purely additive presentation — **no schema, no engine, no new write path**; the entry one-liner was
+extracted to one shared helper so hub + memory can't drift; the "Active" marker is a neutral chip
+(signal palette stays for the profit signal alone); typecheck + **353 tests** (+9) + build green.
+Original blurb: the 2-step new-job wizard: *Who & where* (client,
 address→jurisdiction, job-type chips, scope) and *Money & schedule* (target margin, contingency,
 crew, start window, an **informational** auto-run panel — only what runs today, no rules-screen
 link). Adds nullable `projects.job_type`, `crew_size`, `start_window`, **`default_target_margin_bp`,

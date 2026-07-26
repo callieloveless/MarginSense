@@ -48,4 +48,5 @@ export async function dismissSuggestionAction(projectId: string, suggestionId: s
   await tenantDbForSession(session.authUserId, session.businessId).dismissSuggestion(suggestionId);
   revalidatePath(`/projects/${projectId}/context`);
   revalidatePath(`/projects/${projectId}/tools`);
+  revalidatePath(`/projects/${projectId}`);
 }
