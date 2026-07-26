@@ -18,8 +18,10 @@ import {
   type Computed,
   type EngineConfig,
   type EstimateRollUp,
+  type PortfolioPulse,
   DEFAULT_CONFIG,
   signalAbsolute,
+  signalAggregate,
   signalComparative,
 } from "../engine/index";
 
@@ -95,4 +97,20 @@ export function buildPortfolio(
   }));
 
   return scored.sort((a, b) => weightOf(a) - weightOf(b));
+}
+
+/**
+ * The portfolio pulse across a set of active jobs: the aggregate profit-per-hour, shortfall, and
+ * signal from the engine. Sums the jobs' net profit and labor hours and hands them to the engine —
+ * this module computes no rate itself. Not-applicable when there are no hours (no priced active
+ * work) so the dashboard shows a calm empty state.
+ */
+export function portfolioPulse(
+  jobs: readonly PortfolioJobInput[],
+  targetProfitPerHour: Computed<CentsPerHour>,
+  config: EngineConfig = DEFAULT_CONFIG,
+): Computed<PortfolioPulse> {
+  const totalHours = jobs.reduce((sum, j) => sum + j.laborHours, 0);
+  const totalNet = jobs.reduce((sum, j) => sum + j.netProfit, 0);
+  return signalAggregate(totalNet, totalHours, targetProfitPerHour, config);
 }

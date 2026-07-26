@@ -11,7 +11,7 @@
  */
 
 import type { Cents, CentsPerHour, Computed, Ratio } from "./money";
-import { notApplicable, safeDivide } from "./money";
+import { notApplicable, roundHalfUp, safeDivide } from "./money";
 import type { EngineConfig, SignalThresholds } from "./config";
 import { DEFAULT_CONFIG } from "./config";
 
@@ -156,6 +156,54 @@ export function signalComparative(
       weight,
       percentOfYear: figures.percentOfYear,
       percentOfProfitGoal: figures.percentOfProfitGoal,
+    },
+  };
+}
+
+/** The portfolio "pulse": one aggregate profit-per-hour across a set of jobs, and its inputs. */
+export interface PortfolioPulse {
+  /** `Σ netProfit / Σ laborHours` across the set, in integer cents per hour. */
+  readonly aggregateProfitPerHour: CentsPerHour;
+  /** `max(0, target − aggregate)` — how far each hour falls short of target (0 when at/above). */
+  readonly shortfallPerHour: Cents;
+  /** The red/yellow/green for the aggregate, on the same absolute thresholds. */
+  readonly signal: AbsoluteSignal;
+  readonly totalNetProfit: Cents;
+  readonly totalLaborHours: number;
+  readonly targetProfitPerHour: CentsPerHour;
+}
+
+/**
+ * The aggregate profit-per-hour across a set of jobs (constitution §3.5): the labor-hour-weighted
+ * blend `Σ netProfit / Σ laborHours`, its shortfall against the business target, and a signal on
+ * the same absolute thresholds. Not-applicable when the set has no labor hours or no target — the
+ * dashboard renders that calmly rather than a broken number. A negative aggregate (the set loses
+ * money) reads red, and its shortfall exceeds the target.
+ */
+export function signalAggregate(
+  totalNetProfit: Cents,
+  totalLaborHours: number,
+  targetProfitPerHour: Computed<CentsPerHour>,
+  config: EngineConfig = DEFAULT_CONFIG,
+): Computed<PortfolioPulse> {
+  if (totalLaborHours === 0) return notApplicable("no labor hours");
+  if (!targetProfitPerHour.ok) return notApplicable(targetProfitPerHour.reason);
+
+  const aggregateProfitPerHour = roundHalfUp(totalNetProfit / totalLaborHours);
+  const signal = signalAbsolute({ ok: true, value: aggregateProfitPerHour }, targetProfitPerHour, config);
+  if (!signal.ok) return notApplicable(signal.reason);
+
+  const shortfallPerHour = Math.max(0, targetProfitPerHour.value - aggregateProfitPerHour);
+
+  return {
+    ok: true,
+    value: {
+      aggregateProfitPerHour,
+      shortfallPerHour,
+      signal: signal.value,
+      totalNetProfit,
+      totalLaborHours,
+      targetProfitPerHour: targetProfitPerHour.value,
     },
   };
 }

@@ -5,6 +5,7 @@ import type { ComparativeInput } from "./signal";
 import {
   portfolioFigures,
   signalAbsolute,
+  signalAggregate,
   signalComparative,
 } from "./signal";
 
@@ -198,5 +199,44 @@ describe("comparative signal carries the portfolio figures for the explain panel
       expect(valueOr(signal.value.percentOfYear, -1)).toBeCloseTo(0.0533, 4);
       expect(valueOr(signal.value.percentOfProfitGoal, -1)).toBeCloseTo(0.1005, 4);
     }
+  });
+});
+
+describe("portfolio aggregate — signalAggregate (§3.5)", () => {
+  it("blends Σnet / Σhours, computes the shortfall, and colours it", () => {
+    // 1,800,000¢ over 240 hrs = $75/hr vs an $87.50 target → yellow, $12.50/hr short.
+    const pulse = signalAggregate(1_800_000, 240, defined(8_750));
+    expect(pulse.ok).toBe(true);
+    if (!pulse.ok) return;
+    expect(pulse.value.aggregateProfitPerHour).toBe(7_500);
+    expect(pulse.value.shortfallPerHour).toBe(1_250);
+    expect(pulse.value.signal.color).toBe("yellow");
+  });
+
+  it("clamps the shortfall to zero at or above target (green)", () => {
+    const pulse = signalAggregate(2_400_000, 240, defined(8_750)); // $100/hr
+    if (!pulse.ok) return;
+    expect(pulse.value.shortfallPerHour).toBe(0);
+    expect(pulse.value.signal.color).toBe("green");
+  });
+
+  it("reads red and over-shortfall when the set loses money", () => {
+    const pulse = signalAggregate(-240_000, 240, defined(8_750)); // −$10/hr
+    if (!pulse.ok) return;
+    expect(pulse.value.aggregateProfitPerHour).toBe(-1_000);
+    expect(pulse.value.signal.color).toBe("red");
+    expect(pulse.value.shortfallPerHour).toBe(9_750); // target − (−1000)
+  });
+
+  it("is not-applicable when the set has no labor hours", () => {
+    expect(signalAggregate(500_000, 0, defined(8_750)).ok).toBe(false);
+  });
+
+  it("honours the thresholds at the boundaries", () => {
+    expect(signalAggregate(8_000, 1, defined(10_000)).ok && "yellow"); // ratio 0.80
+    const y = signalAggregate(8_000, 1, defined(10_000));
+    const r = signalAggregate(7_900, 1, defined(10_000));
+    expect(y.ok && y.value.signal.color).toBe("yellow");
+    expect(r.ok && r.value.signal.color).toBe("red");
   });
 });

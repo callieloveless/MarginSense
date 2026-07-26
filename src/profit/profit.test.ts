@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildPortfolio,
   estimateSignal,
+  portfolioPulse,
   type PortfolioJobInput,
 } from "./profit";
 import { defined, type EstimateRollUp } from "../engine/index";
@@ -85,5 +86,27 @@ describe("buildPortfolio", () => {
     ];
     const ranked = buildPortfolio(jobs, business);
     expect(ranked[ranked.length - 1]!.projectId).toBe("z");
+  });
+});
+
+describe("portfolioPulse", () => {
+  it("aggregates the set's net profit and hours into one profit-per-hour + shortfall", () => {
+    const jobs: PortfolioJobInput[] = [
+      { projectId: "a", projectName: "A", laborHours: 120, netProfit: 1_000_000, overheadAllocated: 0 },
+      { projectId: "b", projectName: "B", laborHours: 120, netProfit: 800_000, overheadAllocated: 0 },
+    ];
+    const pulse = portfolioPulse(jobs, defined(8_750)); // 1,800,000 / 240 = $75/hr
+    expect(pulse.ok).toBe(true);
+    if (!pulse.ok) return;
+    expect(pulse.value.aggregateProfitPerHour).toBe(7_500);
+    expect(pulse.value.shortfallPerHour).toBe(1_250);
+    expect(pulse.value.signal.color).toBe("yellow");
+  });
+
+  it("is not-applicable when no job has labor hours (all drafts)", () => {
+    const jobs: PortfolioJobInput[] = [
+      { projectId: "z", projectName: "Draft", laborHours: 0, netProfit: 0, overheadAllocated: 0 },
+    ];
+    expect(portfolioPulse(jobs, defined(8_750)).ok).toBe(false);
   });
 });

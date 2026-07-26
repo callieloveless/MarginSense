@@ -367,6 +367,14 @@ computeEstimate reworked; client-projection delegates; targetProfitPerHour wired
 **R2a `add-per-line-pricing-signal` ✅ implemented · reviewed · archived (2026-07-25).** Build
 deferred (disk); last green build covered the import graph, fixes since are body/test-only.
 
+**R2b `add-portfolio-pulse` ✅ implemented · self-reviewed · archived (2026-07-26).** Engine
+`signalAggregate` (Σnet/Σhours + shortfall + signal, NA-safe, negative-safe) + `portfolioPulse`;
+dashboard reshaped to lead with the "This month" pulse card (aggregate profit/hr, plain verdict,
+progress, drillable inputs) + per-job cards showing each job's own profit/hr + signal chip +
+"% of year / % of goal"; business-name header + camera quick-capture (BottomSheet job-picker →
+the job's photo surface, teaches when no jobs). typecheck + **334 tests** (+8) + build green.
+**R2 (profit core) complete — per-line signal + portfolio pulse both landed.**
+
 ---
 
 ## Constitution reconciliation (before any code)
