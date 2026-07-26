@@ -283,7 +283,20 @@ export const lineItemRawSchema = z.object({
   quantity: z.union([z.string(), z.number()]).nullish(),
   /** Non-labor lines: unit cost in dollars (converted to cents). */
   unitCost: z.union([z.string(), z.number()]).nullish(),
+  /** Optional per-line price in dollars (converted to cents). Blank → unpriced (baseline derived);
+   * a value fixes this line's price and margin becomes an outcome (constitution §3.4a). */
+  price: z.union([z.string(), z.number()]).nullish(),
 });
+
+/** Parse an optional per-line price (dollars → cents): blank/absent → unpriced (null); a present
+ * value must be a non-negative dollar amount. Kept separate so both branches share it. */
+function parseLinePrice(
+  raw: string | number | null | undefined,
+): { ok: true; value: number | null } | { ok: false } {
+  if (raw === null || raw === undefined || String(raw).trim() === "") return { ok: true, value: null };
+  const cents = dollarsToCents(raw);
+  return cents === null ? { ok: false } : { ok: true, value: cents };
+}
 
 /**
  * Parse the estimate editor's line items into {@link LineItemInput} with integer units
@@ -299,18 +312,20 @@ export function parseLineItems(raw: unknown): ParseResult<LineItemInput[]> {
   const items: LineItemInput[] = [];
   for (const l of shape.data) {
     const description = l.description ?? null;
+    const price = parseLinePrice(l.price);
+    if (!price.ok) return err(`${l.category} line price must be a non-negative dollar amount.`);
     if (l.category === "labor") {
       const hours = numberOrNull(l.laborHours);
       if (hours === null || hours > 24 * 366) {
         return err("Labor lines need hours (0 or more).");
       }
-      items.push({ category: "labor", description, laborMinutes: Math.round(hours * 60) });
+      items.push({ category: "labor", description, laborMinutes: Math.round(hours * 60), priceCents: price.value });
     } else {
       const quantity = numberOrNull(l.quantity);
       if (quantity === null) return err(`${l.category} lines need a quantity (0 or more).`);
       const unitCostCents = l.unitCost == null || l.unitCost === "" ? null : dollarsToCents(l.unitCost);
       if (unitCostCents === null) return err(`${l.category} lines need a unit cost.`);
-      items.push({ category: l.category, description, quantity, unitCostCents });
+      items.push({ category: l.category, description, quantity, unitCostCents, priceCents: price.value });
     }
   }
   return { ok: true, data: items };
