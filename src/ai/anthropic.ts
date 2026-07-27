@@ -18,7 +18,14 @@
 
 import type Anthropic from "@anthropic-ai/sdk";
 import { z } from "zod";
-import { AI_DEFAULTS, ANTHROPIC_API_KEY_ENV } from "./config";
+import {
+  AI_DEFAULTS,
+  ANTHROPIC_API_KEY_ENV,
+  ANTHROPIC_AUTH_TOKEN_ENV,
+  CLAUDE_CODE_IDENTITY,
+  CLAUDE_CODE_OAUTH_TOKEN_ENV,
+  OAUTH_BETA,
+} from "./config";
 import {
   type Citation,
   type ModelPort,
@@ -32,6 +39,15 @@ export type ModelPortResolution =
   | { readonly status: "configured"; readonly port: ModelPort }
   | { readonly status: "unconfigured" };
 
+/**
+ * How the real client authenticates: a pay-as-you-go **API key** (`x-api-key`) or a Claude
+ * subscription **OAuth token** (`Authorization: Bearer` + the OAuth beta header + the Claude Code
+ * identity system block). Resolved from the environment by {@link resolveModelPort}.
+ */
+export type AnthropicAuth =
+  | { readonly mode: "apiKey"; readonly apiKey: string }
+  | { readonly mode: "oauth"; readonly authToken: string };
+
 /** The name of the strict tool the model calls to return the structured result. */
 const RESULT_TOOL_NAME = "record_result";
 
@@ -44,16 +60,40 @@ function messageText(content: ModelRequest["messages"][number]["content"]): stri
     .join("\n");
 }
 
+/** The system field for the request: a plain string for API-key auth, or an array whose FIRST
+ * block is the Claude Code identity for OAuth (subscription) tokens, which the API requires. */
+function buildSystem(
+  userSystem: string | undefined,
+  auth: AnthropicAuth,
+): string | Anthropic.Messages.TextBlockParam[] | undefined {
+  if (auth.mode === "oauth") {
+    const blocks: Anthropic.Messages.TextBlockParam[] = [{ type: "text", text: CLAUDE_CODE_IDENTITY }];
+    if (userSystem) blocks.push({ type: "text", text: userSystem });
+    return blocks;
+  }
+  return userSystem;
+}
+
 /**
- * The real Anthropic-backed port. Constructed only when a key is present (see
+ * The real Anthropic-backed port. Constructed only when auth is present (see
  * {@link resolveModelPort}); its live calls are exercised only in the deferred key-gated stage.
  */
-export function createAnthropicModelPort(): ModelPort {
+export function createAnthropicModelPort(auth: AnthropicAuth): ModelPort {
   return {
     async complete(request: ModelRequest): Promise<ModelResponse> {
       // Lazy, import-guarded: the SDK never enters the module graph for mock-only callers.
       const { default: AnthropicClient } = await import("@anthropic-ai/sdk");
-      const client = new AnthropicClient();
+      // OAuth (subscription) tokens auth as a Bearer token with the OAuth beta header; an API key
+      // uses the default x-api-key. `apiKey: null` stops the SDK picking a stray env key on the
+      // OAuth path so the two auth headers can't collide.
+      const client =
+        auth.mode === "oauth"
+          ? new AnthropicClient({
+              apiKey: null,
+              authToken: auth.authToken,
+              defaultHeaders: { "anthropic-beta": OAUTH_BETA },
+            })
+          : new AnthropicClient({ apiKey: auth.apiKey });
 
       const model = request.model ?? AI_DEFAULTS.model;
 
@@ -95,12 +135,13 @@ export function createAnthropicModelPort(): ModelPort {
 
       // Shared request params (identical across the initial call and every pause_turn resume) —
       // spread with the current `messages` so the two calls can never silently diverge.
+      const system = buildSystem(request.system, auth);
       const baseParams = {
         model,
         max_tokens: request.maxTokens ?? AI_DEFAULTS.maxTokens,
         thinking: { type: "adaptive" } as const,
         output_config: { effort: request.effort ?? AI_DEFAULTS.effort },
-        ...(request.system ? { system: request.system } : {}),
+        ...(system ? { system } : {}),
         ...(tools.length > 0 ? { tools } : {}),
       };
 
@@ -152,14 +193,19 @@ export function createAnthropicModelPort(): ModelPort {
 }
 
 /**
- * Resolve the model port from the environment. Returns `unconfigured` when
- * `ANTHROPIC_API_KEY` is unset (the real client is never constructed); otherwise a
- * `configured` port. `env` is injectable for tests.
+ * Resolve the model port from the environment. A Claude subscription **OAuth token**
+ * (`ANTHROPIC_AUTH_TOKEN` / `CLAUDE_CODE_OAUTH_TOKEN`) takes precedence over a pay-as-you-go
+ * **API key** (`ANTHROPIC_API_KEY`); with neither, the AI layer is `unconfigured` and the real
+ * client is never constructed. `env` is injectable for tests.
  */
 export function resolveModelPort(
   env: Record<string, string | undefined> = process.env,
 ): ModelPortResolution {
+  const authToken = env[ANTHROPIC_AUTH_TOKEN_ENV] ?? env[CLAUDE_CODE_OAUTH_TOKEN_ENV];
+  if (authToken) {
+    return { status: "configured", port: createAnthropicModelPort({ mode: "oauth", authToken }) };
+  }
   const key = env[ANTHROPIC_API_KEY_ENV];
-  if (!key) return { status: "unconfigured" };
-  return { status: "configured", port: createAnthropicModelPort() };
+  if (key) return { status: "configured", port: createAnthropicModelPort({ mode: "apiKey", apiKey: key }) };
+  return { status: "unconfigured" };
 }

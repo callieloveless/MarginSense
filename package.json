@@ -5,7 +5,7 @@
   "type": "module",
   "description": "MarginSense — is this estimate worth the crew hours it takes?",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbopack",
     "build": "next build",
     "start": "next start",
     "db:generate": "drizzle-kit generate",

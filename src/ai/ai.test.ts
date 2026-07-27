@@ -94,4 +94,13 @@ describe("resolveModelPort", () => {
     const resolution = resolveModelPort({ ANTHROPIC_API_KEY: "sk-test" });
     expect(resolution.status).toBe("configured");
   });
+
+  it("accepts a subscription OAuth token, and prefers it over an API key", () => {
+    expect(resolveModelPort({ ANTHROPIC_AUTH_TOKEN: "sk-ant-oat01-test" }).status).toBe("configured");
+    expect(resolveModelPort({ CLAUDE_CODE_OAUTH_TOKEN: "sk-ant-oat01-test" }).status).toBe("configured");
+    // Both present → still configured (the token path wins; asserted end-to-end by the live stage).
+    expect(
+      resolveModelPort({ ANTHROPIC_AUTH_TOKEN: "sk-ant-oat01-test", ANTHROPIC_API_KEY: "sk-test" }).status,
+    ).toBe("configured");
+  });
 });

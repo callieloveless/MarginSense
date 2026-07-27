@@ -33,6 +33,20 @@ export const AI_DEFAULTS = {
 export const ANTHROPIC_API_KEY_ENV = "ANTHROPIC_API_KEY";
 
 /**
+ * Subscription auth (opt-in). A Claude Pro/Max **OAuth token** — minted with `claude setup-token`
+ * — routes API usage through the subscription instead of pay-as-you-go API credits. Either env var
+ * works; when set it takes precedence over `ANTHROPIC_API_KEY`. The token authenticates as a Bearer
+ * token, needs the OAuth beta header, and — because the token is scoped to Claude Code — the request
+ * must carry the Claude Code identity as its first system block, or the API rejects it.
+ */
+export const ANTHROPIC_AUTH_TOKEN_ENV = "ANTHROPIC_AUTH_TOKEN";
+export const CLAUDE_CODE_OAUTH_TOKEN_ENV = "CLAUDE_CODE_OAUTH_TOKEN";
+/** Beta header the API requires for subscription OAuth tokens. */
+export const OAUTH_BETA = "oauth-2025-04-20";
+/** The identity a Claude-Code-scoped OAuth token must present as its first system block. */
+export const CLAUDE_CODE_IDENTITY = "You are Claude Code, Anthropic's official CLI for Claude.";
+
+/**
  * The Anthropic server-side web-search tool (constitution §7). Declared on a request via
  * `serverTools`; the real port forwards it to the API and the mock ignores it. Centralized
  * here so the tool-type version string lives in one place — Material Finder (#7b) is the first
