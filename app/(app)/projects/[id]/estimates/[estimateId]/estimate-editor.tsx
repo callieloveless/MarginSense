@@ -71,6 +71,7 @@ export function EstimateEditor({
   initialContingency,
   initialOverride,
   initialLines,
+  initialLineIds,
   initialDto,
 }: {
   estimateId: string;
@@ -79,6 +80,9 @@ export function EstimateEditor({
   initialContingency: string;
   initialOverride: string;
   initialLines: EditorInitialLine[];
+  /** The server line-item ids at load — sent back on save so a concurrent change (an accepted tool
+   * suggestion) is detected instead of silently overwritten (Critique #4). */
+  initialLineIds: string[];
   /** Null when the estimate can't be priced yet (no settings / not-applicable) — the editor stays
    * usable for entering + saving; the panel shows a plain "finish setup" note instead of numbers. */
   initialDto: EstimateDTO | null;
@@ -474,6 +478,7 @@ export function EstimateEditor({
         />
 
         <input type="hidden" name="lines" value={linesJson} />
+        <input type="hidden" name="baseLineIds" value={JSON.stringify(initialLineIds)} />
 
         {saveState && !saveState.ok ? <p className="text-sm text-danger-fg">{saveState.error}</p> : null}
         {saveState && saveState.ok ? (

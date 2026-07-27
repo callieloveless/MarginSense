@@ -55,17 +55,17 @@ Turbopack / App-Router issues on the rebuilt client editor).
 
 ## Stage C — on-surface version management
 
-- [ ] C1. `duplicateEstimateAction(projectId, estimateId)` — new **inactive** version copying margin,
+- [x] C1. `duplicateEstimateAction(projectId, estimateId)` — new **inactive** version copying margin,
   contingency, override, and all lines incl. entered `priceCents`; label "Copy of <label>"; does not
   change the active flag or re-seed context; tenant-scoped; redirects to the copy.
-- [ ] C2. **Versions strip** on the estimate page: each version as a chip with its **signal +
+- [x] C2. **Versions strip** on the estimate page: each version as a chip with its **signal +
   profit-per-hour** (one `computeFromRows` per version on load), active marked, tap to switch; buttons
   for **set active**, **new version**, **duplicate**.
-- [ ] C3. **Save reconciliation** (Critique #4): the editor loads a snapshot of the server's line ids;
+- [x] C3. **Save reconciliation** (Critique #4): the editor loads a snapshot of the server's line ids;
   `saveEstimateAction` (or the editor) detects when the server's current line set differs since load
   (a concurrently-accepted suggestion line) and surfaces it for review instead of silently replacing.
   No schema (`line_items.id` exists).
-- [ ] C4. Unit tests: `duplicateEstimateAction` (copies inputs + lines incl. price; inactive; no
+- [x] C4. Unit tests: `duplicateEstimateAction` (copies inputs + lines incl. price; inactive; no
   re-seed; cross-tenant blocked); save reconciliation flags a changed line set and passes an unchanged
   one. typecheck + vitest + build green.
 

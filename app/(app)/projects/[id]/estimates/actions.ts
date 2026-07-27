@@ -8,6 +8,7 @@ import type { LineItemInput } from "@/src/db/tenant";
 import { computeEstimate, type StoredEstimate } from "@/src/estimate";
 import { businessRates } from "@/app/_lib/estimate-compute";
 import { estimateComputationToDTO, type EstimateDTO } from "@/app/_lib/estimate-dto";
+import { duplicateEstimate, lineSetChanged } from "@/app/_lib/estimate-edit";
 import { seedEstimatePricing } from "@/app/_lib/estimate-seed";
 
 export type EstimateActionResult = { ok: true; message?: string } | { ok: false; error: string };
@@ -15,6 +16,18 @@ export type EstimateActionResult = { ok: true; message?: string } | { ok: false;
 function field(formData: FormData, name: string): string {
   const v = formData.get(name);
   return typeof v === "string" ? v : "";
+}
+
+/** Parse a JSON array of ids from a form field; null when absent/blank/malformed (skip the check). */
+function parseIdList(raw: string): string[] | null {
+  const s = raw.trim();
+  if (s === "") return null;
+  try {
+    const arr: unknown = JSON.parse(s);
+    return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === "string") : null;
+  } catch {
+    return null;
+  }
 }
 
 /** The estimate editor's pricing inputs, parsed once and shared by save and preview so the two
@@ -138,6 +151,20 @@ export async function saveEstimateAction(
   const inputs = parseEstimateInputs(formData);
   if (!inputs.ok) return inputs;
 
+  // Reconcile against a concurrent change (constitution §5; a tool suggestion accepted while the
+  // editor was open adds a line). A full-replace save must not silently drop it: if the server's
+  // line set changed since the editor loaded, surface it instead of overwriting.
+  const baseLineIds = parseIdList(field(formData, "baseLineIds"));
+  if (baseLineIds !== null) {
+    const current = await tenantDb.getLineItems(estimateId);
+    if (lineSetChanged(baseLineIds, current.map((l) => l.id))) {
+      return {
+        ok: false,
+        error: "A line changed on this estimate since you opened it (a tool may have added one). Reload to review before saving.",
+      };
+    }
+  }
+
   const updated = await tenantDb.updateEstimate(estimateId, {
     targetMarginBp: inputs.targetMarginBp,
     contingencyBp: inputs.contingencyBp,
@@ -206,6 +233,23 @@ export async function previewEstimateAction(
 
   const priced = inputs.lines.map((l) => l.priceCents != null);
   return { ok: true, dto: estimateComputationToDTO(computed.value, priced, rates.targetProfitPerHour) };
+}
+
+/**
+ * Duplicate an estimate into a new **inactive** version (Option A → tweak → Option B) copying its
+ * inputs and lines, including any entered per-line prices. Does not change the active version or
+ * re-seed context; tenant-scoped. Redirects to the copy; a foreign estimate id is a no-op.
+ */
+export async function duplicateEstimateAction(projectId: string, estimateId: string): Promise<void> {
+  const session = await getServerSession();
+  if (session.status !== "ready") return;
+  const tenantDb = tenantDbForSession(session.authUserId, session.businessId);
+
+  const copy = await duplicateEstimate(tenantDb, projectId, estimateId);
+  if (!copy) return;
+
+  revalidatePath(`/projects/${projectId}`);
+  redirect(`/projects/${projectId}/estimates/${copy.id}`);
 }
 
 /** Mark a version active/accepted — the one that feeds the portfolio (clears any other). */
