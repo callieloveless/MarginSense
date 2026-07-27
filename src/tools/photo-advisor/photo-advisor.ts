@@ -142,6 +142,10 @@ export const photoAdvisorTool: Tool<PhotoAdvisorInput, PhotoAdvisorOutput> = {
         dataBase64: img.dataBase64,
       })),
       resultSchema: visionResultSchema,
+      // Vision + a small structured result doesn't need max effort; `medium` keeps the read
+      // reasoning-capable but noticeably faster than the default `high` (the auto-read blocks the
+      // set's "looking…" state, so latency is felt directly).
+      effort: "medium",
     });
     // The port already validated `result` against `visionResultSchema` (mock and real impl both
     // parse it), so read it directly rather than re-parsing the same value.

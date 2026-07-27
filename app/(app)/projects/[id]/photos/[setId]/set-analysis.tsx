@@ -15,6 +15,10 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { analyzeSetAction } from "../actions";
 
+// De-dupe concurrent reads of the same set across remounts in this tab, so a set is never analyzed
+// twice at once (which would double-spend the model call).
+const inFlight = new Set<string>();
+
 export function SetAnalysis({
   projectId,
   setId,
@@ -28,18 +32,32 @@ export function SetAnalysis({
 }) {
   const router = useRouter();
   const [running, setRunning] = useState(status === "analyzing" && aiConfigured);
+  const [slow, setSlow] = useState(false);
   const kicked = useRef(false);
 
   async function run() {
+    if (inFlight.has(setId)) return;
+    inFlight.add(setId);
+    setSlow(false);
     setRunning(true);
-    await analyzeSetAction(projectId, setId);
-    setRunning(false);
-    router.refresh();
+    const slowTimer = setTimeout(() => setSlow(true), 45_000);
+    try {
+      await analyzeSetAction(projectId, setId);
+    } catch (err) {
+      // A rejected server action must never strand the spinner: fall through to refresh, which
+      // re-reads the status the action now guarantees it resolves (done/failed, never analyzing).
+      console.error("Set analysis request failed:", err);
+    } finally {
+      clearTimeout(slowTimer);
+      inFlight.delete(setId);
+      setRunning(false);
+      router.refresh();
+    }
   }
 
   useEffect(() => {
     // Auto-read a freshly posted set once — but never fire pointless runs with no model.
-    if (aiConfigured && status === "analyzing" && !kicked.current) {
+    if (aiConfigured && status === "analyzing" && !kicked.current && !inFlight.has(setId)) {
       kicked.current = true;
       void run();
     }
@@ -57,19 +75,27 @@ export function SetAnalysis({
 
   if (running || status === "analyzing") {
     return (
-      <p
+      <div
         aria-live="polite"
         className="rounded-xl border border-line bg-surface px-3 py-2 text-sm text-muted"
       >
-        MarginSense is looking at this set…
-      </p>
+        <p>
+          MarginSense is looking at this set…{" "}
+          <span className="opacity-80">this can take up to a minute.</span>
+        </p>
+        {slow ? (
+          <button type="button" onClick={() => router.refresh()} className="mt-1 font-medium underline">
+            Still working — check for the result
+          </button>
+        ) : null}
+      </div>
     );
   }
 
   if (status === "failed") {
     return (
       <div className="rounded-xl border border-notice-line bg-notice-bg px-3 py-2 text-sm text-notice-fg">
-        <p>The read didn&apos;t finish. Your photos are saved — check your signal and try again.</p>
+        <p>The read didn&apos;t finish. Your photos are saved — try again.</p>
         <button type="button" onClick={run} className="mt-1 font-medium underline">
           Try again
         </button>

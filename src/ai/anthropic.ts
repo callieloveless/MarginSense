@@ -119,13 +119,18 @@ export function createAnthropicModelPort(
           // OAuth (subscription) tokens auth as a Bearer token with the OAuth beta header; an API
           // key uses the default x-api-key. `apiKey: null` stops the SDK picking a stray env key on
           // the OAuth path so the two auth headers can't collide.
+          // Bound each call so a stuck request fails fast (→ the set is marked failed and the UI
+          // recovers) instead of hanging on the SDK's 10-minute default; one retry, not the default
+          // two, so an overloaded API can't stack minutes of backoff.
+          const clientOptions = { timeout: 90_000, maxRetries: 1 };
           return auth.mode === "oauth"
             ? new AnthropicClient({
                 apiKey: null,
                 authToken: auth.authToken,
                 defaultHeaders: { "anthropic-beta": OAUTH_BETA },
+                ...clientOptions,
               })
-            : new AnthropicClient({ apiKey: auth.apiKey });
+            : new AnthropicClient({ apiKey: auth.apiKey, ...clientOptions });
         })());
 
       const model = request.model ?? AI_DEFAULTS.model;

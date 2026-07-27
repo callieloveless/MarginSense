@@ -107,18 +107,24 @@ export async function analyzeSetAction(projectId: string, setId: string): Promis
     return { ok: false, aiUnconfigured: true };
   }
 
-  const result = await adviseSet(tenantDb, resolution.port, { projectId, setId });
-  if (result.ok) {
-    if (result.createdSuggestionIds.length > 0) {
+  // Whatever happens, the set must not be left in `analyzing` once an attempt returns — otherwise the
+  // UI is stranded on "looking…". `adviseSet` already swallows model errors (→ ok:false); this guard
+  // also covers an unexpected throw in tagging or status so the set always resolves to done/failed.
+  let ok = false;
+  try {
+    const result = await adviseSet(tenantDb, resolution.port, { projectId, setId });
+    if (result.ok && result.createdSuggestionIds.length > 0) {
       await tenantDb.tagSuggestionsWithSet(result.createdSuggestionIds, setId);
     }
-    await tenantDb.setPhotoSetStatus(setId, "done");
-  } else {
-    await tenantDb.setPhotoSetStatus(setId, "failed");
+    ok = result.ok;
+  } catch (err) {
+    console.error(`[analyzeSetAction] unexpected failure for set ${setId}:`, err);
+    ok = false;
   }
+  await tenantDb.setPhotoSetStatus(setId, ok ? "done" : "failed");
   revalidate(projectId);
   revalidatePath(`/projects/${projectId}/photos/${setId}`);
-  return { ok: result.ok };
+  return { ok };
 }
 
 /** Delete a set (its photos, objects, and the `photo` context entry), then return to the history. */
