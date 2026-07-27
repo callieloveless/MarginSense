@@ -168,7 +168,9 @@ buildable and typed now, live calls wait on a key.
   `analyzing`, and Retry re-runs (idempotent — dispatch dedups suggestions). A set's review badge is
   derived (`photoSetBadge`): analyzing / N to review / no action / retry. The old per-photo tools
   surface + the Job-memory gallery are retired; photos live on `/projects/[id]/photos`. **Migration
-  0011 apply + live `photo_sets` RLS proof are deferred** (add to the live-Supabase list). Residuals:
+  0011 applied live 2026-07-27** (`npm run db:migrate`) — the hub calls `listPhotoSets`, so the table
+  must exist or the job page throws `relation "photo_sets" does not exist`; the live `photo_sets` RLS
+  *proof* (`test:rls`) is still deferred (no DATABASE_URL in the vitest env). Residuals:
   concurrent opens double-spend tokens (suggestions still single); the photo→code compose edge now
   carries `setId` (code UI reshape is R8); AI-unconfigured shows a "connect AI" set state.
 - **Per-line signal is degenerate unless the line is priced** *(2026-07-26, R5)*. With no entered
