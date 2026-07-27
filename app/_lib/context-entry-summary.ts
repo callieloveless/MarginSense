@@ -34,8 +34,15 @@ export function describeEntry(kind: ContextEntryKindName, payload: unknown): str
     }
     case "code_ref":
       return `${s(p.code)}: ${s(p.citation)}`;
-    case "photo":
+    case "photo": {
+      // A set entry (revamp-photo-advisor) carries a caption/count; a legacy entry, a storage key.
+      if (p.setId) {
+        const caption = s(p.caption);
+        if (caption) return `Photo set: ${caption}`;
+        return typeof p.count === "number" ? `Photo set (${p.count} photos)` : "Photo set";
+      }
       return `Photo (${s(p.storageKey)})`;
+    }
     case "fact":
       return `${s(p.label)}: ${s(p.value)}`;
   }

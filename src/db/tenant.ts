@@ -979,17 +979,21 @@ export class TenantDb {
   }
 
   /**
-   * Delete a set: its photos' objects first, then the set row (whose FK cascades the photo rows),
-   * so no stray bytes remain. Null if the set isn't ours (a no-op). The caller removes the set's
-   * `photo` context entry from shared memory.
+   * Delete a set: its photos' objects, then its photo rows, then the set row — so no stray bytes or
+   * rows remain (the delete is explicit rather than relying on the DB cascade, so it behaves the
+   * same in memory and in production). Null if the set isn't ours (a no-op). The caller removes the
+   * set's `photo` context entry from shared memory.
    */
   async deletePhotoSet(id: string): Promise<PhotoSetRow | null> {
     const set = await this.#photoSetBackend.getById(this.businessId, id);
     if (!set) return null;
-    if (this.hasPhotoStorage) {
-      const photos = await this.#photoBackend.listBySet(this.businessId, id);
+    const photos = await this.#photoBackend.listBySet(this.businessId, id);
+    if (photos.length > 0 && this.hasPhotoStorage) {
       const keys = photos.flatMap((p) => [p.storageKey, p.thumbKey]);
-      if (keys.length > 0) await this.#photoStorageBackend.deleteObjects(this.businessId, keys);
+      await this.#photoStorageBackend.deleteObjects(this.businessId, keys);
+    }
+    for (const p of photos) {
+      await this.#photoBackend.deleteById(this.businessId, p.id);
     }
     return this.#photoSetBackend.deleteById(this.businessId, id);
   }

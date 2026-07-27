@@ -7,8 +7,6 @@ import { describeEntry, KIND_LABEL } from "@/app/_lib/context-entry-summary";
 import { SuggestionCard } from "@/app/_components/suggestion-card";
 import { ProfitHeader } from "@/app/_components/profit-header";
 import { PostMessageForm } from "./post-message-form";
-import { PhotoUploader } from "./photo-uploader";
-import { PhotoGallery, type PhotoView } from "./photo-gallery";
 import { acceptSuggestionAction, dismissSuggestionAction } from "./actions";
 
 /**
@@ -39,27 +37,12 @@ export default async function ProjectContextPage({
   const project = await tenantDb.getProject(projectId);
   if (!project) notFound();
 
-  const storageReady = tenantDb.hasPhotoStorage;
-  const [entries, messages, pending, job, photoRows] = await Promise.all([
+  const [entries, messages, pending, job] = await Promise.all([
     tenantDb.listContextEntries(projectId),
     tenantDb.listMessages(projectId),
     tenantDb.listPendingSuggestions(projectId),
     loadJobProfit(tenantDb, projectId),
-    storageReady ? tenantDb.listPhotos(projectId) : Promise.resolve([]),
   ]);
-
-  // Thumbnails are signed for the whole gallery in ONE round trip, short-lived (constitution §7
-  // — a photo is never served publicly). The full-size URL is deliberately NOT signed here: the
-  // user follows it minutes later, by which time a render-time signature has expired, so the
-  // gallery asks for one when a photo is actually opened.
-  const thumbUrls = await tenantDb.signedPhotoUrls(photoRows.map((p) => p.thumbKey));
-  const photos: PhotoView[] = photoRows.map((p) => ({
-    id: p.id,
-    caption: p.caption,
-    thumbUrl: thumbUrls.get(p.thumbKey) ?? null,
-    width: p.width,
-    height: p.height,
-  }));
 
   return (
     <Shell projectId={projectId}>
@@ -93,23 +76,6 @@ export default async function ProjectContextPage({
               />
             ))}
           </ul>
-        )}
-      </section>
-
-      {/* Job photos — an outer-layer user action (§4): uploading commits directly, it is not a
-          tool's suggestion. Photos stay private to the business and are shown via signed URLs. */}
-      <section className="mt-6">
-        <h2 className="text-lg font-semibold">Photos</h2>
-        {storageReady ? (
-          <>
-            <PhotoUploader projectId={projectId} />
-            <PhotoGallery projectId={projectId} photos={photos} />
-          </>
-        ) : (
-          <p className="mt-1 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">
-            Photo storage isn&apos;t connected yet. Once Supabase Storage is set up, job photos
-            you take on site live here — private to your business.
-          </p>
         )}
       </section>
 

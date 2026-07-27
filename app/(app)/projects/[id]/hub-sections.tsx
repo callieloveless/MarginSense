@@ -34,23 +34,28 @@ function ToolTile({
   );
 }
 
-/** The tools grid — only surfaces that exist today (job memory, tools, client document). */
+/** The tools grid — only surfaces that exist today (photos, job memory, tools, client document). */
 export function ToolsGrid({
   projectId,
-  photoBadge,
+  photosBadge,
   docBadge,
 }: {
   projectId: string;
-  photoBadge: string | null;
+  photosBadge: string | null;
   docBadge: string | null;
 }) {
   return (
     <div className="grid grid-cols-2 gap-3">
       <ToolTile
+        href={`/projects/${projectId}/photos`}
+        title="Photos"
+        hint="Shoot a set; MarginSense reads it"
+        badge={photosBadge}
+      />
+      <ToolTile
         href={`/projects/${projectId}/context`}
         title="Job memory"
-        hint="Photos, findings & notes"
-        badge={photoBadge}
+        hint="Findings, materials & notes"
       />
       <ToolTile
         href={`/projects/${projectId}/tools`}

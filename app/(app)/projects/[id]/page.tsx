@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getServerSession, tenantDbForSession } from "@/src/db/session";
 import { loadJobProfit, previewForSuggestion } from "@/app/_lib/job-profit";
-import { documentBadge, jobSubline, photoBadge } from "@/app/_lib/job-summary";
+import { documentBadge, jobSubline } from "@/app/_lib/job-summary";
 import { ProfitHeader } from "@/app/_components/profit-header";
 import { SuggestionCard } from "@/app/_components/suggestion-card";
 import { Chip, SectionHeader } from "@/app/_components/ui";
@@ -48,21 +48,24 @@ export default async function ProjectHubPage({
   // One pass through the bound handle — the hero, the queue, the tools badges, the feed, and the
   // versions all read here so a single job open is one round of reads. The estimate list is read
   // once (estimatesP) and shared with loadJobProfit, which needs the active version.
-  const storageReady = tenantDb.hasPhotoStorage;
   const estimatesP = tenantDb.listEstimates(id);
-  const [job, estimates, pending, entries, messages, photos, documents] = await Promise.all([
+  const [job, estimates, pending, entries, messages, photoSets, documents] = await Promise.all([
     loadJobProfit(tenantDb, id, estimatesP),
     estimatesP,
     tenantDb.listPendingSuggestions(id),
     tenantDb.listContextEntries(id),
     tenantDb.listMessages(id),
-    storageReady ? tenantDb.listPhotos(id) : Promise.resolve([]),
+    tenantDb.listPhotoSets(id),
     tenantDb.listDocuments(id),
   ]);
 
   const subline = jobSubline(project);
   const statusLabel =
     project.status === "active" ? null : project.status.charAt(0).toUpperCase() + project.status.slice(1);
+  // "Sets to review" — photo sets with pending suggestions from their analysis.
+  const pendingSetIds = new Set(pending.map((s) => s.setId).filter((x): x is string => x !== null));
+  const setsToReview = photoSets.filter((s) => pendingSetIds.has(s.id)).length;
+  const photosBadge = setsToReview > 0 ? `${setsToReview} to review` : null;
 
   return (
     <section>
@@ -107,11 +110,7 @@ export default async function ProjectHubPage({
       {/* Tools — only surfaces that exist today, with honest badges. */}
       <section className="mt-6">
         <SectionHeader title="Tools" />
-        <ToolsGrid
-          projectId={id}
-          photoBadge={photoBadge(storageReady, photos.length)}
-          docBadge={documentBadge(documents)}
-        />
+        <ToolsGrid projectId={id} photosBadge={photosBadge} docBadge={documentBadge(documents)} />
       </section>
 
       <ActivityFeed projectId={id} entries={entries} messages={messages} />

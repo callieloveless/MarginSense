@@ -23,18 +23,18 @@ never depend on the model or a good connection.
 
 ## Stage B — set capture + history (no AI)
 
-- [ ] B1. The **set composer**: **Take photos** (camera, several) + **From phone** (multi-select),
+- [x] B1. The **set composer**: **Take photos** (camera, several) + **From phone** (multi-select),
   each prepared on-device via the existing downscale + EXIF-strip pass (+ thumbnail); one caption for
   the set; **Post set**.
-- [ ] B2. `postPhotoSetAction` (reliable, no model): store each prepared photo through the existing
+- [x] B2. `postPhotoSetAction` (reliable, no model): store each prepared photo through the existing
   storage path, create the set + caption, attach photos, add the `photo` context entry referencing the
   set, emit the event. A failed object write leaves no orphan set/photo/entry.
-- [ ] B3. `/projects/[id]/photos` — the **history of sets** (cards: count · caption · time · review
+- [x] B3. `/projects/[id]/photos` — the **history of sets** (cards: count · caption · time · review
   badge, newest first). `/projects/[id]/photos/[setId]` — set detail (hero + thumbnails via signed
   URLs, the one caption); full-size signed on open, not at render.
-- [ ] B4. Hub tools grid gains a **Photos** tile (badge = sets to review). **Remove** the Job-memory
+- [x] B4. Hub tools grid gains a **Photos** tile (badge = sets to review). **Remove** the Job-memory
   (context) page's photo section — photos live on the Photos surface now (photo context entries remain).
-- [ ] B5. Phone-first pass; storage-unconfigured degrades to a plain "connect storage" state. `npm run
+- [x] B5. Phone-first pass; storage-unconfigured degrades to a plain "connect storage" state. `npm run
   build` green.
 
 ## Stage C — set analysis (Photo Advisor on a set, auto-run)
