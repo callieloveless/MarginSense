@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getServerSession, tenantDbForSession } from "@/src/db/session";
 import { PHYSICAL_WORK_DISCLAIMER } from "@/src/tools";
+import { resolveModelPort } from "@/src/ai";
 import { loadJobProfit, previewForSuggestion } from "@/app/_lib/job-profit";
 import { SuggestionCard } from "@/app/_components/suggestion-card";
 import { SectionHeader } from "@/app/_components/ui";
@@ -49,6 +50,15 @@ export default async function SetDetailPage({
   }));
   // This set's own recommendations — the same durable queue as the hub's "Waiting on you".
   const setPending = pending.filter((s) => s.setId === setId);
+  const aiConfigured = resolveModelPort().status === "configured";
+  // Repair labor this set proposes, in minutes (an input the model returned — shown as hours, not a
+  // fabricated cost; the per-line preview below shows each one's profit impact via the engine).
+  const repairMinutes = setPending.reduce((sum, s) => {
+    if (s.target !== "estimate_line_item") return sum;
+    const p = (s.payload ?? {}) as { laborMinutes?: unknown };
+    return sum + (typeof p.laborMinutes === "number" ? p.laborMinutes : 0);
+  }, 0);
+  const showReveal = set.analysisStatus === "done" || setPending.length > 0;
 
   return (
     <Shell projectId={projectId}>
@@ -60,28 +70,41 @@ export default async function SetDetailPage({
       </p>
 
       <div className="mt-4">
-        <SetAnalysis projectId={projectId} setId={setId} status={set.analysisStatus} />
+        <SetAnalysis
+          projectId={projectId}
+          setId={setId}
+          status={set.analysisStatus}
+          aiConfigured={aiConfigured}
+        />
       </div>
 
-      {set.analysisStatus === "done" ? (
+      {showReveal ? (
         <section className="mt-4">
           <SectionHeader title="See what MarginSense found" />
           {setPending.length === 0 ? (
             <p className="rounded-xl border border-line bg-surface px-3 py-2 text-sm text-muted">
-              Nothing to act on from this set.
+              Nothing to act on from this set — filed to job memory.
             </p>
           ) : (
-            <ul className="space-y-2">
-              {setPending.map((s) => (
-                <SuggestionCard
-                  key={s.id}
-                  suggestion={s}
-                  preview={previewForSuggestion(s, job)}
-                  accept={acceptSuggestionAction.bind(null, projectId, s.id)}
-                  dismiss={dismissSuggestionAction.bind(null, projectId, s.id)}
-                />
-              ))}
-            </ul>
+            <>
+              {repairMinutes > 0 ? (
+                <p className="mb-2 text-sm text-ink-soft">
+                  Across this set: <strong className="text-ink">≈ {(repairMinutes / 60).toFixed(1)} repair hours</strong>{" "}
+                  proposed. Confirm the ones you want — each shows its profit impact.
+                </p>
+              ) : null}
+              <ul className="space-y-2">
+                {setPending.map((s) => (
+                  <SuggestionCard
+                    key={s.id}
+                    suggestion={s}
+                    preview={previewForSuggestion(s, job)}
+                    accept={acceptSuggestionAction.bind(null, projectId, s.id)}
+                    dismiss={dismissSuggestionAction.bind(null, projectId, s.id)}
+                  />
+                ))}
+              </ul>
+            </>
           )}
           <p className="mt-2 text-xs text-muted">{PHYSICAL_WORK_DISCLAIMER}</p>
         </section>
