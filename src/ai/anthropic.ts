@@ -74,26 +74,59 @@ function buildSystem(
   return userSystem;
 }
 
+/** Compact, model-readable summary of why a result-tool input failed its schema — fed straight
+ * back to the model in the one repair round (path + message + expected type per issue). */
+function describeSchemaIssues(error: z.ZodError): string {
+  return error.issues
+    .slice(0, 8)
+    .map((i) => {
+      const path = i.path.map((p) => String(p)).join(".") || "(root)";
+      const expected =
+        "expected" in i && typeof (i as { expected?: unknown }).expected === "string"
+          ? ` (expected ${(i as { expected: string }).expected})`
+          : "";
+      return `${path}: ${i.message}${expected}`;
+    })
+    .join("; ");
+}
+
+/** The sliver of the Anthropic SDK the port actually calls — enough to inject a scripted client in
+ * a unit test (the structured-output repair round) without touching the real SDK or the network. */
+export interface AnthropicLike {
+  messages: {
+    create(
+      params: Anthropic.Messages.MessageCreateParamsNonStreaming,
+    ): Promise<Anthropic.Messages.Message>;
+  };
+}
+
 /**
  * The real Anthropic-backed port. Constructed only when auth is present (see
  * {@link resolveModelPort}); its live calls are exercised only in the deferred key-gated stage.
+ * `clientOverride` is a test seam — production always builds the real, lazily-imported SDK client.
  */
-export function createAnthropicModelPort(auth: AnthropicAuth): ModelPort {
+export function createAnthropicModelPort(
+  auth: AnthropicAuth,
+  clientOverride?: AnthropicLike,
+): ModelPort {
   return {
     async complete(request: ModelRequest): Promise<ModelResponse> {
       // Lazy, import-guarded: the SDK never enters the module graph for mock-only callers.
-      const { default: AnthropicClient } = await import("@anthropic-ai/sdk");
-      // OAuth (subscription) tokens auth as a Bearer token with the OAuth beta header; an API key
-      // uses the default x-api-key. `apiKey: null` stops the SDK picking a stray env key on the
-      // OAuth path so the two auth headers can't collide.
-      const client =
-        auth.mode === "oauth"
-          ? new AnthropicClient({
-              apiKey: null,
-              authToken: auth.authToken,
-              defaultHeaders: { "anthropic-beta": OAUTH_BETA },
-            })
-          : new AnthropicClient({ apiKey: auth.apiKey });
+      const client: AnthropicLike =
+        clientOverride ??
+        (await (async () => {
+          const { default: AnthropicClient } = await import("@anthropic-ai/sdk");
+          // OAuth (subscription) tokens auth as a Bearer token with the OAuth beta header; an API
+          // key uses the default x-api-key. `apiKey: null` stops the SDK picking a stray env key on
+          // the OAuth path so the two auth headers can't collide.
+          return auth.mode === "oauth"
+            ? new AnthropicClient({
+                apiKey: null,
+                authToken: auth.authToken,
+                defaultHeaders: { "anthropic-beta": OAUTH_BETA },
+              })
+            : new AnthropicClient({ apiKey: auth.apiKey });
+        })());
 
       const model = request.model ?? AI_DEFAULTS.model;
 
@@ -145,47 +178,105 @@ export function createAnthropicModelPort(auth: AnthropicAuth): ModelPort {
         ...(tools.length > 0 ? { tools } : {}),
       };
 
+      // Every API call in this `complete()` (initial, pause-turn resumes, and a structured-output
+      // repair) accumulates into one usage total, so the caller sees the whole cost of the turn.
+      let inputTokens = 0;
+      let outputTokens = 0;
+      const create = async (
+        params: Anthropic.Messages.MessageCreateParamsNonStreaming,
+      ): Promise<Anthropic.Messages.Message> => {
+        const r = await client.messages.create(params);
+        inputTokens += r.usage.input_tokens;
+        outputTokens += r.usage.output_tokens;
+        return r;
+      };
+
       // One call; loop only to resume a server-tool `pause_turn` (web search iteration cap).
-      let response = await client.messages.create({ ...baseParams, messages });
+      let response = await create({ ...baseParams, messages });
       let guard = 0;
       while (response.stop_reason === "pause_turn" && guard++ < 5) {
         messages.push({ role: "assistant", content: response.content });
-        response = await client.messages.create({ ...baseParams, messages });
+        response = await create({ ...baseParams, messages });
       }
 
-      // Extract text, the result-tool call, and citations from the final content.
-      const outputBlocks: OutputBlock[] = [];
-      const citations: Citation[] = [];
-      let rawResult: unknown;
-      for (const block of response.content) {
-        if (block.type === "text") {
-          outputBlocks.push({ type: "text", text: block.text });
-          for (const c of (block.citations ?? []) as unknown as ReadonlyArray<Record<string, unknown>>) {
-            citations.push({
-              url: typeof c.url === "string" ? c.url : undefined,
-              title: typeof c.title === "string" ? c.title : undefined,
-              citedText: typeof c.cited_text === "string" ? c.cited_text : undefined,
-            });
+      // Pull text, the result-tool call (id + input), and citations out of a response's content.
+      const collect = (content: Anthropic.Messages.ContentBlock[]) => {
+        const outputBlocks: OutputBlock[] = [];
+        const citations: Citation[] = [];
+        let rawResult: unknown;
+        let resultToolUseId: string | undefined;
+        for (const block of content) {
+          if (block.type === "text") {
+            outputBlocks.push({ type: "text", text: block.text });
+            for (const c of (block.citations ?? []) as unknown as ReadonlyArray<Record<string, unknown>>) {
+              citations.push({
+                url: typeof c.url === "string" ? c.url : undefined,
+                title: typeof c.title === "string" ? c.title : undefined,
+                citedText: typeof c.cited_text === "string" ? c.cited_text : undefined,
+              });
+            }
+          } else if (block.type === "tool_use" && block.name === RESULT_TOOL_NAME) {
+            rawResult = block.input;
+            resultToolUseId = block.id;
           }
-        } else if (block.type === "tool_use" && block.name === RESULT_TOOL_NAME) {
-          rawResult = block.input;
         }
-      }
+        return { outputBlocks, citations, rawResult, resultToolUseId };
+      };
 
-      // Check for the missing result BEFORE parsing — otherwise `parse(undefined)` throws a raw
-      // ZodError first and this clear, actionable message never surfaces.
-      if (request.resultSchema && rawResult === undefined) {
-        throw new Error(
-          `The model did not return a "${RESULT_TOOL_NAME}" structured result (stop_reason: ${response.stop_reason}).`,
-        );
+      let collected = collect(response.content);
+
+      // Structured output: validate the result-tool input, and give the model exactly ONE chance to
+      // fix a malformed call before we fail. Models occasionally return the wrong shape — a string
+      // where the schema wants an array, a missing field — and throwing the whole run away over that
+      // is wasteful; a single corrective round (the concrete schema errors handed back) recovers it.
+      // The human-facing prose/citations stay from the first response; only the result is repaired.
+      let result: unknown;
+      if (request.resultSchema) {
+        let parsed = request.resultSchema.safeParse(collected.rawResult);
+        if (!parsed.success) {
+          const detail = describeSchemaIssues(parsed.error);
+          const correction: Anthropic.Messages.MessageParam =
+            collected.rawResult !== undefined && collected.resultToolUseId
+              ? {
+                  role: "user",
+                  content: [
+                    {
+                      type: "tool_result",
+                      tool_use_id: collected.resultToolUseId,
+                      is_error: true,
+                      content: `Your ${RESULT_TOOL_NAME} input did not match the required schema — ${detail}. Call ${RESULT_TOOL_NAME} again with corrected input that matches the schema exactly: every field must be the exact type shown (arrays must be JSON arrays, not strings), and required fields must be present.`,
+                    },
+                  ],
+                }
+              : {
+                  role: "user",
+                  content: `You must record the result by calling the ${RESULT_TOOL_NAME} tool with input matching its schema exactly${detail ? ` (problem: ${detail})` : ""}. Do it now — do not answer in prose.`,
+                };
+          response = await create({
+            ...baseParams,
+            messages: [...messages, { role: "assistant", content: response.content }, correction],
+          });
+          const repaired = collect(response.content);
+          // Keep the first turn's prose/citations if the repair turn returned only the tool call.
+          collected =
+            repaired.outputBlocks.length > 0
+              ? repaired
+              : { ...repaired, outputBlocks: collected.outputBlocks, citations: collected.citations };
+          parsed = request.resultSchema.safeParse(repaired.rawResult);
+          if (!parsed.success) {
+            throw new Error(
+              `The model's ${RESULT_TOOL_NAME} result did not match the schema after one repair attempt: ${describeSchemaIssues(parsed.error)}`,
+            );
+          }
+        }
+        result = parsed.data;
       }
-      const result = request.resultSchema ? request.resultSchema.parse(rawResult) : undefined;
 
       return {
-        text: outputBlocks.map((b) => b.text).join(""),
-        content: outputBlocks,
-        usage: { inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens },
-        ...(citations.length > 0 ? { citations } : {}),
+        text: collected.outputBlocks.map((b) => b.text).join(""),
+        content: collected.outputBlocks,
+        usage: { inputTokens, outputTokens },
+        ...(collected.citations.length > 0 ? { citations: collected.citations } : {}),
         ...(request.resultSchema ? { result } : {}),
       };
     },

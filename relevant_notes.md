@@ -159,6 +159,17 @@ buildable and typed now, live calls wait on a key.
 
 ## Gotchas & lessons
 
+- **The model sometimes returns malformed structured output — the port repairs it once** *(2026-07-27)*.
+  A live Photo Advisor run failed with a `ZodError` because Claude called `record_result` with
+  `labor` as a *string* and `findings` missing. `createAnthropicModelPort.complete` now `safeParse`s
+  the result-tool input and, on failure, runs **one** corrective round — handing the model the exact
+  schema errors (as an `is_error` `tool_result` when there's a tool call to reference, else a plain
+  "call the tool" nudge) — before throwing. Usage is summed across the extra call. The mock port is
+  unaffected. Guarded offline by `src/ai/anthropic.repair.test.ts` (scripted fake client, no
+  network; `createAnthropicModelPort(auth, clientOverride)` takes a test seam). **Opt-in live check:**
+  `npm run test:ai:live` (suffix `*.live.test.ts`, own `vitest.live.config.ts`, excluded from the
+  default run like the RLS suite) makes a REAL API call using the token in `.env.local` to prove the
+  subscription token authenticates + structured output round-trips — run it, don't add to CI.
 - **"New job then click → 404" is (almost always) a wrong-account view, not a bug** *(2026-07-27,
   show-active-workspace)*. Each Supabase auth identity maps to exactly one business
   (`users.auth_id → business_id`), and `current_business_id()` resolves it server-side; a job created

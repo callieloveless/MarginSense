@@ -14,6 +14,7 @@
     "test:watch": "vitest",
     "test:engine": "vitest run src/engine",
     "test:rls": "vitest run --config vitest.rls.config.ts",
+    "test:ai:live": "vitest run --config vitest.live.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
