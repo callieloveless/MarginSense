@@ -72,6 +72,23 @@ describe("postPhotoSetForProject", () => {
     expect(result.ok).toBe(false);
   });
 
+  it("refuses to delete a set through the wrong project (no cross-project delete)", async () => {
+    const { tenantDb, storage } = wire();
+    const posted = await postPhotoSetForProject(tenantDb, {
+      projectId: PROJECT,
+      caption: "Backsplash",
+      photos: [photo(1)],
+    });
+    if (!posted.ok) throw new Error("post failed");
+
+    // Same business, but a different project id than the set was posted under.
+    const del = await deletePhotoSetForProject(tenantDb, "p-other", posted.set.id);
+    expect(del.ok).toBe(false);
+    // The set and its object survive untouched.
+    expect(await tenantDb.getPhotoSet(posted.set.id)).not.toBeNull();
+    expect(storage.keys()).toHaveLength(2);
+  });
+
   it("deleting a set removes its objects, rows, and context entry", async () => {
     const { tenantDb, storage } = wire();
     const posted = await postPhotoSetForProject(tenantDb, {

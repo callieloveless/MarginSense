@@ -10,6 +10,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { MAX_UPLOAD_BYTES } from "@/src/photos";
+import { MAX_ADVISOR_IMAGES } from "@/src/tools";
 import { ImagePrepError, prepareImage } from "@/app/_lib/prepare-image";
 import { postPhotoSetAction } from "./actions";
 
@@ -21,10 +22,23 @@ export function SetComposer({ projectId }: { projectId: string }) {
   const [caption, setCaption] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
 
   function addFrom(input: HTMLInputElement | null) {
     const picked = Array.from(input?.files ?? []);
-    if (picked.length > 0) setFiles((prev) => [...prev, ...picked]);
+    if (picked.length > 0) {
+      setFiles((prev) => {
+        const combined = [...prev, ...picked];
+        // A read looks at up to MAX_ADVISOR_IMAGES photos; keep the set to that so what's posted is
+        // what's read, and say so rather than silently dropping the extras.
+        if (combined.length > MAX_ADVISOR_IMAGES) {
+          setNote(`A set is read up to ${MAX_ADVISOR_IMAGES} photos — keeping the first ${MAX_ADVISOR_IMAGES}.`);
+          return combined.slice(0, MAX_ADVISOR_IMAGES);
+        }
+        setNote(null);
+        return combined;
+      });
+    }
     if (input) input.value = ""; // allow re-picking the same file
   }
 
@@ -101,10 +115,18 @@ export function SetComposer({ projectId }: { projectId: string }) {
             <span className="font-medium text-ink">
               {files.length} photo{files.length === 1 ? "" : "s"} in this set
             </span>
-            <button type="button" onClick={() => setFiles([])} className="text-muted underline">
+            <button
+              type="button"
+              onClick={() => {
+                setFiles([]);
+                setNote(null);
+              }}
+              className="text-muted underline"
+            >
               Clear
             </button>
           </div>
+          {note ? <p className="text-xs text-muted">{note}</p> : null}
           <label className="block text-sm">
             <span className="mb-1 block text-xs font-medium text-ink-soft">Caption for the set</span>
             <input

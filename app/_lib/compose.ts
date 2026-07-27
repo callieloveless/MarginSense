@@ -125,40 +125,49 @@ export async function dispatchAndCompose(
   const step = (request.step ?? 0) + 1;
   const ctx: ComposeContext = { tenantDb: deps.tenantDb, projectId: request.projectId, step };
 
-  for (const edge of edges) {
-    let inputs: readonly unknown[];
-    try {
-      inputs = await edge.map(outcome.output, ctx);
-    } catch (err) {
-      console.error(
-        `[compose] mapping ${request.toolName} → ${edge.consumer} failed for project ${request.projectId}:`,
-        err,
-      );
-      continue;
-    }
-
-    for (const input of inputs) {
-      // Belt-and-braces: the budget is enforced inside dispatch too, but skipping here keeps the
-      // log quiet for the expected ceiling case rather than treating it as an error.
-      if (step >= MAX_TOOL_STEPS) {
-        console.error(
-          `[compose] ${request.toolName} → ${edge.consumer} refused: step ${step} reaches the budget (${MAX_TOOL_STEPS}).`,
-        );
-        continue;
-      }
+  // Fan out concurrently. Each composed run is independent and often slow (Code Finder does a web
+  // search per finding), and the producer's result — e.g. the photo read blocking the "looking…"
+  // state — can't return until they finish. Running them in parallel makes that wait the single
+  // slowest lookup, not the sum. Dedup still runs inside each dispatch; two concurrent runs emit
+  // different suggestions here (different findings → different lookups), so the queue stays clean.
+  await Promise.all(
+    edges.map(async (edge) => {
+      let inputs: readonly unknown[];
       try {
-        await dispatch(
-          { toolName: edge.consumer, projectId: request.projectId, input, source: "compose", step },
-          dispatchPorts,
-        );
+        inputs = await edge.map(outcome.output, ctx);
       } catch (err) {
         console.error(
-          `[compose] running ${edge.consumer} (composed from ${request.toolName}) failed:`,
+          `[compose] mapping ${request.toolName} → ${edge.consumer} failed for project ${request.projectId}:`,
           err,
         );
+        return;
       }
-    }
-  }
+
+      await Promise.all(
+        inputs.map(async (input) => {
+          // Belt-and-braces: the budget is enforced inside dispatch too, but skipping here keeps the
+          // log quiet for the expected ceiling case rather than treating it as an error.
+          if (step >= MAX_TOOL_STEPS) {
+            console.error(
+              `[compose] ${request.toolName} → ${edge.consumer} refused: step ${step} reaches the budget (${MAX_TOOL_STEPS}).`,
+            );
+            return;
+          }
+          try {
+            await dispatch(
+              { toolName: edge.consumer, projectId: request.projectId, input, source: "compose", step },
+              dispatchPorts,
+            );
+          } catch (err) {
+            console.error(
+              `[compose] running ${edge.consumer} (composed from ${request.toolName}) failed:`,
+              err,
+            );
+          }
+        }),
+      );
+    }),
+  );
 
   return outcome;
 }

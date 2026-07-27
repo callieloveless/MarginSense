@@ -90,6 +90,11 @@ export async function deletePhotoSetForProject(
   projectId: string,
   setId: string,
 ): Promise<DeleteSetResult> {
+  // Confirm the set is in this project first. Business scope is enforced by the handle; this stops a
+  // projectId/setId mismatch from removing a sibling project's set within the same business.
+  const set = await tenantDb.getPhotoSet(setId);
+  if (!set || set.projectId !== projectId) return { ok: false, error: "Set not found." };
+
   let removed;
   try {
     removed = await tenantDb.deletePhotoSet(setId);

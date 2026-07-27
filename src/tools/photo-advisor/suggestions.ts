@@ -82,12 +82,16 @@ export function laborSuggestion(
 /** Every material named across a result's findings, de-duplicated, for the Material Finder
  * handoff in the conversation post. */
 export function materialsNamed(findings: readonly VisionFinding[]): string[] {
-  const seen = new Set<string>();
+  // De-dupe case-insensitively (keep the first spelling seen) so "Plywood" and "plywood" collapse to
+  // one entry in the post and the Material Finder handoff.
+  const seen = new Map<string, string>();
   for (const finding of findings) {
     for (const material of finding.materials ?? []) {
       const trimmed = material.trim();
-      if (trimmed !== "") seen.add(trimmed);
+      if (trimmed === "") continue;
+      const key = trimmed.toLowerCase();
+      if (!seen.has(key)) seen.set(key, trimmed);
     }
   }
-  return [...seen];
+  return [...seen.values()];
 }

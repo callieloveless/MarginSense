@@ -28,8 +28,14 @@ export default async function AppLayout({
   // bound handle; a job created under another account then looks empty here, not lost.
   let workspaceName: string | null = null;
   if (session.status === "ready") {
-    const business = await tenantDbForSession(session.authUserId, session.businessId).getBusiness();
-    workspaceName = business?.name ?? null;
+    try {
+      const business = await tenantDbForSession(session.authUserId, session.businessId).getBusiness();
+      workspaceName = business?.name ?? null;
+    } catch (err) {
+      // A name lookup must never break navigation for every authenticated route — fall back to the
+      // static header label.
+      console.error("[layout] resolving the active workspace name failed:", err);
+    }
   }
 
   return (

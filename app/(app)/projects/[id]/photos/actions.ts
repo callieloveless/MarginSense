@@ -113,10 +113,16 @@ export async function analyzeSetAction(projectId: string, setId: string): Promis
   let ok = false;
   try {
     const result = await adviseSet(tenantDb, resolution.port, { projectId, setId });
-    if (result.ok && result.createdSuggestionIds.length > 0) {
-      await tenantDb.tagSuggestionsWithSet(result.createdSuggestionIds, setId);
-    }
     ok = result.ok;
+    if (result.ok && result.createdSuggestionIds.length > 0) {
+      // Tagging is best-effort: the read already succeeded and its suggestions are on the queue, so a
+      // tagging hiccup must not flip the set to "failed" — it would only be missing its set link.
+      try {
+        await tenantDb.tagSuggestionsWithSet(result.createdSuggestionIds, setId);
+      } catch (tagErr) {
+        console.error(`[analyzeSetAction] tagging suggestions for set ${setId} failed:`, tagErr);
+      }
+    }
   } catch (err) {
     console.error(`[analyzeSetAction] unexpected failure for set ${setId}:`, err);
     ok = false;

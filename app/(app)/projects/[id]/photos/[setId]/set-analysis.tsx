@@ -34,13 +34,15 @@ export function SetAnalysis({
   const [running, setRunning] = useState(status === "analyzing" && aiConfigured);
   const [slow, setSlow] = useState(false);
   const kicked = useRef(false);
+  const slowTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   async function run() {
     if (inFlight.has(setId)) return;
     inFlight.add(setId);
     setSlow(false);
     setRunning(true);
-    const slowTimer = setTimeout(() => setSlow(true), 45_000);
+    if (slowTimer.current) clearTimeout(slowTimer.current);
+    slowTimer.current = setTimeout(() => setSlow(true), 45_000);
     try {
       await analyzeSetAction(projectId, setId);
     } catch (err) {
@@ -48,7 +50,8 @@ export function SetAnalysis({
       // re-reads the status the action now guarantees it resolves (done/failed, never analyzing).
       console.error("Set analysis request failed:", err);
     } finally {
-      clearTimeout(slowTimer);
+      if (slowTimer.current) clearTimeout(slowTimer.current);
+      slowTimer.current = null;
       inFlight.delete(setId);
       setRunning(false);
       router.refresh();
@@ -63,6 +66,12 @@ export function SetAnalysis({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, aiConfigured]);
+
+  // Never let the slow-timer fire after the set detail unmounts (a state update on an unmounted
+  // component); the run itself continues server-side and its result is picked up on the next visit.
+  useEffect(() => () => {
+    if (slowTimer.current) clearTimeout(slowTimer.current);
+  }, []);
 
   if (!aiConfigured) {
     return (

@@ -196,6 +196,11 @@ export function createAnthropicModelPort(
         return r;
       };
 
+      // Snapshot the original turns before the pause loop mutates `messages` — the structured-output
+      // repair resends these so it always ends on the user turn (a forced `tool_choice` after an
+      // assistant pause turn would be rejected).
+      const initialMessages = [...messages];
+
       // One call; loop only to resume a server-tool `pause_turn` (web search iteration cap).
       let response = await create({ ...baseParams, messages });
       let guard = 0;
@@ -268,7 +273,7 @@ export function createAnthropicModelPort(
             ...baseParams,
             ...(strongerSystem ? { system: strongerSystem } : {}),
             tool_choice: { type: "tool", name: RESULT_TOOL_NAME, disable_parallel_tool_use: true },
-            messages,
+            messages: initialMessages,
           };
           delete retryParams.thinking;
           response = await create(retryParams);
