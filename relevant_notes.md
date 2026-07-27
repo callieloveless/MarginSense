@@ -159,6 +159,18 @@ buildable and typed now, live calls wait on a key.
 
 ## Gotchas & lessons
 
+- **Photos are SETS now, analyzed as a whole** *(2026-07-27, R6)*. `photo_sets` holds one caption per
+  set; `project_photos.set_id` + `suggestions.set_id` tie photos/recommendations to a set (the
+  per-photo caption is retired, not dropped). Photo Advisor's tool input is a **set** (`{ setId,
+  images[], caption?, question? }`, bounded by `MAX_ADVISOR_IMAGES`) — one model call across all
+  images. **Posting a set never calls the model** (`postPhotoSetForProject`); analysis is a separate
+  **best-effort** `analyzeSetAction` the set-detail client **auto-kicks once** when status is
+  `analyzing`, and Retry re-runs (idempotent — dispatch dedups suggestions). A set's review badge is
+  derived (`photoSetBadge`): analyzing / N to review / no action / retry. The old per-photo tools
+  surface + the Job-memory gallery are retired; photos live on `/projects/[id]/photos`. **Migration
+  0011 apply + live `photo_sets` RLS proof are deferred** (add to the live-Supabase list). Residuals:
+  concurrent opens double-spend tokens (suggestions still single); the photo→code compose edge now
+  carries `setId` (code UI reshape is R8); AI-unconfigured shows a "connect AI" set state.
 - **Per-line signal is degenerate unless the line is priced** *(2026-07-26, R5)*. With no entered
   per-line price the engine allocates each line's price cost-proportionally and overhead by hours, so
   **every baseline labor line's profit-per-hour is identical by construction** (worked example: 10 h vs

@@ -255,11 +255,23 @@ access lenses; 7 findings folded in — see the proposal's Critique log). typech
   per-line labor rates stay deferred (explicit non-goals).
 
 ### R6 — Photo Advisor (its own feature)
-`revamp-photo-advisor` — gallery/camera import, captions, per-photo **tags** (to review / reviewed /
-no action), the analyzing state, and the photo-detail **single saved-recommendation reveal** +
-confirm/dismiss + standing disclaimer. Reshape of the built 8a/8b to the prototype's per-photo
-saved-read model.
-- **Constitution.** Tools suggest → user confirms; Photo Advisor never prices; disclaimer (§5,§7).
+**`revamp-photo-advisor` ✅ implemented · self-reviewed · archived (2026-07-27).** Re-modeled around the
+**photo set** (per the user's mock + 4 scoping calls: auto-analyze on post · set rec + queue
+suggestions · Photo Advisor only · new sets model, retire the gallery). Staged: **A** — schema
+(`photo_sets` + RLS, migration 0011; `set_id` on `project_photos` + `suggestions`) + a `PhotoSetBackend`
+seam (memory + Drizzle) + isolation + badge tests. **B** — the set composer (Take photos / From phone,
+one caption), `postPhotoSetForProject` (reliable, **no model call**, rolls back cleanly), the
+**history-of-sets** surface + set detail (signed URLs), the hub **Photos** tile, and the retired
+Job-memory gallery. **C** — Photo Advisor reshaped to read a **whole set** (N images, one model call;
+findings reference the set), `analyzeSetAction` (best-effort, auto-kicked by the client after post,
+retryable, tags suggestions with the set), the set-detail **"See what MarginSense found"** reveal +
+disclaimer, and the retired per-photo tools surface. Post never depends on AI or signal; a failed run
+leaves the set posted + retryable. typecheck + **385 tests** + build green.
+- **Constitution.** Tools suggest → user confirms; Photo Advisor never prices (minutes only, hands
+  materials to Material Finder); disclaimer (§5,§7); tenant isolation on `photo_sets` + objects.
+- **Residual (relevant_notes):** apply migration 0011 + prove `photo_sets` RLS live stay deferred;
+  concurrent set-opens can double-run the analysis (dedup keeps suggestions single, spends 2× tokens);
+  the code-finder compose edge, if live, now runs per set (its UI reshape is R8).
 
 ### R7 — Material Finder (its own feature)
 `revamp-material-finder` — a **running per-job material list** ("On this job", from `material`

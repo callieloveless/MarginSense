@@ -59,14 +59,14 @@ never depend on the model or a good connection.
 
 ## Stage D — self-review, code-review, archive
 
-- [ ] D1. Self-review vs the spec deltas + critique lenses (tenant isolation on `photo_sets` + objects;
+- [x] D1. Self-review vs the spec deltas + critique lenses (tenant isolation on `photo_sets` + objects;
   tools-suggest/accept-to-commit; AI honesty — sourced findings, no fabricated price, disclaimer; money
   math untouched; job-site reality — post never needs AI/signal; client boundary — photos never public).
-- [ ] D2. `/code-review` (user-triggered) or a high-effort adversarial inline pass; address findings;
+- [x] D2. `/code-review` (user-triggered) or a high-effort adversarial inline pass; address findings;
   re-verify typecheck + vitest + build.
-- [ ] D3. Update `PROGRESS.md` (R6 → done) + `relevant_notes.md` (the set model; post-vs-analyze split;
+- [x] D3. Update `PROGRESS.md` (R6 → done) + `relevant_notes.md` (the set model; post-vs-analyze split;
   live-Supabase items: apply the migration + prove `photo_sets` RLS live stay deferred).
-- [ ] D4. Commit the stages, then archive (`openspec archive revamp-photo-advisor --yes`) as its own
+- [x] D4. Commit the stages, then archive (`openspec archive revamp-photo-advisor --yes`) as its own
   commit, then push.
 
 ## Deferred (explicit non-goals — not this change)

@@ -22,11 +22,13 @@ export function SetAnalysis({
 }) {
   const router = useRouter();
   const [running, setRunning] = useState(status === "analyzing");
+  const [aiOff, setAiOff] = useState(false);
   const kicked = useRef(false);
 
   async function run() {
     setRunning(true);
-    await analyzeSetAction(projectId, setId);
+    const result = await analyzeSetAction(projectId, setId);
+    setAiOff(Boolean(result.aiUnconfigured));
     setRunning(false);
     router.refresh();
   }
@@ -53,10 +55,16 @@ export function SetAnalysis({
   if (status === "failed") {
     return (
       <div className="rounded-xl border border-notice-line bg-notice-bg px-3 py-2 text-sm text-notice-fg">
-        <p>The analysis didn&apos;t finish. Your photos are saved — check your signal and try again.</p>
-        <button type="button" onClick={run} className="mt-1 font-medium underline">
-          Retry analysis
-        </button>
+        {aiOff ? (
+          <p>AI isn&apos;t connected, so this set can&apos;t be analyzed yet. Your photos are saved.</p>
+        ) : (
+          <>
+            <p>The analysis didn&apos;t finish. Your photos are saved — check your signal and try again.</p>
+            <button type="button" onClick={run} className="mt-1 font-medium underline">
+              Retry analysis
+            </button>
+          </>
+        )}
       </div>
     );
   }
