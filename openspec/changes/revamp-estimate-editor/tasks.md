@@ -71,15 +71,15 @@ Turbopack / App-Router issues on the rebuilt client editor).
 
 ## Stage D — self-review, code-review, archive
 
-- [ ] D1. Self-review vs the spec deltas + critique lenses (store-inputs-only / show-derived-only;
+- [x] D1. Self-review vs the spec deltas + critique lenses (store-inputs-only / show-derived-only;
   signal honesty — per-line colour only on entered-price labor lines, never uniform-by-construction;
   job-site reality — usable offline, save is the guaranteed path; user access — unsaved-work guard +
   a11y; tenant reads/writes only; no client-side engine math; no dead/fabricated numbers).
-- [ ] D2. `/code-review` (user-triggered) or a high-effort adversarial inline pass; address findings;
+- [x] D2. `/code-review` (user-triggered) or a high-effort adversarial inline pass; address findings;
   re-verify typecheck + vitest + build.
-- [ ] D3. Update `PROGRESS.md` (R5 → done) and `relevant_notes.md` (per-line pricing now reachable;
+- [x] D3. Update `PROGRESS.md` (R5 → done) and `relevant_notes.md` (per-line pricing now reachable;
   the preview-DTO pattern; unit-of-measure still deferred).
-- [ ] D4. Commit the implementation stages, then archive (`openspec archive revamp-estimate-editor
+- [x] D4. Commit the implementation stages, then archive (`openspec archive revamp-estimate-editor
   --yes`) as its own commit, then push.
 
 ## Deferred (explicit non-goals — not this change)

@@ -233,12 +233,26 @@ feed** (real events only). Migration + isolation test. *(The chain teaser + auto
   estimate stays the source of truth for its own value).
 
 ### R5 — Estimate editor: per-line chips + traceable roll-up
-Wire R2 into the editor: "v_ · Active" + the "private, never the client's" note; the profit hero
-with the **existing** drillable roll-up; **per-line editing incl. an optional own price**, each
-labor line showing its own signal with a plain note + **a constructive nudge** ("reprice — well
-under target"); calm treatment (surface the worst draggers, quiet the rest); price/your-profit
-summary; "Turn into the client estimate." Non-labor lines legibly show *no* per-hour signal.
+**`revamp-estimate-editor` ✅ implemented · critiqued · self-reviewed · archived (2026-07-26).** The
+estimator made real and phone-first — it surfaces the per-line pricing / profit-per-hour / signal that
+R2a put in the engine + spec but the UI never exposed. **No schema** (`price_cents`, `sort_order`
+already existed; only `parseLineItems` learned the per-line price). Landed in four green stages:
+**A** — the per-line price seam + a shared `EstimateDTO` mapper + markup helper + read-only
+`previewEstimateAction` (tests). **B** — the phone-first editor: line cards with an optional price
+(ghost baseline hint), per-line economics (price · cost · net · hours · markup) with a red/yellow/green
+signal **only on entered-price labor lines** (baseline lines are uniform by construction — the
+signal-honesty fix), category subtotals, add/delete/duplicate/reorder, the token `EstimatePanel`, live
+engine-truthful recompute **as a progressive enhancement** (save is the guaranteed path — works on one
+bar of signal), a local **draft** + navigate-away guard, and a11y (labels, aria-live, aria-labels).
+**C** — versions strip (each version's own signal + profit/hour, switch/active/duplicate/new) +
+`duplicateEstimate` (inactive copy incl. entered prices) + **save reconciliation** (a concurrently
+added tool line isn't silently dropped). Critiqued up front (fully-featured-for-a-contractor + user
+access lenses; 7 findings folded in — see the proposal's Critique log). typecheck + **375 tests**
+(+20) + build green.
 - **Change:** `revamp-estimate-editor`. **Constitution.** Traceability extends to per-line inputs.
+- **Residual (tracked in relevant_notes):** the reconciliation is change-detection (the floor), not a
+  3-way merge; unit-of-measure, a saved-line/assemblies library, custom phases, allowances/tax, and
+  per-line labor rates stay deferred (explicit non-goals).
 
 ### R6 — Photo Advisor (its own feature)
 `revamp-photo-advisor` — gallery/camera import, captions, per-photo **tags** (to review / reviewed /

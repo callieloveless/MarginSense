@@ -159,6 +159,24 @@ buildable and typed now, live calls wait on a key.
 
 ## Gotchas & lessons
 
+- **Per-line signal is degenerate unless the line is priced** *(2026-07-26, R5)*. With no entered
+  per-line price the engine allocates each line's price cost-proportionally and overhead by hours, so
+  **every baseline labor line's profit-per-hour is identical by construction** (worked example: 10 h vs
+  5 h → net and hours both 2:1 → same $/hr). So the editor shows a per-line red/yellow/green **only on
+  an *entered-price* labor line** (`EstimateLineDTO.signalColor`/`ephCents` are null otherwise); the DTO
+  carries a `priced` flag to gate it. This is *why* per-line pricing exists — don't "helpfully" colour
+  baseline lines.
+- **Live estimate numbers: preview-DTO pattern, save is the floor** *(2026-07-26, R5)*. The editor never
+  re-implements engine math client-side. A read-only `previewEstimateAction` recomputes from the
+  in-progress form via the engine and returns a plain `EstimateDTO`; the same `EstimatePanel` renders
+  the server first paint and the debounced live preview. Liveness is a **progressive enhancement** —
+  save always yields engine-true numbers and works offline; the preview degrades to "numbers update on
+  save." Per-line UI matches economics to the editor line by **key**, not index (survives reorder).
+- **Full-replace save + concurrency:** `saveLineItems` replaces all lines, so a tool suggestion accepted
+  while the editor is open would be dropped. R5 sends the loaded `baseLineIds` and `lineSetChanged`
+  blocks the save if the server's set changed (the floor). **Residual:** it's change-detection, not a
+  3-way merge; the true fix is an id-keyed upsert (`line_items.id` exists) — do it if this bites. The
+  draft cache can still re-hide a concurrent line after a reload.
 - **Magic links get prefetched → "email link is invalid or has expired"; use the 6-digit code**
   *(2026-07-24)*. A clickable magic link carries a one-time token that some mail providers —
   **Proton**, many corporate scanners — *prefetch* (the scanner opens the link before the human),
