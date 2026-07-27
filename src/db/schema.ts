@@ -321,6 +321,10 @@ export const suggestions = pgTable("suggestions", {
    * Nullable: user-created and pre-platform suggestions have none. Every proposed change is
    * traceable to the run — and cost — that produced it (§6.6). */
   toolRunId: uuid("tool_run_id").references(() => toolRuns.id, { onDelete: "set null" }),
+  /** The photo set that produced this suggestion (revamp-photo-advisor), when a set analysis did —
+   * provenance for the set-detail reveal and the review badge. Null for user- and non-photo
+   * suggestions; cleared (not deleted) if the set is removed. */
+  setId: uuid("set_id").references(() => photoSets.id, { onDelete: "set null" }),
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -381,10 +385,42 @@ export const projectPhotos = pgTable("project_photos", {
   byteSize: integer("byte_size").notNull(),
   width: integer("width").notNull(),
   height: integer("height").notNull(),
-  /** The owner's short note on the photo ("joist under the tub"); null until set. */
+  /** Retired: the caption now lives on the photo's set (revamp-photo-advisor). Left in place
+   * (forward-only) and null for new photos. */
   caption: text("caption"),
+  /** The set this photo belongs to (revamp-photo-advisor). Nullable for legacy rows; every new
+   * photo joins a set. Deleting the set cascades to its photos. */
+  setId: uuid("set_id").references(() => photoSets.id, { onDelete: "cascade" }),
   /** The Supabase Auth identity that uploaded it (matches `users.auth_id`); null if unknown. */
   uploadedByAuthId: uuid("uploaded_by_auth_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** A photo set's analysis lifecycle (revamp-photo-advisor): `analyzing` while Photo Advisor runs on
+ * the set, `done` when it finished, `failed` when it didn't (retryable, never blocks the post). */
+export const photoSetAnalysisStatus = pgEnum("photo_set_analysis_status", [
+  "analyzing",
+  "done",
+  "failed",
+]);
+
+/**
+ * A photo set (revamp-photo-advisor) — one or more photos with ONE caption, captured together and
+ * analyzed as a whole. Tenant-isolated like every business-owned row; the caption lives here, not on
+ * the individual photo, and the analysis status drives the history card's review badge.
+ */
+export const photoSets = pgTable("photo_sets", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  businessId: uuid("business_id")
+    .notNull()
+    .references(() => businesses.id, { onDelete: "cascade" }),
+  projectId: uuid("project_id")
+    .notNull()
+    .references(() => projects.id, { onDelete: "cascade" }),
+  /** The one caption for the whole set. */
+  caption: text("caption"),
+  analysisStatus: photoSetAnalysisStatus("analysis_status").notNull().default("analyzing"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
@@ -451,6 +487,10 @@ export type ToolRunRow = typeof toolRuns.$inferSelect;
 export type NewToolRunRow = typeof toolRuns.$inferInsert;
 export type ProjectPhotoRow = typeof projectPhotos.$inferSelect;
 export type NewProjectPhotoRow = typeof projectPhotos.$inferInsert;
+
+export type PhotoSetRow = typeof photoSets.$inferSelect;
+export type NewPhotoSetRow = typeof photoSets.$inferInsert;
+export type PhotoSetAnalysisStatusName = (typeof photoSetAnalysisStatus.enumValues)[number];
 export type DocumentRow = typeof documents.$inferSelect;
 export type NewDocumentRow = typeof documents.$inferInsert;
 

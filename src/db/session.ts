@@ -18,6 +18,7 @@ import {
   createDrizzleDocumentBackend,
   createDrizzleEstimateBackend,
   createDrizzlePhotoBackend,
+  createDrizzlePhotoSetBackend,
   createDrizzleProjectBackend,
   createDrizzleSettingsBackend,
   createDrizzleToolRunsBackend,
@@ -97,6 +98,7 @@ export function tenantDbForSession(authUserId: string, businessId: BusinessId): 
     toolRuns: createDrizzleToolRunsBackend(db, authUserId),
     documents: createDrizzleDocumentBackend(db, authUserId),
     photos: createDrizzlePhotoBackend(db, authUserId),
+    photoSets: createDrizzlePhotoSetBackend(db, authUserId),
     ...(storage.status === "configured" ? { photoStorage: storage.backend } : {}),
   });
 }

@@ -16,11 +16,13 @@ import {
   estimates,
   lineItems,
   overheadItems,
+  photoSets,
   projectPhotos,
   projects,
   suggestions,
   toolRuns,
 } from "./schema";
+import type { PhotoSetAnalysisStatusName } from "./schema";
 import { withAuthenticatedTx, type Db, type Tx } from "./rls";
 import { nextStatus, suggestionEffect } from "../context";
 import type {
@@ -30,6 +32,7 @@ import type {
   EstimateBackend,
   EstimatePatch,
   PhotoBackend,
+  PhotoSetBackend,
   ProjectBackend,
   SettingsBackend,
   ToolRunsBackend,
@@ -494,6 +497,69 @@ export function createDrizzlePhotoBackend(db: Db, authUserId: string): PhotoBack
         const deleted = await tx
           .delete(projectPhotos)
           .where(and(eq(projectPhotos.id, id), eq(projectPhotos.businessId, businessId)))
+          .returning();
+        return deleted[0] ?? null;
+      });
+    },
+    listBySet(businessId: BusinessId, setId: string) {
+      return withAuthenticatedTx(db, authUserId, (tx) =>
+        tx
+          .select()
+          .from(projectPhotos)
+          .where(and(eq(projectPhotos.setId, setId), eq(projectPhotos.businessId, businessId)))
+          .orderBy(asc(projectPhotos.createdAt)),
+      );
+    },
+  };
+}
+
+/**
+ * The production {@link PhotoSetBackend} (revamp-photo-advisor): photo sets inside
+ * `withAuthenticatedTx`, so the app-layer `business_id` predicate and the `photo_sets` RLS policy
+ * both apply. History lists newest-first.
+ */
+export function createDrizzlePhotoSetBackend(db: Db, authUserId: string): PhotoSetBackend {
+  return {
+    listByProject(businessId: BusinessId, projectId: string) {
+      return withAuthenticatedTx(db, authUserId, (tx) =>
+        tx
+          .select()
+          .from(photoSets)
+          .where(and(eq(photoSets.projectId, projectId), eq(photoSets.businessId, businessId)))
+          .orderBy(desc(photoSets.createdAt)),
+      );
+    },
+    getById(businessId: BusinessId, id: string) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const found = await tx
+          .select()
+          .from(photoSets)
+          .where(and(eq(photoSets.id, id), eq(photoSets.businessId, businessId)))
+          .limit(1);
+        return found[0] ?? null;
+      });
+    },
+    insert(row) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const inserted = await tx.insert(photoSets).values(row).returning();
+        return inserted[0]!;
+      });
+    },
+    setAnalysisStatus(businessId: BusinessId, id: string, status: PhotoSetAnalysisStatusName) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const updated = await tx
+          .update(photoSets)
+          .set({ analysisStatus: status, updatedAt: new Date() })
+          .where(and(eq(photoSets.id, id), eq(photoSets.businessId, businessId)))
+          .returning();
+        return updated[0] ?? null;
+      });
+    },
+    deleteById(businessId: BusinessId, id: string) {
+      return withAuthenticatedTx(db, authUserId, async (tx) => {
+        const deleted = await tx
+          .delete(photoSets)
+          .where(and(eq(photoSets.id, id), eq(photoSets.businessId, businessId)))
           .returning();
         return deleted[0] ?? null;
       });

@@ -38,11 +38,14 @@ import type {
   NewOverheadItemRow,
   DocumentRow,
   NewDocumentRow,
+  NewPhotoSetRow,
   NewProjectPhotoRow,
   NewProjectRow,
   NewSuggestionRow,
   NewToolRunRow,
   OverheadItemRow,
+  PhotoSetAnalysisStatusName,
+  PhotoSetRow,
   ProjectPhotoRow,
   ProjectRow,
   ProjectStatus,
@@ -321,6 +324,8 @@ export interface PhotoUploadInput {
   width: number;
   height: number;
   caption?: string | null | undefined;
+  /** The set this photo joins (revamp-photo-advisor). New photos always carry one. */
+  setId?: string | null | undefined;
 }
 
 /**
@@ -341,6 +346,32 @@ export interface PhotoBackend {
   ): Promise<ProjectPhotoRow | null>;
   /** Delete scoped to the business; returns the deleted row (null if it isn't ours). */
   deleteById(businessId: BusinessId, id: string): Promise<ProjectPhotoRow | null>;
+  /** This set's photos, scoped to the business (for object cleanup on set delete). */
+  listBySet(businessId: BusinessId, setId: string): Promise<ProjectPhotoRow[]>;
+}
+
+/** What a caller supplies to create a photo set (revamp-photo-advisor). `business_id` is stamped by
+ * the handle, never input; a new set starts `analyzing` (its auto-run is kicked right after post). */
+export interface PhotoSetInput {
+  projectId: string;
+  caption?: string | null | undefined;
+}
+
+/**
+ * The photo-set port `TenantDb` talks to (revamp-photo-advisor). Like every other port, each method
+ * takes `businessId` explicitly and only `TenantDb` calls it with its bound id — so a set's tenant is
+ * always the session's, never input.
+ */
+export interface PhotoSetBackend {
+  listByProject(businessId: BusinessId, projectId: string): Promise<PhotoSetRow[]>;
+  getById(businessId: BusinessId, id: string): Promise<PhotoSetRow | null>;
+  insert(row: NewPhotoSetRow): Promise<PhotoSetRow>;
+  setAnalysisStatus(
+    businessId: BusinessId,
+    id: string,
+    status: PhotoSetAnalysisStatusName,
+  ): Promise<PhotoSetRow | null>;
+  deleteById(businessId: BusinessId, id: string): Promise<PhotoSetRow | null>;
 }
 
 /**
@@ -418,6 +449,7 @@ export interface TenantBackends {
   context?: ContextBackend | undefined;
   toolRuns?: ToolRunsBackend | undefined;
   photos?: PhotoBackend | undefined;
+  photoSets?: PhotoSetBackend | undefined;
   /** Absent when object storage is unconfigured — the surface renders "connect storage". */
   photoStorage?: PhotoStorageBackend | undefined;
   documents?: DocumentBackend | undefined;
@@ -436,6 +468,7 @@ export class TenantDb {
   readonly #context: ContextBackend | undefined;
   readonly #toolRuns: ToolRunsBackend | undefined;
   readonly #photos: PhotoBackend | undefined;
+  readonly #photoSets: PhotoSetBackend | undefined;
   readonly #photoStorage: PhotoStorageBackend | undefined;
   readonly #documents: DocumentBackend | undefined;
 
@@ -452,6 +485,7 @@ export class TenantDb {
     this.#context = backends.context;
     this.#toolRuns = backends.toolRuns;
     this.#photos = backends.photos;
+    this.#photoSets = backends.photoSets;
     this.#photoStorage = backends.photoStorage;
   }
 
@@ -501,6 +535,14 @@ export class TenantDb {
       throw new Error("TenantDb has no photos backend configured.");
     }
     return this.#photos;
+  }
+
+  /** The photo-set backend, or a clear error if this handle wasn't wired with one. */
+  get #photoSetBackend(): PhotoSetBackend {
+    if (!this.#photoSets) {
+      throw new Error("TenantDb has no photo-sets backend configured.");
+    }
+    return this.#photoSets;
   }
 
   /** The photo-object backend, or a clear error when object storage is unconfigured. Callers
@@ -830,6 +872,7 @@ export class TenantDb {
         width: input.width,
         height: input.height,
         caption: input.caption ?? null,
+        setId: input.setId ?? null,
       });
     } catch (err) {
       // Best-effort cleanup; never let it mask the real failure.
@@ -900,6 +943,55 @@ export class TenantDb {
   async signedPhotoUrl(key: string, expiresInSeconds = SIGNED_URL_TTL_SECONDS): Promise<string | null> {
     const signed = await this.signedPhotoUrls([key], expiresInSeconds);
     return signed.get(key) ?? null;
+  }
+
+  // --- Photo sets (revamp-photo-advisor) -------------------------------------------
+
+  /** This project's photo sets, scoped to this business. Another tenant's never appear. */
+  listPhotoSets(projectId: string): Promise<PhotoSetRow[]> {
+    return this.#photoSetBackend.listByProject(this.businessId, projectId);
+  }
+
+  /** One set by id, scoped to this business. Null if it isn't ours. */
+  getPhotoSet(id: string): Promise<PhotoSetRow | null> {
+    return this.#photoSetBackend.getById(this.businessId, id);
+  }
+
+  /** Create a set with its one caption. It starts `analyzing`; the caller kicks the analysis right
+   * after posting. `business_id` is stamped from this handle, never input. */
+  createPhotoSet(input: PhotoSetInput): Promise<PhotoSetRow> {
+    return this.#photoSetBackend.insert({
+      businessId: this.businessId,
+      projectId: input.projectId,
+      caption: input.caption ?? null,
+      analysisStatus: "analyzing",
+    });
+  }
+
+  /** Move a set's analysis status (analyzing → done/failed), scoped to this business. */
+  setPhotoSetStatus(id: string, status: PhotoSetAnalysisStatusName): Promise<PhotoSetRow | null> {
+    return this.#photoSetBackend.setAnalysisStatus(this.businessId, id, status);
+  }
+
+  /** This set's photos, scoped to this business. */
+  listPhotosBySet(setId: string): Promise<ProjectPhotoRow[]> {
+    return this.#photoBackend.listBySet(this.businessId, setId);
+  }
+
+  /**
+   * Delete a set: its photos' objects first, then the set row (whose FK cascades the photo rows),
+   * so no stray bytes remain. Null if the set isn't ours (a no-op). The caller removes the set's
+   * `photo` context entry from shared memory.
+   */
+  async deletePhotoSet(id: string): Promise<PhotoSetRow | null> {
+    const set = await this.#photoSetBackend.getById(this.businessId, id);
+    if (!set) return null;
+    if (this.hasPhotoStorage) {
+      const photos = await this.#photoBackend.listBySet(this.businessId, id);
+      const keys = photos.flatMap((p) => [p.storageKey, p.thumbKey]);
+      if (keys.length > 0) await this.#photoStorageBackend.deleteObjects(this.businessId, keys);
+    }
+    return this.#photoSetBackend.deleteById(this.businessId, id);
   }
 
   // --- Client documents (constitution §5; add-client-document) ---------------------
@@ -1326,6 +1418,7 @@ export function createMemoryContextBackend(
         author: row.author ?? "user",
         authorTool: row.authorTool ?? null,
         toolRunId: row.toolRunId ?? null,
+        setId: row.setId ?? null,
         resolvedAt: null,
         createdAt: now,
         updatedAt: now,
@@ -1451,6 +1544,7 @@ export function createMemoryPhotoBackend(seed: ProjectPhotoRow[] = []): PhotoBac
         width: row.width,
         height: row.height,
         caption: row.caption ?? null,
+        setId: row.setId ?? null,
         // The real backend stamps the signed-in identity; the memory one has no session.
         uploadedByAuthId: null,
         createdAt: now,
@@ -1463,6 +1557,53 @@ export function createMemoryPhotoBackend(seed: ProjectPhotoRow[] = []): PhotoBac
       const row = rows.find((r) => r.id === id && r.businessId === businessId);
       if (!row) return null;
       row.caption = caption;
+      return row;
+    },
+    async deleteById(businessId, id) {
+      const i = rows.findIndex((r) => r.id === id && r.businessId === businessId);
+      if (i < 0) return null;
+      return rows.splice(i, 1)[0]!;
+    },
+    async listBySet(businessId, setId) {
+      return rows.filter((r) => r.businessId === businessId && r.setId === setId);
+    },
+  };
+}
+
+/**
+ * An in-memory {@link PhotoSetBackend} over one array holding *every* tenant's sets — the same
+ * shape as the other memory backends, so the isolation tests prove a set's tenant is the handle's,
+ * never input, without a live database.
+ */
+export function createMemoryPhotoSetBackend(seed: PhotoSetRow[] = []): PhotoSetBackend {
+  const rows: PhotoSetRow[] = [...seed];
+  let seq = seed.length;
+  const now = new Date(0);
+
+  return {
+    async listByProject(businessId, projectId) {
+      return rows.filter((r) => r.businessId === businessId && r.projectId === projectId);
+    },
+    async getById(businessId, id) {
+      return rows.find((r) => r.id === id && r.businessId === businessId) ?? null;
+    },
+    async insert(row) {
+      const stored: PhotoSetRow = {
+        id: row.id ?? `mem-set-${++seq}`,
+        businessId: row.businessId,
+        projectId: row.projectId,
+        caption: row.caption ?? null,
+        analysisStatus: row.analysisStatus ?? "analyzing",
+        createdAt: now,
+        updatedAt: now,
+      };
+      rows.push(stored);
+      return stored;
+    },
+    async setAnalysisStatus(businessId, id, status) {
+      const row = rows.find((r) => r.id === id && r.businessId === businessId);
+      if (!row) return null;
+      row.analysisStatus = status;
       return row;
     },
     async deleteById(businessId, id) {
