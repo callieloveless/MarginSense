@@ -11,6 +11,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getServerSession, tenantDbForSession } from "@/src/db/session";
 import { validateUpload } from "@/src/photos";
+import { resolveModelPort } from "@/src/ai";
+import { adviseSet } from "@/app/_lib/photo-advise";
 import {
   deletePhotoSetForProject,
   postPhotoSetForProject,
@@ -83,6 +85,40 @@ export async function postPhotoSetAction(
 
   revalidate(projectId);
   return { ok: true, setId: result.set.id };
+}
+
+export type AnalyzeResult = { ok: boolean; aiUnconfigured?: boolean };
+
+/**
+ * Run Photo Advisor on a set (revamp-photo-advisor) — auto-kicked by the client right after a post,
+ * and again on Retry. Best-effort and idempotent: it moves the set's status to done/failed, tags the
+ * suggestions it created with the set, and never re-posts the photos. A failed or unconfigured run
+ * leaves the set posted and retryable.
+ */
+export async function analyzeSetAction(projectId: string, setId: string): Promise<AnalyzeResult> {
+  const session = await getServerSession();
+  if (session.status !== "ready") return { ok: false };
+  const tenantDb = tenantDbForSession(session.authUserId, session.businessId);
+
+  const resolution = resolveModelPort();
+  if (resolution.status !== "configured") {
+    await tenantDb.setPhotoSetStatus(setId, "failed");
+    revalidate(projectId);
+    return { ok: false, aiUnconfigured: true };
+  }
+
+  const result = await adviseSet(tenantDb, resolution.port, { projectId, setId });
+  if (result.ok) {
+    if (result.createdSuggestionIds.length > 0) {
+      await tenantDb.tagSuggestionsWithSet(result.createdSuggestionIds, setId);
+    }
+    await tenantDb.setPhotoSetStatus(setId, "done");
+  } else {
+    await tenantDb.setPhotoSetStatus(setId, "failed");
+  }
+  revalidate(projectId);
+  revalidatePath(`/projects/${projectId}/photos/${setId}`);
+  return { ok: result.ok };
 }
 
 /** Delete a set (its photos, objects, and the `photo` context entry), then return to the history. */

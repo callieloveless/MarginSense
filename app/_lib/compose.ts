@@ -77,7 +77,8 @@ const photoAdvisorToCodeFinder: ComposeEdge = {
       return {
         query: `Building code for: ${finding.summary}.${materials}`,
         ...(serviceArea ? { location: serviceArea } : {}),
-        photoStorageKey: output.photoStorageKey,
+        // Traceability back to the source — now the photo SET (revamp-photo-advisor).
+        photoStorageKey: output.setId,
       };
     });
   },

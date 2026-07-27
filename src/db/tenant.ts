@@ -289,6 +289,9 @@ export interface ContextBackend {
   ): Promise<SuggestionRow[]>;
   getSuggestion(businessId: BusinessId, id: string): Promise<SuggestionRow | null>;
   createSuggestion(row: NewSuggestionRow): Promise<SuggestionRow>;
+  /** Tag a suggestion with the photo set that produced it (revamp-photo-advisor), scoped to the
+   * business. A no-op if the suggestion isn't ours. */
+  setSuggestionSet(businessId: BusinessId, id: string, setId: string): Promise<void>;
   resolveSuggestion(
     businessId: BusinessId,
     id: string,
@@ -789,6 +792,14 @@ export class TenantDb {
       authorTool,
       toolRunId: input.toolRunId ?? null,
     });
+  }
+
+  /** Tag suggestions with the photo set that produced them (revamp-photo-advisor), scoped to this
+   * business — so the set detail can reveal its own recommendations and the badge can count them. */
+  async tagSuggestionsWithSet(ids: readonly string[], setId: string): Promise<void> {
+    for (const id of ids) {
+      await this.#contextBackend.setSuggestionSet(this.businessId, id, setId);
+    }
   }
 
   // --- Tool runs (constitution §2, §7; add-tool-platform) --------------------------
@@ -1429,6 +1440,10 @@ export function createMemoryContextBackend(
       };
       suggestionRows.push(stored);
       return stored;
+    },
+    async setSuggestionSet(businessId, id, setId) {
+      const s = suggestionRows.find((x) => x.id === id && x.businessId === businessId);
+      if (s) s.setId = setId;
     },
     async resolveSuggestion(businessId, id, action) {
       const s = suggestionRows.find((x) => x.id === id && x.businessId === businessId);

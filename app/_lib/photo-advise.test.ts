@@ -1,11 +1,11 @@
 /**
- * The photo → Photo Advisor wiring (add-photo-advisor), against the in-memory tenant backends and
- * a mock model. This is the layer the tool's own tests can't reach: reading the stored image
- * tenant-scoped, refusing a photo from another project, handing the right bytes and media type to
- * the model, and turning a run into pending suggestions on the real queue.
+ * The photo set → Photo Advisor wiring (revamp-photo-advisor), against the in-memory tenant
+ * backends and a mock model. This is the layer the tool's own tests can't reach: reading a set's
+ * stored images tenant-scoped, refusing a set from another project, handing the right bytes and
+ * media type to the model, and turning a run into pending suggestions on the real queue.
  *
  * It exists because a missing `photo.uploaded` emit once shipped through a green suite — the tool
- * was tested and the actions were not.
+ * was tested and the wiring was not.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,6 +13,7 @@ import {
   createMemoryContextBackend,
   createMemoryEstimateBackend,
   createMemoryPhotoBackend,
+  createMemoryPhotoSetBackend,
   createMemoryPhotoStorageBackend,
   createMemoryProjectBackend,
   createMemorySettingsBackend,
@@ -22,14 +23,14 @@ import {
 } from "@/src/db/tenant";
 import { createMockModelPort, type ModelRequest } from "@/src/ai";
 import { photoAdvisorTool, type VisionResult } from "@/src/tools";
-import { advisePhoto } from "./photo-advise";
+import { adviseSet } from "./photo-advise";
 import { COMPOSE_EDGES, type ComposeEdge } from "./compose";
-import { storePhotoForProject } from "./photo-upload";
+import { postPhotoSetForProject } from "./photo-set-post";
 
 const BUSINESS = "biz-a";
 const PROJECT = "p-1";
 
-// These tests exercise advisePhoto in isolation. The live `photo-advisor → code-finder` edge
+// These tests exercise adviseSet in isolation. The live `photo-advisor → code-finder` edge
 // (add-code-finder) is exercised by its own integration test; here it would spawn composed runs
 // that add tool_runs and console noise unrelated to what each test asserts, so it is unwired for
 // the duration and restored after.
@@ -54,12 +55,14 @@ const vision: VisionResult = {
 };
 
 /** A handle wired with everything the snapshot assembler touches — entries, messages, settings,
- * and estimates — plus photos and tool runs. No active estimate unless a test adds one. */
+ * and estimates — plus photos, photo sets, and tool runs. No active estimate unless a test adds
+ * one. */
 function wire(): { tenantDb: TenantDb } {
   return {
     tenantDb: createTenantDb(BUSINESS, {
       projects: createMemoryProjectBackend(),
       photos: createMemoryPhotoBackend(),
+      photoSets: createMemoryPhotoSetBackend(),
       photoStorage: createMemoryPhotoStorageBackend(),
       context: createMemoryContextBackend(),
       toolRuns: createMemoryToolRunsBackend(),
@@ -69,28 +72,34 @@ function wire(): { tenantDb: TenantDb } {
   };
 }
 
-async function storePhoto(tenantDb: TenantDb, projectId = PROJECT, caption?: string) {
-  const stored = await storePhotoForProject(tenantDb, {
+/** Post a one-photo set (bytes [1,2,3,4]) for a project, optionally captioned, and return its
+ * row — the set the advisor reads its images back from. */
+async function storeSet(tenantDb: TenantDb, projectId = PROJECT, caption?: string) {
+  const posted = await postPhotoSetForProject(tenantDb, {
     projectId,
-    contentType: "image/jpeg",
-    bytes: new Uint8Array([1, 2, 3, 4]),
-    thumbBytes: new Uint8Array([1]),
-    width: 1568,
-    height: 1176,
     ...(caption !== undefined ? { caption } : {}),
+    photos: [
+      {
+        contentType: "image/jpeg",
+        bytes: new Uint8Array([1, 2, 3, 4]),
+        thumbBytes: new Uint8Array([1]),
+        width: 1568,
+        height: 1176,
+      },
+    ],
   });
-  if (!stored.ok) throw new Error("fixture failed to store a photo");
-  return stored.photo;
+  if (!posted.ok) throw new Error("fixture failed to store a set");
+  return posted.set;
 }
 
-describe("advisePhoto", () => {
-  it("runs on a stored photo and lands pending suggestions on the queue", async () => {
+describe("adviseSet", () => {
+  it("runs on a stored set and lands pending suggestions on the queue", async () => {
     const { tenantDb } = wire();
-    const photo = await storePhoto(tenantDb);
+    const set = await storeSet(tenantDb);
 
-    const result = await advisePhoto(tenantDb, createMockModelPort({ result: vision }), {
+    const result = await adviseSet(tenantDb, createMockModelPort({ result: vision }), {
       projectId: PROJECT,
-      photoId: photo.id,
+      setId: set.id,
     });
 
     expect(result.ok).toBe(true);
@@ -100,7 +109,7 @@ describe("advisePhoto", () => {
     expect(pending[0]!.target).toBe("context_entry");
     const payload = pending[0]!.payload as { payload: Record<string, unknown> };
     expect(payload.payload.severity).toBe("safety");
-    expect(payload.payload.photoStorageKey).toBe(photo.storageKey);
+    expect(payload.payload.setId).toBe(set.id);
     // Authored by the tool, and traceable to the run that produced it.
     expect(pending[0]!.authorTool).toBe("photo-advisor");
     expect(pending[0]!.toolRunId).not.toBeNull();
@@ -108,7 +117,7 @@ describe("advisePhoto", () => {
 
   it("sends the stored bytes and the row's media type to the model", async () => {
     const { tenantDb } = wire();
-    const photo = await storePhoto(tenantDb, PROJECT, "under the tub");
+    const set = await storeSet(tenantDb, PROJECT, "under the tub");
 
     let seen: ModelRequest | null = null;
     const mock = createMockModelPort({ result: vision });
@@ -119,16 +128,16 @@ describe("advisePhoto", () => {
       },
     };
 
-    await advisePhoto(tenantDb, port, {
+    await adviseSet(tenantDb, port, {
       projectId: PROJECT,
-      photoId: photo.id,
+      setId: set.id,
       question: "  is this worth sistering?  ",
     });
 
     const request = seen as ModelRequest | null;
     expect(request?.images?.[0]?.mediaType).toBe("image/jpeg");
     expect(request?.images?.[0]?.dataBase64).toBe(Buffer.from([1, 2, 3, 4]).toString("base64"));
-    // The question is trimmed, and the photo's own caption rides along as context.
+    // The question is trimmed, and the set's own caption rides along as context.
     const text = String(request?.messages?.[0]?.content ?? "");
     expect(text).toContain("is this worth sistering?");
     expect(text).not.toContain("  is this");
@@ -137,11 +146,11 @@ describe("advisePhoto", () => {
 
   it("records a completed tool_run", async () => {
     const { tenantDb } = wire();
-    const photo = await storePhoto(tenantDb);
+    const set = await storeSet(tenantDb);
 
-    await advisePhoto(tenantDb, createMockModelPort({ result: vision }), {
+    await adviseSet(tenantDb, createMockModelPort({ result: vision }), {
       projectId: PROJECT,
-      photoId: photo.id,
+      setId: set.id,
     });
 
     const runs = await tenantDb.listToolRuns(PROJECT);
@@ -150,28 +159,28 @@ describe("advisePhoto", () => {
     expect(runs[0]!.status).toBe("ok");
   });
 
-  it("refuses a photo id that isn't this project's", async () => {
+  it("refuses a set id that isn't this project's", async () => {
     const { tenantDb } = wire();
-    const elsewhere = await storePhoto(tenantDb, "other-project");
+    const elsewhere = await storeSet(tenantDb, "other-project");
 
-    const result = await advisePhoto(tenantDb, createMockModelPort({ result: vision }), {
+    const result = await adviseSet(tenantDb, createMockModelPort({ result: vision }), {
       projectId: PROJECT,
-      photoId: elsewhere.id,
+      setId: elsewhere.id,
     });
 
     expect(result).toEqual({
       ok: false,
-      error: "That photo couldn't be read. Try again, or take a new one.",
+      error: "That set couldn't be read. Try again.",
     });
     expect(await tenantDb.listPendingSuggestions(PROJECT)).toHaveLength(0);
   });
 
-  it("refuses an unknown photo id without running anything", async () => {
+  it("refuses an unknown set id without running anything", async () => {
     const { tenantDb } = wire();
 
-    const result = await advisePhoto(tenantDb, createMockModelPort({ result: vision }), {
+    const result = await adviseSet(tenantDb, createMockModelPort({ result: vision }), {
       projectId: PROJECT,
-      photoId: "not-a-photo",
+      setId: "not-a-set",
     });
 
     expect(result.ok).toBe(false);
@@ -180,7 +189,7 @@ describe("advisePhoto", () => {
 
   it("reports a plain failure and logs the cause when the run throws", async () => {
     const { tenantDb } = wire();
-    const photo = await storePhoto(tenantDb);
+    const set = await storeSet(tenantDb);
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     const failing = {
       complete: async () => {
@@ -188,7 +197,7 @@ describe("advisePhoto", () => {
       },
     };
 
-    const result = await advisePhoto(tenantDb, failing, { projectId: PROJECT, photoId: photo.id });
+    const result = await adviseSet(tenantDb, failing, { projectId: PROJECT, setId: set.id });
 
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error).toMatch(/didn't finish/i);

@@ -37,7 +37,7 @@ export function isImplausibleEstimate(labor: VisionLabor): boolean {
  * A finding → its `finding` context-entry suggestion. Materials the repair needs are folded into
  * the entry's detail text (they are part of the diagnosis), never into a priced line.
  */
-export function findingSuggestion(finding: VisionFinding, storageKey: string): ProposedSuggestion {
+export function findingSuggestion(finding: VisionFinding, setId: string): ProposedSuggestion {
   const materials = finding.materials ?? [];
   const detailParts = [
     finding.detail,
@@ -48,7 +48,7 @@ export function findingSuggestion(finding: VisionFinding, storageKey: string): P
   const payload: Record<string, unknown> = {
     summary: finding.summary,
     severity: finding.severity,
-    photoStorageKey: storageKey,
+    setId,
   };
   if (detailParts.length > 0) payload.detail = detailParts.join(" ");
 

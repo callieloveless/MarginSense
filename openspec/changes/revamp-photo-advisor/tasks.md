@@ -39,19 +39,19 @@ never depend on the model or a good connection.
 
 ## Stage C — set analysis (Photo Advisor on a set, auto-run)
 
-- [ ] C1. Reshape `photoAdvisorTool` input to a **set**: `{ setId, caption?, question?, images: [...] }`
+- [x] C1. Reshape `photoAdvisorTool` input to a **set**: `{ setId, caption?, question?, images: [...] }`
   (bounded count); the tool sends all images in one model call and still gets no storage/DB handle.
   `advisePhoto` → `adviseSet(tenantDb, port, { projectId, setId, question? })` reads the set's photos
   tenant-scoped and dispatches; findings reference the set; labor candidates unchanged (minutes only).
-- [ ] C2. `analyzeSetAction` (best-effort, retryable): runs `adviseSet`, sets `analysis_status`
+- [x] C2. `analyzeSetAction` (best-effort, retryable): runs `adviseSet`, sets `analysis_status`
   done/failed, tags produced suggestions with `set_id`. **Client auto-kicks it right after a successful
   post** (automatic, not a manual tap) — separate from the post; retry from the set detail on failure;
   retry skips duplicates (existing dispatch dedup).
-- [ ] C3. Set-detail **"See what MarginSense found"** reveal: the set's pending suggestions via
+- [x] C3. Set-detail **"See what MarginSense found"** reveal: the set's pending suggestions via
   `SuggestionCard` + the before→after profit preview + accept/dismiss in place; the shared
   licensed-professional disclaimer shown before/around analysis. The same suggestions show in the hub
   "Waiting on you"; the set badge follows the pending count.
-- [ ] C4. Tests: `adviseSet` against in-memory backends + mock model — a set yields set-referencing
+- [x] C4. Tests: `adviseSet` against in-memory backends + mock model — a set yields set-referencing
   findings + labor `estimate_line_item` suggestions (minutes only), all pending + set-tagged; **no
   material line, no price ever**; the post carries the disclaimer; a retry skips duplicates; the post↔
   analyze split (post makes no model call; a failed analysis leaves the set posted). typecheck + vitest

@@ -17,16 +17,25 @@
 import { z } from "zod";
 import { FINDING_SEVERITIES } from "../../context";
 
-/** A Photo Advisor run: one stored photo (id for traceability, bytes for the model) and an
- * optional question to focus the diagnosis. The caller resolves the bytes tenant-scoped. */
-export const inputSchema = z.object({
-  photoId: z.string().min(1),
-  /** The photo's storage key — rides along so a finding can name the photo it came from. */
-  storageKey: z.string().min(1),
+/** The most images sent to the model in one set analysis — bounded so a huge set can't blow up
+ * one request's token cost; the surface says when a set exceeds it (revamp-photo-advisor). */
+export const MAX_ADVISOR_IMAGES = 12;
+
+/** One image in a set: bytes for the model (the tool gets no storage handle, §5). */
+export const advisorImageSchema = z.object({
   mediaType: z.string().min(1),
   /** The image itself, base64. Transient: nothing persists a tool run's input. */
-  imageBase64: z.string().min(1),
-  /** The photo's caption, when it has one — cheap context for the model. */
+  dataBase64: z.string().min(1),
+});
+export type AdvisorImage = z.infer<typeof advisorImageSchema>;
+
+/** A Photo Advisor run: a whole photo **set** (its id for traceability, all its images for the
+ * model) plus the set's one caption and an optional question. The caller resolves the bytes
+ * tenant-scoped (revamp-photo-advisor). */
+export const inputSchema = z.object({
+  setId: z.string().min(1),
+  images: z.array(advisorImageSchema).min(1).max(MAX_ADVISOR_IMAGES),
+  /** The set's one caption, when it has one — cheap context for the model. */
   caption: z.string().trim().max(500).optional(),
   question: z.string().trim().max(500).optional(),
 });
@@ -71,9 +80,9 @@ export const outputSchema = z.object({
   flaggedLabor: z.array(z.string()),
   /** Whether candidate work could be proposed at all (false with no active estimate). */
   proposedLineItems: z.boolean(),
-  /** The storage key of the photo this run was about — every finding shares it. Carried on the
-   * output so a downstream tool (Code Finder, composed off findings) can trace a result back to
-   * the picture, since the raw findings don't carry it (add-code-finder). */
-  photoStorageKey: z.string().min(1),
+  /** The id of the set this run was about — every finding shares it. Carried on the output so a
+   * downstream tool (Code Finder, composed off findings) can trace a result back to the set, since
+   * the raw findings don't carry it (revamp-photo-advisor). */
+  setId: z.string().min(1),
 });
 export type PhotoAdvisorOutput = z.infer<typeof outputSchema>;

@@ -15,6 +15,7 @@ export { referenceTool } from "./reference";
 export {
   photoAdvisorTool,
   IMPLAUSIBLE_LABOR_MINUTES,
+  MAX_ADVISOR_IMAGES,
   type PhotoAdvisorInput,
   type PhotoAdvisorOutput,
   type VisionFinding,

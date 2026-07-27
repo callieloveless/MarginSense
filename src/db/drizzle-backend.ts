@@ -332,6 +332,14 @@ export function createDrizzleContextBackend(db: Db, authUserId: string): Context
         return inserted[0]!;
       });
     },
+    async setSuggestionSet(businessId: BusinessId, id: string, setId: string) {
+      await withAuthenticatedTx(db, authUserId, (tx) =>
+        tx
+          .update(suggestions)
+          .set({ setId, updatedAt: new Date() })
+          .where(and(eq(suggestions.id, id), eq(suggestions.businessId, businessId))),
+      );
+    },
     resolveSuggestion(businessId: BusinessId, id: string, action) {
       return withAuthenticatedTx(db, authUserId, async (tx) => {
         const found = await tx

@@ -1,7 +1,13 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getServerSession, tenantDbForSession } from "@/src/db/session";
+import { PHYSICAL_WORK_DISCLAIMER } from "@/src/tools";
+import { loadJobProfit, previewForSuggestion } from "@/app/_lib/job-profit";
+import { SuggestionCard } from "@/app/_components/suggestion-card";
+import { SectionHeader } from "@/app/_components/ui";
+import { acceptSuggestionAction, dismissSuggestionAction } from "../../context/actions";
 import { deleteSetAction } from "../actions";
+import { SetAnalysis } from "./set-analysis";
 import { SetGallery, type SetPhoto } from "./set-gallery";
 
 /**
@@ -31,12 +37,18 @@ export default async function SetDetailPage({
   const set = await tenantDb.getPhotoSet(setId);
   if (!set || set.projectId !== projectId) notFound();
 
-  const photos = await tenantDb.listPhotosBySet(setId);
+  const [photos, pending, job] = await Promise.all([
+    tenantDb.listPhotosBySet(setId),
+    tenantDb.listPendingSuggestions(projectId),
+    loadJobProfit(tenantDb, projectId),
+  ]);
   const thumbUrls = await tenantDb.signedPhotoUrls(photos.map((p) => p.thumbKey));
   const setPhotos: SetPhoto[] = photos.map((p) => ({
     id: p.id,
     thumbUrl: thumbUrls.get(p.thumbKey) ?? null,
   }));
+  // This set's own recommendations — the same durable queue as the hub's "Waiting on you".
+  const setPending = pending.filter((s) => s.setId === setId);
 
   return (
     <Shell projectId={projectId}>
@@ -46,6 +58,34 @@ export default async function SetDetailPage({
       <p className="mt-1 text-sm text-muted">
         {relativeTime(set.createdAt)} · one caption for the set · posted to job memory
       </p>
+
+      <div className="mt-4">
+        <SetAnalysis projectId={projectId} setId={setId} status={set.analysisStatus} />
+      </div>
+
+      {set.analysisStatus === "done" ? (
+        <section className="mt-4">
+          <SectionHeader title="See what MarginSense found" />
+          {setPending.length === 0 ? (
+            <p className="rounded-xl border border-line bg-surface px-3 py-2 text-sm text-muted">
+              Nothing to act on from this set.
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {setPending.map((s) => (
+                <SuggestionCard
+                  key={s.id}
+                  suggestion={s}
+                  preview={previewForSuggestion(s, job)}
+                  accept={acceptSuggestionAction.bind(null, projectId, s.id)}
+                  dismiss={dismissSuggestionAction.bind(null, projectId, s.id)}
+                />
+              ))}
+            </ul>
+          )}
+          <p className="mt-2 text-xs text-muted">{PHYSICAL_WORK_DISCLAIMER}</p>
+        </section>
+      ) : null}
 
       <form action={deleteSetAction.bind(null, projectId, setId)} className="mt-6">
         <button className="rounded-full border border-line px-3 py-1.5 text-sm font-medium text-muted">

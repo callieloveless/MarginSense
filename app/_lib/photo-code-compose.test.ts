@@ -1,7 +1,7 @@
 /**
  * The live `photo-advisor → code-finder` compose edge (add-code-finder), end to end through
- * `advisePhoto` → `dispatchAndCompose` against the memory backends and a mock model. This is where
- * 9a's dormant seam and 9b's tool meet: a photo diagnosis fans out to a code lookup per
+ * `adviseSet` → `dispatchAndCompose` against the memory backends and a mock model. This is where
+ * 9a's dormant seam and 9b's tool meet: a photo-set diagnosis fans out to a code lookup per
  * code-relevant finding, no user retyping.
  *
  * The mock returns a schema-appropriate result per call (vision for the Photo Advisor run, codes
@@ -14,6 +14,7 @@ import {
   createMemoryContextBackend,
   createMemoryEstimateBackend,
   createMemoryPhotoBackend,
+  createMemoryPhotoSetBackend,
   createMemoryPhotoStorageBackend,
   createMemoryProjectBackend,
   createMemorySettingsBackend,
@@ -23,8 +24,8 @@ import {
 } from "@/src/db/tenant";
 import { createMockModelPort, type ModelPort, type ModelRequest } from "@/src/ai";
 import { type CodeResult, type VisionResult } from "@/src/tools";
-import { advisePhoto } from "./photo-advise";
-import { storePhotoForProject } from "./photo-upload";
+import { adviseSet } from "./photo-advise";
+import { postPhotoSetForProject } from "./photo-set-post";
 
 const BUSINESS = "biz-a";
 const PROJECT = "p-1";
@@ -74,6 +75,7 @@ function wire(): TenantDb {
   return createTenantDb(BUSINESS, {
     projects: createMemoryProjectBackend(),
     photos: createMemoryPhotoBackend(),
+    photoSets: createMemoryPhotoSetBackend(),
     photoStorage: createMemoryPhotoStorageBackend(),
     context: createMemoryContextBackend(),
     toolRuns: createMemoryToolRunsBackend(),
@@ -82,8 +84,8 @@ function wire(): TenantDb {
   });
 }
 
-/** Store a photo and set a service area, so a composed Code Finder run has a photo and a
- * jurisdiction. */
+/** Post a photo set and set a service area, so a composed Code Finder run has a set and a
+ * jurisdiction. Returns the set's id. */
 async function seed(tenantDb: TenantDb): Promise<string> {
   await tenantDb.saveSettings({
     annualOverheadCents: 6_000_000,
@@ -97,30 +99,35 @@ async function seed(tenantDb: TenantDb): Promise<string> {
     defaultContingencyBp: 500,
     serviceArea: SERVICE_AREA,
   });
-  const stored = await storePhotoForProject(tenantDb, {
+  const posted = await postPhotoSetForProject(tenantDb, {
     projectId: PROJECT,
-    contentType: "image/jpeg",
-    bytes: new Uint8Array([1, 2, 3, 4]),
-    thumbBytes: new Uint8Array([1]),
-    width: 1568,
-    height: 1176,
+    photos: [
+      {
+        contentType: "image/jpeg",
+        bytes: new Uint8Array([1, 2, 3, 4]),
+        thumbBytes: new Uint8Array([1]),
+        width: 1568,
+        height: 1176,
+      },
+    ],
   });
-  if (!stored.ok) throw new Error("fixture failed to store a photo");
-  return stored.photo.id;
+  if (!posted.ok) throw new Error("fixture failed to store a set");
+  return posted.set.id;
 }
 
 describe("photo-advisor → code-finder compose edge", () => {
   it("composes one Code Finder run per code-relevant finding, skipping the note", async () => {
     const tenantDb = wire();
-    const photoId = await seed(tenantDb);
+    const setId = await seed(tenantDb);
 
-    await advisePhoto(tenantDb, schemaAwarePort(), { projectId: PROJECT, photoId });
+    await adviseSet(tenantDb, schemaAwarePort(), { projectId: PROJECT, setId });
 
     const runs = await tenantDb.listToolRuns(PROJECT);
     const advisor = runs.filter((r) => r.toolName === "photo-advisor");
     const code = runs.filter((r) => r.toolName === "code-finder");
     expect(advisor).toHaveLength(1);
-    expect(advisor[0]!.source).toBe("user");
+    // The set analysis is the automatic post-set run, not a user-opened tool.
+    expect(advisor[0]!.source).toBe("auto");
     // Two code-relevant findings (safety + attention); the `note` composes nothing.
     expect(code).toHaveLength(2);
     expect(code.every((r) => r.source === "compose")).toBe(true);
@@ -129,10 +136,10 @@ describe("photo-advisor → code-finder compose edge", () => {
 
   it("passes the finding and the service area into the composed query", async () => {
     const tenantDb = wire();
-    const photoId = await seed(tenantDb);
+    const setId = await seed(tenantDb);
     const requests: ModelRequest[] = [];
 
-    await advisePhoto(tenantDb, schemaAwarePort(requests), { projectId: PROJECT, photoId });
+    await adviseSet(tenantDb, schemaAwarePort(requests), { projectId: PROJECT, setId });
 
     const codeRequests = requests.filter((r) => (r.serverTools?.length ?? 0) > 0);
     const prompts = codeRequests.map((r) => String(r.messages[0]?.content ?? ""));
@@ -142,12 +149,11 @@ describe("photo-advisor → code-finder compose edge", () => {
     expect(prompts.some((p) => p.includes("Attic ventilation looks short"))).toBe(true);
   });
 
-  it("lands code_ref suggestions traceable to the photo", async () => {
+  it("lands code_ref suggestions traceable to the set", async () => {
     const tenantDb = wire();
-    const photoId = await seed(tenantDb);
-    const photo = await tenantDb.getPhoto(photoId);
+    const setId = await seed(tenantDb);
 
-    await advisePhoto(tenantDb, schemaAwarePort(), { projectId: PROJECT, photoId });
+    await adviseSet(tenantDb, schemaAwarePort(), { projectId: PROJECT, setId });
 
     const pending = await tenantDb.listPendingSuggestions(PROJECT);
     const codeRefs = pending.filter(
@@ -158,7 +164,8 @@ describe("photo-advisor → code-finder compose edge", () => {
     expect(codeRefs).toHaveLength(2);
     for (const s of codeRefs) {
       const payload = (s.payload as { payload: Record<string, unknown> }).payload;
-      expect(payload.photoStorageKey).toBe(photo!.storageKey);
+      // The advisor's output carries the set id; the edge rides it onto each code_ref.
+      expect(payload.photoStorageKey).toBe(setId);
       expect(payload.sourceUrl).toContain("iccsafe.org");
       expect(s.authorTool).toBe("code-finder");
     }
@@ -166,7 +173,7 @@ describe("photo-advisor → code-finder compose edge", () => {
 
   it("a failing code lookup never breaks the photo advice", async () => {
     const tenantDb = wire();
-    const photoId = await seed(tenantDb);
+    const setId = await seed(tenantDb);
     const logged = vi.spyOn(console, "error").mockImplementation(() => {});
     // A port that gives a valid vision result but an INVALID code result — composed runs fail.
     const brokenCode = createMockModelPort({
@@ -174,7 +181,7 @@ describe("photo-advisor → code-finder compose edge", () => {
         (request.serverTools?.length ?? 0) > 0 ? { wrong: "shape" } : vision,
     });
 
-    const result = await advisePhoto(tenantDb, brokenCode, { projectId: PROJECT, photoId });
+    const result = await adviseSet(tenantDb, brokenCode, { projectId: PROJECT, setId });
 
     // The photo advice itself succeeded.
     expect(result.ok).toBe(true);

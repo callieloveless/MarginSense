@@ -19,13 +19,12 @@ import { IMPLAUSIBLE_LABOR_MINUTES } from "./suggestions";
 import { type PhotoAdvisorInput, type VisionResult } from "./schema";
 import { PHYSICAL_WORK_DISCLAIMER } from "../disclaimer";
 
-const STORAGE_KEY = "biz-a/proj-1/photo-1.jpg";
+const SET_ID = "set-1";
+const IMAGE_BASE64 = "ZmFrZS1qcGVn";
 
 const input: PhotoAdvisorInput = {
-  photoId: "photo-1",
-  storageKey: STORAGE_KEY,
-  mediaType: "image/jpeg",
-  imageBase64: "ZmFrZS1qcGVn",
+  setId: SET_ID,
+  images: [{ mediaType: "image/jpeg", dataBase64: IMAGE_BASE64 }],
   caption: "under the tub",
 };
 
@@ -65,7 +64,7 @@ function run(opts: { activeEstimateId: string | null; result?: VisionResult; inp
 }
 
 describe("Photo Advisor — findings", () => {
-  it("proposes each finding with its severity and the photo it came from", async () => {
+  it("proposes each finding with its severity and the set it came from", async () => {
     const out = await run({ activeEstimateId: "est-1" });
     const findings = (out.suggestions ?? []).filter((s) => s.target === "context_entry");
 
@@ -73,7 +72,7 @@ describe("Photo Advisor — findings", () => {
     const first = findings[0]!.payload as { kind: string; payload: Record<string, unknown> };
     expect(first.kind).toBe("finding");
     expect(first.payload.severity).toBe("safety");
-    expect(first.payload.photoStorageKey).toBe(STORAGE_KEY);
+    expect(first.payload.setId).toBe(SET_ID);
     expect(first.payload.summary).toMatch(/rot at the joist/i);
   });
 
@@ -132,11 +131,11 @@ describe("Photo Advisor — repair labor", () => {
     expect(out.message?.body).toMatch(/no active estimate/i);
   });
 
-  it("carries the run's photo key on its output, for a downstream code lookup", async () => {
+  it("carries the run's set id on its output, for a downstream code lookup", async () => {
     const out = await run({ activeEstimateId: "est-1" });
-    // Every finding in the run shares this photo; Code Finder (9b) reads it off the output to
-    // trace a composed code_ref back to the picture.
-    expect(out.output.photoStorageKey).toBe(STORAGE_KEY);
+    // Every finding in the run shares this set; Code Finder (9b) reads it off the output to
+    // trace a composed code_ref back to the set of pictures.
+    expect(out.output.setId).toBe(SET_ID);
   });
 });
 
@@ -194,7 +193,7 @@ describe("Photo Advisor — safety and contract", () => {
     const ai = createMockModelPort({ result });
     const spy = {
       complete: async (request: Parameters<typeof ai.complete>[0]) => {
-        sawImage = (request.images ?? []).some((i) => i.dataBase64 === input.imageBase64);
+        sawImage = (request.images ?? []).some((i) => i.dataBase64 === input.images[0]!.dataBase64);
         return ai.complete(request);
       },
     };
@@ -205,10 +204,15 @@ describe("Photo Advisor — safety and contract", () => {
     expect(() => photoAdvisorTool.outputSchema.parse(out.output)).not.toThrow();
   });
 
-  it("rejects input that isn't a real photo reference", () => {
-    expect(photoAdvisorTool.inputSchema.safeParse({ photoId: "p" }).success).toBe(false);
+  it("rejects input that isn't a real set of photos", () => {
+    // A set id with no images is not a runnable input.
+    expect(photoAdvisorTool.inputSchema.safeParse({ setId: SET_ID }).success).toBe(false);
+    // Nor is a set whose one image carries no bytes.
     expect(
-      photoAdvisorTool.inputSchema.safeParse({ ...input, imageBase64: "" }).success,
+      photoAdvisorTool.inputSchema.safeParse({
+        ...input,
+        images: [{ mediaType: "image/jpeg", dataBase64: "" }],
+      }).success,
     ).toBe(false);
   });
 });

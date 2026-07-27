@@ -34,7 +34,8 @@ import {
 } from "./suggestions";
 
 const SYSTEM = [
-  "You are Photo Advisor for a trade contractor. Look at the job photo and report what you can",
+  "You are Photo Advisor for a trade contractor. Look at the job photos — a SET of the same work",
+  "(wide shots and close-ups) — and report, across all of them, what you can",
   "actually see: the condition, the likely cause, and how serious it is. Mark anything",
   "structural, electrical, or otherwise dangerous as severity `safety`. Mark anything that likely",
   "needs a permit, a code check, an inspection, or a licensed trade as at least `attention` — never",
@@ -53,9 +54,9 @@ function buildPrompt(input: PhotoAdvisorInput, hasActiveEstimate: boolean): stri
   const lines = [
     input.question
       ? `The contractor asks: "${input.question}"`
-      : "Assess this job photo: what do you see, how serious is it, and what would the repair take?",
+      : "Assess this set of job photos: what do you see, how serious is it, and what would the repair take?",
   ];
-  if (input.caption) lines.push(`The photo is labelled: "${input.caption}".`);
+  if (input.caption) lines.push(`The set is labelled: "${input.caption}".`);
   lines.push(
     hasActiveEstimate
       ? "Break the repair into labor tasks with realistic minutes for each."
@@ -76,10 +77,10 @@ function summarize(
   opts: { hasActiveEstimate: boolean; flagged: readonly string[] },
 ): string {
   if (result.findings.length === 0 && result.labor.length === 0) {
-    return "Photo Advisor couldn't tell anything reliable from this photo. Try a clearer shot, or one from further back for context.";
+    return "Photo Advisor couldn't tell anything reliable from this set. Try clearer shots, or add one from further back for context.";
   }
 
-  const blocks: string[] = ["Photo Advisor looked at this photo:"];
+  const blocks: string[] = ["Photo Advisor looked at this set:"];
 
   if (result.findings.length > 0) {
     blocks.push(
@@ -135,7 +136,11 @@ export const photoAdvisorTool: Tool<PhotoAdvisorInput, PhotoAdvisorOutput> = {
     const response = await ctx.ai.complete({
       system: SYSTEM,
       messages: [{ role: "user", content: buildPrompt(ctx.input, activeEstimateId !== null) }],
-      images: [{ type: "image", mediaType: ctx.input.mediaType, dataBase64: ctx.input.imageBase64 }],
+      images: ctx.input.images.map((img) => ({
+        type: "image" as const,
+        mediaType: img.mediaType,
+        dataBase64: img.dataBase64,
+      })),
       resultSchema: visionResultSchema,
     });
     // The port already validated `result` against `visionResultSchema` (mock and real impl both
@@ -144,7 +149,7 @@ export const photoAdvisorTool: Tool<PhotoAdvisorInput, PhotoAdvisorOutput> = {
 
     const suggestions: ProposedSuggestion[] = [];
     for (const finding of result.findings) {
-      suggestions.push(findingSuggestion(finding, ctx.input.storageKey));
+      suggestions.push(findingSuggestion(finding, ctx.input.setId));
     }
     for (const labor of result.labor) {
       suggestions.push(...laborSuggestion(labor, activeEstimateId));
@@ -159,7 +164,7 @@ export const photoAdvisorTool: Tool<PhotoAdvisorInput, PhotoAdvisorOutput> = {
       labor: result.labor,
       flaggedLabor: flagged,
       proposedLineItems: activeEstimateId !== null && result.labor.length > 0,
-      photoStorageKey: ctx.input.storageKey,
+      setId: ctx.input.setId,
     };
 
     return {
