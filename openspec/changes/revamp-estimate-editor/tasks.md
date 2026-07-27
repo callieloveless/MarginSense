@@ -28,29 +28,29 @@ Turbopack / App-Router issues on the rebuilt client editor).
 
 ## Stage B — phone-first editor + per-line economics (UI)
 
-- [ ] B1. Rebuild `estimate-editor.tsx` on the token system + R1 primitives: one **line card** each —
+- [x] B1. Rebuild `estimate-editor.tsx` on the token system + R1 primitives: one **line card** each —
   category **chip**, description, cost inputs (labor hours, or qty + unit cost), and an optional
   **price** field with a ghost baseline hint; delete + **duplicate** icons; **up/down reorder**.
-- [ ] B2. Per-line **economics row** from the DTO: price · cost · net · hours · **markup %**. A
+- [x] B2. Per-line **economics row** from the DTO: price · cost · net · hours · **markup %**. A
   `SignalBadge` profit-per-hour signal **only on entered-price labor lines** (DTO `priced` + labor),
   with the **target it's measured against** and a plain "below/above your target" phrase; a
   baseline labor line shows a "shares your blended labor rate — price it to judge it" note (no colour);
   non-labor lines show "labor is what the signal measures" (Critique #1, #6).
-- [ ] B3. **Category subtotals** (display-only sum of the per-line DTO by category).
-- [ ] B4. Rebuild the profit panel (`estimate-signal.tsx`) on tokens; keep it **in view** (sticky or
+- [x] B3. **Category subtotals** (display-only sum of the per-line DTO by category).
+- [x] B4. Rebuild the profit panel (`estimate-signal.tsx`) on tokens; keep it **in view** (sticky or
   top) while editing; price-source line reads *solved / your override / set on lines* in plain words;
   include the "your numbers" context (target profit-per-hour).
-- [ ] B5. **Live recompute as a progressive enhancement** (Critique #2): debounce (~400 ms / on blur) +
+- [x] B5. **Live recompute as a progressive enhancement** (Critique #2): debounce (~400 ms / on blur) +
   cancel-in-flight → `previewEstimateAction` → render the DTO; keep last-good numbers dimmed with an
   `aria-live` "updating…" note while in flight; on slow/failed/offline, show "numbers update on save"
   and keep the editor fully usable. **Save** stays explicit and is the guaranteed engine-true path.
-- [ ] B6. **Unsaved-work protection** (Critique #3): mirror in-progress inputs to a local **draft**
+- [x] B6. **Unsaved-work protection** (Critique #3): mirror in-progress inputs to a local **draft**
   keyed by estimate id, restore on reload with a "restored unsaved changes / discard" affordance,
   clear on successful save; a dirty-flag **`beforeunload` + in-app navigation guard**.
-- [ ] B7. **Accessibility** (Critique #5): real `<label>`s (placeholder is only an example),
+- [x] B7. **Accessibility** (Critique #5): real `<label>`s (placeholder is only an example),
   `aria-live` on the panel/recompute, `aria-label`s on delete/duplicate/reorder, keyboard-reachable
   drill-downs, colour always paired with text.
-- [ ] B8. Phone-width pass at 360px (tap targets, `inputMode="decimal"`, `formatCents`). `npm run
+- [x] B8. Phone-width pass at 360px (tap targets, `inputMode="decimal"`, `formatCents`). `npm run
   build` green.
 
 ## Stage C — on-surface version management
