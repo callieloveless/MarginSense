@@ -160,16 +160,21 @@ buildable and typed now, live calls wait on a key.
 ## Gotchas & lessons
 
 - **The model sometimes returns malformed structured output — the port repairs it once** *(2026-07-27)*.
-  A live Photo Advisor run failed with a `ZodError` because Claude called `record_result` with
-  `labor` as a *string* and `findings` missing. `createAnthropicModelPort.complete` now `safeParse`s
-  the result-tool input and, on failure, runs **one** corrective round — handing the model the exact
-  schema errors (as an `is_error` `tool_result` when there's a tool call to reference, else a plain
-  "call the tool" nudge) — before throwing. Usage is summed across the extra call. The mock port is
-  unaffected. Guarded offline by `src/ai/anthropic.repair.test.ts` (scripted fake client, no
-  network; `createAnthropicModelPort(auth, clientOverride)` takes a test seam). **Opt-in live check:**
-  `npm run test:ai:live` (suffix `*.live.test.ts`, own `vitest.live.config.ts`, excluded from the
-  default run like the RLS suite) makes a REAL API call using the token in `.env.local` to prove the
-  subscription token authenticates + structured output round-trips — run it, don't add to CI.
+  A live Photo Advisor run failed with a `ZodError` (Claude called `record_result` with `labor` a
+  *string* and `findings` missing). `createAnthropicModelPort.complete` now collects **every**
+  `record_result` call (a model can emit several — take the first that validates) and `safeParse`s
+  them; on total failure it runs **one** corrective round. **The repair is a FRESH resend of the
+  original request** (same messages) with (a) a sterner system note quoting the schema errors, (b)
+  `tool_choice` forcing a single `record_result`, and (c) **adaptive thinking turned OFF** — the API
+  forbids a forced `tool_choice` while thinking is on. *Do not* try to "continue the conversation"
+  with a `tool_result`: the first attempt did, and when the model had emitted 2 tool calls the API
+  400'd (`tool_use` ids without matching `tool_result`) — every `tool_use` must be answered, so a
+  fresh resend is simpler and safer. Usage is summed across calls; mock port unaffected. Guarded
+  offline by `src/ai/anthropic.repair.test.ts` (scripted fake client via the
+  `createAnthropicModelPort(auth, clientOverride)` test seam — incl. the multi-call 400 case).
+  **Opt-in live check:** `npm run test:ai:live` (suffix `*.live.test.ts`, own `vitest.live.config.ts`,
+  excluded from the default run like RLS) makes a REAL API call using the `.env.local` token to prove
+  the subscription token authenticates + structured output round-trips — run it, don't add to CI.
 - **"New job then click → 404" is (almost always) a wrong-account view, not a bug** *(2026-07-27,
   show-active-workspace)*. Each Supabase auth identity maps to exactly one business
   (`users.auth_id → business_id`), and `current_business_id()` resolves it server-side; a job created

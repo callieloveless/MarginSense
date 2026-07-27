@@ -199,12 +199,13 @@ export function createAnthropicModelPort(
         response = await create({ ...baseParams, messages });
       }
 
-      // Pull text, the result-tool call (id + input), and citations out of a response's content.
+      // Pull text, EVERY result-tool call's input, and citations out of a response's content. All
+      // inputs are collected (not just the last) because a model can emit the result tool more than
+      // once — one of which may be the valid one.
       const collect = (content: Anthropic.Messages.ContentBlock[]) => {
         const outputBlocks: OutputBlock[] = [];
         const citations: Citation[] = [];
-        let rawResult: unknown;
-        let resultToolUseId: string | undefined;
+        const resultInputs: unknown[] = [];
         for (const block of content) {
           if (block.type === "text") {
             outputBlocks.push({ type: "text", text: block.text });
@@ -216,60 +217,69 @@ export function createAnthropicModelPort(
               });
             }
           } else if (block.type === "tool_use" && block.name === RESULT_TOOL_NAME) {
-            rawResult = block.input;
-            resultToolUseId = block.id;
+            resultInputs.push(block.input);
           }
         }
-        return { outputBlocks, citations, rawResult, resultToolUseId };
+        return { outputBlocks, citations, resultInputs };
+      };
+
+      /** First result-tool input that satisfies the schema, else a model-readable failure reason. */
+      const parseResult = (
+        schema: NonNullable<ModelRequest["resultSchema"]>,
+        inputs: readonly unknown[],
+      ): { ok: true; data: unknown } | { ok: false; detail: string } => {
+        if (inputs.length === 0) return { ok: false, detail: `you did not call the ${RESULT_TOOL_NAME} tool` };
+        let lastError: z.ZodError | undefined;
+        for (const input of inputs) {
+          const p = schema.safeParse(input);
+          if (p.success) return { ok: true, data: p.data };
+          lastError = p.error;
+        }
+        return { ok: false, detail: lastError ? describeSchemaIssues(lastError) : "invalid result" };
       };
 
       let collected = collect(response.content);
 
-      // Structured output: validate the result-tool input, and give the model exactly ONE chance to
-      // fix a malformed call before we fail. Models occasionally return the wrong shape — a string
-      // where the schema wants an array, a missing field — and throwing the whole run away over that
-      // is wasteful; a single corrective round (the concrete schema errors handed back) recovers it.
-      // The human-facing prose/citations stay from the first response; only the result is repaired.
+      // Structured output: validate the result, and give the model exactly ONE chance to fix a
+      // malformed call before we fail. Models occasionally return the wrong shape — a string where
+      // the schema wants an array, a missing field — and throwing the whole run away over that is
+      // wasteful. The repair is a FRESH resend of the original request with a sterner system note
+      // (not a tool_result continuation): a continuation must answer every `tool_use` id the model
+      // emitted or the API 400s, and a fresh resend sidesteps that entirely. The human-facing
+      // prose/citations stay from the first response when the repair turn returns only the tool call.
       let result: unknown;
       if (request.resultSchema) {
-        let parsed = request.resultSchema.safeParse(collected.rawResult);
-        if (!parsed.success) {
-          const detail = describeSchemaIssues(parsed.error);
-          const correction: Anthropic.Messages.MessageParam =
-            collected.rawResult !== undefined && collected.resultToolUseId
-              ? {
-                  role: "user",
-                  content: [
-                    {
-                      type: "tool_result",
-                      tool_use_id: collected.resultToolUseId,
-                      is_error: true,
-                      content: `Your ${RESULT_TOOL_NAME} input did not match the required schema — ${detail}. Call ${RESULT_TOOL_NAME} again with corrected input that matches the schema exactly: every field must be the exact type shown (arrays must be JSON arrays, not strings), and required fields must be present.`,
-                    },
-                  ],
-                }
-              : {
-                  role: "user",
-                  content: `You must record the result by calling the ${RESULT_TOOL_NAME} tool with input matching its schema exactly${detail ? ` (problem: ${detail})` : ""}. Do it now — do not answer in prose.`,
-                };
-          response = await create({
+        let outcome = parseResult(request.resultSchema, collected.resultInputs);
+        if (!outcome.ok) {
+          const strongerSystem = buildSystem(
+            `${request.system ? `${request.system}\n\n` : ""}CRITICAL: Reply by calling ${RESULT_TOOL_NAME} exactly once, with input matching its JSON schema EXACTLY — every field must be the exact type shown (arrays must be JSON arrays, never strings) and every required field must be present. Your previous reply was rejected: ${outcome.detail}.`,
+            auth,
+          );
+          // Force ONE clean result-tool call on the retry. Allowed only because we also turn OFF
+          // adaptive thinking (the API forbids a forced `tool_choice` while thinking is on);
+          // `disable_parallel_tool_use` stops the model emitting several calls again. `thinking` is
+          // deleted rather than set undefined so the key is absent (exactOptionalPropertyTypes).
+          const retryParams: Anthropic.Messages.MessageCreateParamsNonStreaming = {
             ...baseParams,
-            messages: [...messages, { role: "assistant", content: response.content }, correction],
-          });
+            ...(strongerSystem ? { system: strongerSystem } : {}),
+            tool_choice: { type: "tool", name: RESULT_TOOL_NAME, disable_parallel_tool_use: true },
+            messages,
+          };
+          delete retryParams.thinking;
+          response = await create(retryParams);
           const repaired = collect(response.content);
-          // Keep the first turn's prose/citations if the repair turn returned only the tool call.
           collected =
             repaired.outputBlocks.length > 0
               ? repaired
               : { ...repaired, outputBlocks: collected.outputBlocks, citations: collected.citations };
-          parsed = request.resultSchema.safeParse(repaired.rawResult);
-          if (!parsed.success) {
+          outcome = parseResult(request.resultSchema, repaired.resultInputs);
+          if (!outcome.ok) {
             throw new Error(
-              `The model's ${RESULT_TOOL_NAME} result did not match the schema after one repair attempt: ${describeSchemaIssues(parsed.error)}`,
+              `The model's ${RESULT_TOOL_NAME} result did not match the schema after one repair attempt: ${outcome.detail}`,
             );
           }
         }
-        result = parsed.data;
+        result = outcome.data;
       }
 
       return {
