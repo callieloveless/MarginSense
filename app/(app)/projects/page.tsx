@@ -12,8 +12,12 @@ export default async function ProjectsPage() {
 
   let projects: ProjectRow[] = [];
   let live = false;
+  let workspaceName: string | null = null;
   if (session.status === "ready") {
-    projects = await tenantDbForSession(session.authUserId, session.businessId).listProjects();
+    const tenantDb = tenantDbForSession(session.authUserId, session.businessId);
+    const [rows, business] = await Promise.all([tenantDb.listProjects(), tenantDb.getBusiness()]);
+    projects = rows;
+    workspaceName = business?.name ?? null;
     live = true;
   }
 
@@ -34,7 +38,11 @@ export default async function ProjectsPage() {
       <ul className="mt-6 divide-y divide-neutral-200 dark:divide-neutral-800">
         {projects.length === 0 ? (
           <li className="py-3 text-sm text-neutral-500">
-            {live ? "No jobs yet — add your first job above." : "Connect Supabase to load jobs."}
+            {live
+              ? workspaceName
+                ? `No jobs yet in ${workspaceName} — add your first job above.`
+                : "No jobs yet — add your first job above."
+              : "Connect Supabase to load jobs."}
           </li>
         ) : (
           projects.map((p) => (

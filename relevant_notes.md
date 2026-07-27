@@ -159,6 +159,17 @@ buildable and typed now, live calls wait on a key.
 
 ## Gotchas & lessons
 
+- **"New job then click → 404" is (almost always) a wrong-account view, not a bug** *(2026-07-27,
+  show-active-workspace)*. Each Supabase auth identity maps to exactly one business
+  (`users.auth_id → business_id`), and `current_business_id()` resolves it server-side; a job created
+  under account A is *invisible* to account B by design (RLS). If a freshly-made job 404s on click,
+  the session is on a different account than the one that created it — the write wasn't lost. The
+  create→read path is pinned by `src/db/create-read-consistency.test.ts` (a new job is instantly
+  readable by its own account; cross-account is the *only* legit 404). The fix was legibility, not
+  logic: the shell header now shows the active workspace via `getBusiness()` and the empty jobs list
+  names it ("No jobs yet in <workspace>"). If a *single* auth_id ever gets two `users` rows,
+  `current_business_id()` (no `LIMIT`/`ORDER BY`) could flip businesses — a latent footgun, deferred
+  (the user chose the UI-only fix); harden with `ORDER BY created_at, id LIMIT 1` if it ever bites.
 - **Photos are SETS now, analyzed as a whole** *(2026-07-27, R6)*. `photo_sets` holds one caption per
   set; `project_photos.set_id` + `suggestions.set_id` tie photos/recommendations to a set (the
   per-photo caption is retired, not dropped). Photo Advisor's tool input is a **set** (`{ setId,
